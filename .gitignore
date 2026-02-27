@@ -1,0 +1,7 @@
+node_modules/
+dist/
+.env
+.storage/
+exports/
+*.log
+.aider*

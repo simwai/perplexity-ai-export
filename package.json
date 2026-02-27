@@ -1,0 +1,43 @@
+{
+  "name": "perplexity-history-export",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx src/index.ts",
+    "start": "node dist/index.js",
+    "build": "tsc",
+    "type-check": "tsc --noEmit",
+    "format": "oxlint --fix --format=stylish && oxfmt",
+    "test": "vitest",
+    "test:unit": "vitest run test/unit",
+    "test:integration": "vitest run test/integration",
+    "test:e2e": "vitest run test/e2e",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "test:ci": "vitest run --reporter=verbose"
+  },
+  "dependencies": {
+    "chalk": "^5.6.2",
+    "dotenv": "^17.2.4",
+    "inquirer": "^13.2.2",
+    "sanitize-filename": "^1.6.3",
+    "vectra": "^0.12.3",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.58.2",
+    "@types/inquirer": "^9.0.9",
+    "@types/node": "^25.2.3",
+    "@types/sanitize-filename": "^1.1.28",
+    "@vitest/ui": "^4.0.18",
+    "lint-staged": "^16.2.7",
+    "oxfmt": "^0.32.0",
+    "oxlint": "^1.47.0",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
+  },
+  "lint-staged": {
+    "*": "npm run format"
+  }
+}
