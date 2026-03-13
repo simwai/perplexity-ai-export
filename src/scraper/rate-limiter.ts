@@ -35,7 +35,7 @@ export class RateLimiter {
       // If an error occurs, we reject the next promise? But we don't have reject.
       // Instead, we could rethrow as QueueError, but the original code didn't handle errors.
       // We'll log and move on (though unlikely to happen).
-      console.error('RateLimiter internal error:', error)
+      logger.error('RateLimiter internal error:', error)
     } finally {
       this.isProcessing = false
       if (this.queue.length > 0) {

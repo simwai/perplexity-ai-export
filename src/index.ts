@@ -6,11 +6,7 @@ async function main(): Promise<void> {
     const repl = new Repl()
     await repl.start()
   } catch (error) {
-    logger.error('Failed to start REPL:')
-    if (error instanceof Error) {
-      logger.error(error.message)
-    }
-    process.exit(1)
+    logger.error('Failed to start REPL:', error)
   }
 }
 

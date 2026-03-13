@@ -12,7 +12,7 @@ export class Repl {
   }
 
   async start(): Promise<void> {
-    console.log(chalk.bold.cyan('\n🔮 Perplexity History Export Tool\n'))
+    logger.info(chalk.bold.cyan('\n🔮 Perplexity History Export Tool\n'))
     logger.info('Select commands to execute. Press Ctrl+C to exit.\n')
 
     while (this.isRunning) {
@@ -66,7 +66,7 @@ export class Repl {
   private stop(): void {
     if (!this.isRunning) return
     this.isRunning = false
-    console.log(chalk.cyan('\n👋 Goodbye!\n'))
+    logger.info(chalk.cyan('\n👋 Goodbye!\n'))
     process.exit(0)
   }
 }

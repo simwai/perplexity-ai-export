@@ -54,9 +54,7 @@ export class SearchOrchestrator {
       }
     } catch (error) {
       if (error instanceof Error) {
-        throw new SearchOrchestrator.SearchOrchestratorError(
-          `Search failed: ${error.message}`
-        )
+        throw new SearchOrchestrator.SearchOrchestratorError(`Search failed: ${error.message}`)
       }
       throw error
     }
@@ -84,7 +82,7 @@ export class SearchOrchestrator {
     for (const result of results) {
       const { meta, score } = result
       const rel = score.toFixed(3)
-      console.log(
+      logger.info(
         `${chalk.green(meta.spaceName)} ${chalk.gray('›')} ${chalk.cyan(
           meta.title
         )} ${chalk.gray(`(${rel})`)}\n${chalk.gray(meta.path)}\n`

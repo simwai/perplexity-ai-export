@@ -1,25 +1,29 @@
 import chalk from 'chalk'
+import { logger } from '../utils/logger.js'
 
 export function showHelp(): void {
-  console.log(chalk.bold('\\n📚 Available Actions:\\n'))
+  logger.info(chalk.bold('\n📚 Available Actions:\n'))
 
-  console.log(chalk.cyan('  start'))
-  console.log('    Run the scraper. If a checkpoint exists, you can resume or restart.\\n')
+  logger.info(chalk.cyan('  start'))
+  logger.info('    Run the scraper. If a checkpoint exists, you can resume or restart.\n')
 
-  console.log(chalk.cyan('  search'))
-  console.log('    Search exported conversations (choose mode: auto / semantic / exact).\\n')
+  logger.info(chalk.cyan('  search'))
+  logger.info('    Search exported conversations (choose mode: auto / semantic / exact).\n')
 
-  console.log(chalk.cyan('  vectorize'))
-  console.log('    Build or rebuild the local vector index from exports using Ollama.\\n')
+  logger.info(chalk.cyan('  vectorize'))
+  logger.info('    Build or rebuild the local vector index from exports using Ollama.\n')
 
-  console.log(chalk.cyan('  help'))
-  console.log('    Show this help message.\\n')
+  logger.info(chalk.cyan('  reset'))
+  logger.info('    Delete all stored checkpoints, authentication data, and vector index.\n')
 
-  console.log(chalk.cyan('  exit'))
-  console.log('    Exit the tool.\\n')
+  logger.info(chalk.cyan('  help'))
+  logger.info('    Show this help message.\n')
 
-  console.log(chalk.bold('💡 Tips:\\n'))
-  console.log('  • Use auto mode for natural language questions.')
-  console.log('  • Use semantic search when you want fuzzy matches.')
-  console.log('  • Use exact search for precise string matches.\\n')
+  logger.info(chalk.cyan('  exit'))
+  logger.info('    Exit the tool.\n')
+
+  logger.info(chalk.bold('💡 Tips:\n'))
+  logger.info('  • Use auto mode for natural language questions.')
+  logger.info('  • Use semantic search when you want fuzzy matches.')
+  logger.info('  • Use exact search for precise string matches.\n')
 }

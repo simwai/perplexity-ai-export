@@ -1,4 +1,5 @@
 import { input, select, confirm } from '@inquirer/prompts'
+import { rmSync } from 'node:fs'
 import { BrowserManager } from '../scraper/browser.js'
 import { CheckpointManager } from '../scraper/checkpoint-manager.js'
 import { WorkerPool } from '../scraper/worker-pool.js'
@@ -6,6 +7,7 @@ import { SearchOrchestrator } from '../search/search-orchestrator.js'
 import { logger } from '../utils/logger.js'
 import { showHelp } from './help.js'
 import { LibraryDiscovery } from '../scraper/library-discovery.js'
+import { config } from '../utils/config.js'
 
 export class CommandHandler {
   // ========== Custom Error Classes ==========
@@ -34,6 +36,13 @@ export class CommandHandler {
     constructor(message: string) {
       super(message)
       this.name = 'ValidationError'
+    }
+  }
+
+  static readonly ResetError = class extends Error {
+    constructor(message: string) {
+      super(message)
+      this.name = 'ResetError'
     }
   }
 
@@ -90,7 +99,6 @@ export class CommandHandler {
   }
 
   async handleVectorizeWizard(): Promise<void> {
-    console.log()
     const confirmVectorize = await confirm({
       message: 'Rebuild the vector index from exports now?',
       default: true,
@@ -109,6 +117,28 @@ export class CommandHandler {
     }
 
     await this.searchOrchestrator.vectorizeNow()
+  }
+
+  async handleReset(): Promise<void> {
+    const confirmed = await confirm({
+      message:
+        '⚠️  This will delete all stored checkpoints, authentication data, and vector index. Are you sure?',
+      default: false,
+    })
+
+    if (!confirmed) {
+      logger.info('Reset cancelled.')
+      return
+    }
+
+    try {
+      this.deleteStorageFolder()
+      this.checkpointManager.reset() // also reset in-memory state
+      logger.success('✅ Storage folder deleted. All progress has been reset.')
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      throw new CommandHandler.ResetError(`Failed to reset: ${message}`)
+    }
   }
 
   handleHelp(): void {
@@ -187,7 +217,7 @@ export class CommandHandler {
    */
   private async handleCheckpointPrompt(): Promise<void> {
     const progress = this.checkpointManager.getProgress()
-    console.log()
+
     const resumeChoice = await select({
       message: `Found checkpoint (${progress.processed}/${progress.total} processed). What do you want to do?`,
       choices: [
@@ -199,7 +229,7 @@ export class CommandHandler {
 
     if (resumeChoice === 'cancel') {
       logger.info('Start cancelled.')
-      process.exit(0) // or throw a custom cancel error? We'll exit cleanly.
+      process.exit(0)
     }
 
     if (resumeChoice === 'restart') {
@@ -275,5 +305,22 @@ export class CommandHandler {
 
     // If validation passed, continue to vectorization
     await this.searchOrchestrator.vectorizeNow()
+  }
+
+  /**
+   * Delete the .storage folder and all its contents.
+   * Uses the storage path from config
+   */
+  private deleteStorageFolder(): void {
+    const storagePath = config.authStoragePath || '.storage' // fallback if not defined
+    try {
+      rmSync(storagePath, { recursive: true, force: true })
+      logger.debug(`Deleted storage folder: ${storagePath}`)
+    } catch (error) {
+      // If folder doesn't exist, it's fine – we just do nothing
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+        throw error
+      }
+    }
   }
 }

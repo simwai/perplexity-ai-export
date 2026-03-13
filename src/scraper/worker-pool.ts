@@ -1,4 +1,4 @@
-import type { Browser, BrowserContext, Page } from '@playwright/test'
+import type { Browser, BrowserContext } from '@playwright/test'
 import { existsSync, readFileSync, statSync } from 'node:fs'
 import { logger } from '../utils/logger.js'
 import { config } from '../utils/config.js'
@@ -8,8 +8,6 @@ import type { CheckpointManager, ConversationMetadata } from './checkpoint-manag
 
 interface Worker {
   id: number
-  context: BrowserContext
-  page: Page
   extractor: ConversationExtractor
   isBusy: boolean
 }
@@ -20,6 +18,24 @@ interface ProcessingStats {
   failed: number
   skipped: number
   failures: Array<{ url: string; title: string; reason: string }>
+}
+
+/**
+ * Loads and validates the saved authentication state.
+ * Returns the storage state object if valid, otherwise null.
+ */
+function loadAuthState(): any | null {
+  const authPath = config.authStoragePath
+  if (!existsSync(authPath)) return null
+  try {
+    const stats = statSync(authPath)
+    const ageMs = Date.now() - stats.mtimeMs
+    const oneDayMs = 24 * 60 * 60 * 1000
+    if (ageMs >= oneDayMs) return null
+    return JSON.parse(readFileSync(authPath, 'utf-8'))
+  } catch {
+    return null
+  }
 }
 
 export class WorkerPool {
@@ -56,6 +72,7 @@ export class WorkerPool {
   private readonly fileWriter: FileWriter
   private readonly checkpointManager: CheckpointManager
   private stats: ProcessingStats
+  private sharedContext: BrowserContext | null = null
 
   constructor(checkpointManager: CheckpointManager) {
     this.fileWriter = new FileWriter()
@@ -68,8 +85,15 @@ export class WorkerPool {
     logger.info(`Initializing worker pool with ${config.parallelWorkers} workers...`)
 
     try {
+      // Create a single shared context with saved auth state
+      const storageState = loadAuthState()
+      this.sharedContext = storageState
+        ? await browser.newContext({ storageState })
+        : await browser.newContext()
+
+      // Create workers, each sharing the same context
       for (let i = 0; i < config.parallelWorkers; i++) {
-        const worker = await this.createWorker(browser, i + 1)
+        const worker = await this.createWorker(i + 1)
         this.workers.push(worker)
       }
     } catch (error) {
@@ -85,15 +109,15 @@ export class WorkerPool {
     logger.info(`Processing ${conversations.length} conversations in parallel...`)
 
     const queue = [...conversations]
-    const activeWorkers = this.workers.map(worker => this.runWorkerLoop(worker, queue))
+    const activeWorkers = this.workers.map((worker) => this.runWorkerLoop(worker, queue))
 
     await Promise.all(activeWorkers)
     this.printSummary()
   }
 
   async close(): Promise<void> {
-    for (const worker of this.workers) {
-      await worker.context.close()
+    if (this.sharedContext) {
+      await this.sharedContext.close()
     }
     logger.info('Worker pool closed')
   }
@@ -101,17 +125,17 @@ export class WorkerPool {
   // ========== Private Methods ==========
 
   /**
-   * Creates a single worker with its own browser context, page, and extractor.
+   * Creates a single worker that shares the global context.
    */
-  private async createWorker(browser: Browser, id: number): Promise<Worker> {
-    const context = await browser.newContext()
-    const page = await context.newPage()
-    const extractor = new ConversationExtractor(context)
+  private async createWorker(id: number): Promise<Worker> {
+    if (!this.sharedContext) {
+      throw new WorkerPool.InitializationError('Shared context not initialized')
+    }
+
+    const extractor = new ConversationExtractor(this.sharedContext)
 
     return {
       id,
-      context,
-      page,
       extractor,
       isBusy: false,
     }
@@ -159,7 +183,10 @@ export class WorkerPool {
   /**
    * Processes a single conversation: delay, extract, validate, save, update stats/checkpoint.
    */
-  private async processConversation(worker: Worker, conversation: ConversationMetadata): Promise<void> {
+  private async processConversation(
+    worker: Worker,
+    conversation: ConversationMetadata
+  ): Promise<void> {
     worker.isBusy = true
 
     try {
@@ -168,7 +195,11 @@ export class WorkerPool {
 
       const extracted = await this.extractWithErrorHandling(worker, conversation)
       if (!extracted) {
-        this.handleSkipped(worker, conversation, 'No extractable content (empty thread or auth issue)')
+        this.handleSkipped(
+          worker,
+          conversation,
+          'No extractable content (empty thread or auth issue)'
+        )
         return
       }
 
@@ -190,7 +221,7 @@ export class WorkerPool {
    */
   private async randomDelay(): Promise<void> {
     const delayMs = 1000 + Math.random() * 2000
-    await new Promise(resolve => setTimeout(resolve, delayMs))
+    await new Promise((resolve) => setTimeout(resolve, delayMs))
   }
 
   /**
@@ -212,11 +243,13 @@ export class WorkerPool {
    * Handles extraction with error catching – returns null if extraction returns null,
    * throws if extraction throws an error.
    */
-  private async extractWithErrorHandling(worker: Worker, conversation: ConversationMetadata): Promise<ExtractedConversation | null> {
+  private async extractWithErrorHandling(
+    worker: Worker,
+    conversation: ConversationMetadata
+  ): Promise<ExtractedConversation | null> {
     try {
       return await worker.extractor.extract(conversation.url)
     } catch (error) {
-      // Re-throw as ExtractionError with context
       const message = error instanceof Error ? error.message : String(error)
       throw new WorkerPool.ExtractionError(`Extraction failed: ${message}`)
     }
@@ -226,7 +259,10 @@ export class WorkerPool {
    * Validates that the written file meets expectations.
    * Throws FileValidationError if validation fails.
    */
-  private async validateExtractedFile(filepath: string, extracted: ExtractedConversation): Promise<void> {
+  private async validateExtractedFile(
+    filepath: string,
+    extracted: ExtractedConversation
+  ): Promise<void> {
     const validationError = this.validateFile(filepath, extracted)
     if (validationError) {
       throw new WorkerPool.FileValidationError(validationError)
@@ -289,7 +325,11 @@ export class WorkerPool {
   /**
    * Handles errors during processing (extraction, validation, writing).
    */
-  private handleProcessingError(worker: Worker, conversation: ConversationMetadata, error: unknown): void {
+  private handleProcessingError(
+    worker: Worker,
+    conversation: ConversationMetadata,
+    error: unknown
+  ): void {
     const message = error instanceof Error ? error.message : String(error)
     logger.error(`Worker ${worker.id} failed for ${conversation.title}`)
     logger.error(`  URL: ${conversation.url}`)
@@ -309,9 +349,9 @@ export class WorkerPool {
    */
   private printSummary(): void {
     const line = '='.repeat(70)
-    console.log(`\n${line}`)
+    logger.info(`\n${line}`)
     logger.info('📊 EXPORT SUMMARY')
-    console.log(line)
+    logger.info(line)
 
     logger.info(`Total conversations: ${this.stats.total}`)
     logger.success(`✓ Successfully exported: ${this.stats.succeeded}`)
@@ -325,17 +365,17 @@ export class WorkerPool {
     }
 
     if (this.stats.failures.length > 0) {
-      console.log('\n❌ Failed / Skipped Conversations:')
-      console.log('-'.repeat(70))
+      logger.info('\n❌ Failed / Skipped Conversations:')
+      logger.info('-'.repeat(70))
       for (const failure of this.stats.failures) {
         logger.error(`\n  ${failure.title}`)
         logger.error(`    URL: ${failure.url}`)
         logger.error(`    Reason: ${failure.reason}`)
       }
-      console.log()
+      logger.info()
     }
 
-    console.log(line + '\n')
+    logger.info(`${line}\n`)
 
     if (this.stats.failed > 0 || this.stats.skipped > 0) {
       logger.info('💡 Failed/skipped conversations were NOT marked as processed.')

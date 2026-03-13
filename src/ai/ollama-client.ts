@@ -1,13 +1,17 @@
+import { z } from 'zod'
 import { config } from '../utils/config.js'
 import { logger } from '../utils/logger.js'
 
-interface OllamaEmbeddingResponse {
-  embedding: number[]
-  data: Array<{ embedding: number[] }>
-}
+// Zod schemas – defined close to where they're used for clarity
+const embeddingItemSchema = z.object({ embedding: z.array(z.number()) })
+const openAiFormatSchema = z.object({ data: z.array(embeddingItemSchema) })
+const legacyFormatSchema = z.object({ embedding: z.array(z.number()) })
 
 export class OllamaClient {
   // ========== Custom Error Classes ==========
+  /**
+   * Thrown when the HTTP request to Ollama fails or returns a non‑ok status.
+   */
   static readonly EmbeddingError = class extends Error {
     constructor(message: string) {
       super(message)
@@ -15,6 +19,9 @@ export class OllamaClient {
     }
   }
 
+  /**
+   * Thrown when the validation step (embedding a test string) fails.
+   */
   static readonly ValidationError = class extends Error {
     constructor(message: string) {
       super(message)
@@ -22,6 +29,9 @@ export class OllamaClient {
     }
   }
 
+  /**
+   * Thrown when the response from Ollama does not match any known format.
+   */
   static readonly ResponseFormatError = class extends Error {
     constructor(message: string) {
       super(message)
@@ -29,19 +39,21 @@ export class OllamaClient {
     }
   }
 
+  // ========== Public API ==========
+
   /**
    * Generate embeddings for a list of texts.
+   * @param texts - Array of strings to embed.
+   * @returns Promise resolving to an array of embedding vectors.
    * @throws {OllamaClient.EmbeddingError} if the request fails.
    * @throws {OllamaClient.ResponseFormatError} if the response format is unexpected.
    */
   async embed(texts: string[]): Promise<number[][]> {
-    if (texts.length === 0) {
-      return []
-    }
+    if (texts.length === 0) return []
 
-    const body = this.buildRequestBody(texts)
-    const response = await this.sendRequest(body)
-    return this.parseResponse(response)
+    const requestBody = this.createRequestBody(texts)
+    const responseData = await this.fetchEmbedding(requestBody)
+    return this.extractEmbeddings(responseData)
   }
 
   /**
@@ -49,8 +61,8 @@ export class OllamaClient {
    * @throws {OllamaClient.ValidationError} if validation fails.
    */
   async validate(): Promise<void> {
+    logger.info('Validating Ollama embedding configuration...')
     try {
-      logger.info('Validating Ollama embedding configuration...')
       await this.embed(['ping'])
       logger.success('Ollama embeddings look good.')
     } catch (error) {
@@ -63,22 +75,21 @@ export class OllamaClient {
 
   /**
    * Build the request body for the embeddings API.
+   * (The `options` field is omitted because it can cause empty responses in some versions.)
    */
-  private buildRequestBody(texts: string[]): object {
+  private createRequestBody(texts: string[]): object {
     return {
       model: config.ollamaEmbedModel,
       input: texts,
-      options: {
-        num_ctx: 8192, // nomic-embed-text supports up to 8192
-      },
+      // options intentionally omitted – they can cause empty responses
     }
   }
 
   /**
-   * Send the embedding request and handle HTTP errors.
-   * @throws {OllamaClient.EmbeddingError} on network or HTTP error.
+   * Perform the HTTP POST to Ollama and return the parsed JSON response.
+   * @throws {OllamaClient.EmbeddingError} on network errors or HTTP error responses.
    */
-  private async sendRequest(body: object): Promise<Response> {
+  private async fetchEmbedding(body: object): Promise<unknown> {
     const url = `${config.ollamaUrl}/v1/embeddings`
 
     try {
@@ -89,11 +100,13 @@ export class OllamaClient {
       })
 
       if (!response.ok) {
-        await this.handleErrorResponse(response, body)
+        await this.throwHttpError(response, body)
       }
 
-      return response
+      return await response.json()
     } catch (error) {
+      // Re‑throw known errors; wrap others in EmbeddingError
+      if (error instanceof OllamaClient.EmbeddingError) throw error
       throw new OllamaClient.EmbeddingError(
         `Network error while calling Ollama: ${error instanceof Error ? error.message : String(error)}`
       )
@@ -101,50 +114,45 @@ export class OllamaClient {
   }
 
   /**
-   * Process a non-OK HTTP response, extracting error details and throwing EmbeddingError.
+   * Handle a non‑ok HTTP response by logging and throwing an EmbeddingError.
+   * This function never returns – it always throws.
    */
-  private async handleErrorResponse(response: Response, body: object): Promise<never> {
-    const errorText = await response.text().catch(() => '')
-    const inputLengths = (body as any).input?.map((t: string) => t.length) || []
-    const maxLength = inputLengths.length ? Math.max(...inputLengths) : 0
-
-    console.error(`Ollama Embed Error: ${response.status} ${response.statusText}`)
-    console.error(`Payload size: ${inputLengths.length} texts`)
-    console.error(`Max text length: ${maxLength}`)
-
+  private async throwHttpError(response: Response, body: object): Promise<never> {
+    let errorBody = ''
+    try {
+      errorBody = await response.text()
+    } catch {
+      // Ignore – we already have the status
+    }
+    logger.error(`Ollama HTTP ${response.status}`, { body, errorBody: errorBody.slice(0, 500) })
     throw new OllamaClient.EmbeddingError(
-      `Ollama embeddings failed (${response.status}): ${errorText || response.statusText}`
+      `Ollama embeddings failed with status ${response.status} – ${errorBody.slice(0, 200)}`
     )
   }
 
   /**
-   * Parse the JSON response and extract embeddings.
-   * @throws {OllamaClient.ResponseFormatError} if format is unexpected.
+   * Validate and extract embeddings from the response data.
+   * Tries OpenAI‑compatible format first, then the legacy single‑embedding format.
+   * @throws {OllamaClient.ResponseFormatError} if neither format matches.
    */
-  private parseResponse(response: Response): number[][] {
-    // We already checked response.ok, so response.json() should succeed.
-    // But we'll still wrap in try/catch.
-    try {
-      const json = response.json() as unknown as OllamaEmbeddingResponse
-
-      // Handle OpenAI-compatible format (data array)
-      if (json.data && Array.isArray(json.data)) {
-        return json.data.map(item => item.embedding)
-      }
-
-      // Fallback for older Ollama versions (single embedding)
-      if (json.embedding) {
-        return [json.embedding]
-      }
-
-      throw new OllamaClient.ResponseFormatError(
-        'Unexpected response format from Ollama embeddings endpoint'
-      )
-    } catch (error) {
-      if (error instanceof OllamaClient.ResponseFormatError) throw error
-      throw new OllamaClient.ResponseFormatError(
-        `Failed to parse Ollama response: ${error instanceof Error ? error.message : String(error)}`
-      )
+  private extractEmbeddings(data: unknown): number[][] {
+    // Try OpenAI‑compatible format first (multiple embeddings in `data` array)
+    const openAiResult = openAiFormatSchema.safeParse(data)
+    if (openAiResult.success) {
+      return openAiResult.data.data.map((item) => item.embedding)
     }
+
+    // Fallback to legacy format (single embedding in `embedding` field)
+    const legacyResult = legacyFormatSchema.safeParse(data)
+    if (legacyResult.success) {
+      return [legacyResult.data.embedding]
+    }
+
+    // Both failed – build a helpful error message from Zod issues
+    const issues = [...(openAiResult.error?.issues ?? []), ...(legacyResult.error?.issues ?? [])]
+    const details = issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ')
+    throw new OllamaClient.ResponseFormatError(
+      `Unexpected response format from Ollama embeddings endpoint: ${details}`
+    )
   }
 }
