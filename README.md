@@ -1,19 +1,20 @@
 # Perplexity History Export
 
-TypeScript + Playwright tool to bulk-export all your Perplexity.ai conversations, organize them by Space, and search them via ripgrep or local vector search (Ollama + Vectra).
+TypeScript + Playwright tool to bulk‑export all your Perplexity.ai conversations, organize them by Space, and search them via ripgrep or local vector search (Ollama + Vectra).
 
 ## Features
 
-- Manual login (normal or Google) with **persistent Playwright auth state**.
-- Crawls your **Perplexity history/collections** via infinite scroll.
-- Fetches conversation data via **network interception** (no fragile copy buttons).
-- **Parallel export** with a worker pool for speed.
-- One **Markdown file per conversation**, grouped into folders by Space.
-- Resumable runs via **checkpoint** file with restart/resume choice.
-- REPL-style CLI with **Inquirer autocomplete** (wizard flow).
-- Search:
-  - **Exact text** search via ripgrep.
-  - **Semantic** search via Vectra + Ollama embeddings.
+- **Persistent authentication** – Manual login (normal or Google) with Playwright storage state.
+- **Full history crawling** – Infinite scroll over your Perplexity library (collections).
+- **Robust extraction** – Uses network interception to fetch the exact JSON API response, validated with Zod schemas.
+- **Parallel export** – Worker pool with configurable concurrency for high speed.
+- **Resilient to failures** – Automatically recreates browser context if it crashes; retries failed conversations once.
+- **Fallback for missing questions** – If an entry has no `query_str`, the thread title is used as a heading, ensuring valid Markdown.
+- **Checkpoint & resumability** – Saves progress so you can resume after interruption or restart.
+- **REPL‑style CLI** – Inquirer‑based wizard with autocomplete.
+- **Search**:
+  - **Exact text** via ripgrep (`rg`).
+  - **Semantic** via Vectra + Ollama embeddings (optional).
 
 ---
 
@@ -24,8 +25,8 @@ TypeScript + Playwright tool to bulk-export all your Perplexity.ai conversations
 - Git (optional)
 - Installed tools:
   - [Playwright](https://playwright.dev) (comes via `@playwright/test`)
-  - [ripgrep](https://github.com/BurntSushi/ripgrep) (`rg`)
-  - [Ollama](https://ollama.ai) with an embedding model (e.g. `nomic-embed-text`)
+  - [ripgrep](https://github.com/BurntSushi/ripgrep) (`rg`) – for exact text search
+  - [Ollama](https://ollama.ai) with an embedding model (e.g. `nomic-embed-text`) – for semantic search
 
 Install ripgrep:
 
@@ -78,7 +79,7 @@ ENABLE_VECTOR_SEARCH=true
 
 # AI services
 OLLAMA_URL=http://localhost:11435
-OLLAMA_MODEL=deepseek-r1
+OLLAMA_MODEL=deepseek-r1          # (not used for embeddings)
 OLLAMA_EMBED_MODEL=nomic-embed-text
 
 # Paths
@@ -89,7 +90,7 @@ VECTOR_INDEX_PATH=.storage/vector-index
 
 Notes:
 
-- `WAIT_MODE=dynamic`: use Playwright’s built-in waits.
+- `WAIT_MODE=dynamic`: use Playwright’s built‑in waits.
 - `WAIT_MODE=static`: use manual `waitForTimeout` delays (more conservative).
 - `PARALLEL_WORKERS`: number of Playwright contexts scraping in parallel.
 - `ENABLE_VECTOR_SEARCH=false`: disables semantic search completely.
@@ -140,14 +141,16 @@ Then the scraper:
    - Scrolls until no new items are loaded.
    - Collects metadata: URL, title, space name, timestamp.
 2. **Phase 2: Parallel Extraction**
-   - Spawns `PARALLEL_WORKERS` browser contexts.
+   - Spawns `PARALLEL_WORKERS` workers, each with a shared browser context.
    - Each worker:
      - Navigates to a conversation URL.
-     - Intercepts the API response containing thread data.
-     - Extracts messages and metadata.
+     - Intercepts the API response (`/rest/thread/...`).
+     - Validates the JSON against Zod schemas.
+     - Extracts messages (questions and answers) and metadata.
      - Writes a Markdown file:
        - Folder: `exports/{SpaceName}/`
        - Filename: `{SpaceName}_{Title}_{Date}_{Id}.md`
+   - If a worker encounters a “browser context closed” error, the pool automatically recreates the context and retries the conversation once.
    - Checkpoint updated every `CHECKPOINT_SAVE_INTERVAL` items.
 
 ### Command: vectorize
@@ -188,7 +191,7 @@ Search modes:
 
 - Exact (rg):
   - Runs `rg` inside `EXPORT_DIR`.
-  - Prints colored, heading-based matches with line numbers.
+  - Prints colored, heading‑based matches with line numbers.
 - Semantic (vector):
   - Embeds query via Ollama.
   - Queries Vectra’s index with `(vector, queryString, topK)`.
@@ -236,8 +239,8 @@ src/
     browser.ts            # Playwright auth + context setup
     checkpoint-manager.ts # Load/save/resume checkpoint JSON
     url-discovery.ts      # Infinite scroll + URL collection
-    conversation-extractor.ts # Network interception + JSON parse
-    worker-pool.ts        # Parallel Playwright contexts
+    conversation-extractor.ts # Network interception, Zod validation, Markdown formatting
+    worker-pool.ts        # Parallel Playwright contexts with automatic recovery
     rate-limiter.ts       # Global rate limiter between workers
   export/
     file-writer.ts        # Write Markdown by Space
@@ -309,6 +312,15 @@ On startup, `start` will:
   - Embeds query string with Ollama.
   - Calls `LocalIndex.queryItems(embedding, query, topK, filter?, isBm25?)`. [app.unpkg](https://app.unpkg.com/vectra@0.12.3/files/src/LocalDocumentIndex.ts)
   - Ranks by similarity and returns metadata + score.
+
+---
+
+## Error Handling & Resilience
+
+- **API response validation** – The JSON is checked against Zod schemas. If it does not contain an `entries` array or a valid entry object, the extraction fails gracefully and logs a warning.
+- **Missing questions** – If an entry lacks a `query_str`, the thread title is used as the heading for the first turn, and later turns are labeled `Follow‑up`. This guarantees that every Markdown file contains at least one `##` heading, which is required by downstream validation.
+- **Context crashes** – When a worker encounters a “browser context closed” error (e.g., from `response.json` after the page closed), the pool recreates the shared context and retries the conversation once. If it fails again, the conversation is marked as failed but **not** processed, so it will be retried in a future run.
+- **Empty threads** – If the API returns an object with no entries, the conversation is skipped and counted as “failed”. It is **not** marked as processed, allowing later retries.
 
 ---
 

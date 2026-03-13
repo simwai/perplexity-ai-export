@@ -24,6 +24,7 @@ export class Repl {
             { name: 'Retry failed conversations', value: 'retry-failed' },
             { name: 'Search conversations', value: 'search' },
             { name: 'Build vector index', value: 'vectorize' },
+            { name: 'Reset all data', value: 'reset' },
             { name: 'Help', value: 'help' },
             { name: 'Exit', value: 'exit' },
           ],
@@ -50,6 +51,9 @@ export class Repl {
         break
       case 'vectorize':
         await this.commandHandler.handleVectorizeWizard()
+        break
+      case 'reset':
+        await this.commandHandler.handleReset()
         break
       case 'help':
         this.commandHandler.handleHelp()
