@@ -1,6 +1,7 @@
 import type { BrowserContext, Page, Response } from '@playwright/test'
 import { waitStrategy } from '../utils/wait-strategy.js'
 import { logger } from '../utils/logger.js'
+import { z } from 'zod'
 
 export interface ExtractedConversation {
   id: string
@@ -11,6 +12,36 @@ export interface ExtractedConversation {
 }
 
 export class ConversationExtractor {
+  // ========== Zod Schemas ==========
+  private static readonly BlockSchema = z.object({
+    intended_usage: z.string().optional(),
+    markdown_block: z
+      .object({
+        answer: z.string().optional(),
+      })
+      .optional(),
+  })
+
+  private static readonly EntrySchema = z.object({
+    thread_title: z.string().optional(),
+    collection_info: z
+      .object({
+        title: z.string().optional(),
+      })
+      .optional(),
+    updated_datetime: z.string().optional(),
+    query_str: z.string().optional(),
+    blocks: z.array(ConversationExtractor.BlockSchema).optional(),
+  })
+
+  private static readonly ApiResponseSchema = z.union([
+    z.array(ConversationExtractor.EntrySchema),
+    z.object({
+      status: z.string().optional(),
+      entries: z.array(ConversationExtractor.EntrySchema),
+    }),
+  ])
+
   // ========== Custom Error Classes ==========
   static readonly ExtractionError = class extends Error {
     constructor(message: string) {
@@ -69,12 +100,6 @@ export class ConversationExtractor {
 
   // ========== Public API ==========
 
-  /**
-   * Extracts conversation data from a Perplexity thread URL.
-   * @param url - The full URL of the conversation.
-   * @returns Promise resolving to the extracted conversation.
-   * @throws One of the custom errors above on failure.
-   */
   async extract(url: string): Promise<ExtractedConversation> {
     const page = await this.context.newPage()
     const apiDataPromise = this.waitForApiResponse(page)
@@ -85,7 +110,7 @@ export class ConversationExtractor {
 
       const apiData = await apiDataPromise
       if (!apiData) {
-        throw new ConversationExtractor.NoDataError('No API response intercepted')
+        throw new ConversationExtractor.NoDataError('API response timeout or not found')
       }
 
       const parsed = this.parseConversationData(apiData, url)
@@ -95,7 +120,6 @@ export class ConversationExtractor {
 
       return parsed
     } catch (error) {
-      // Re-throw known errors; wrap unknown ones
       if (error instanceof Error) throw error
       throw new ConversationExtractor.ExtractionError(String(error))
     } finally {
@@ -105,37 +129,57 @@ export class ConversationExtractor {
 
   // ========== Private Helpers ==========
 
-  /**
-   * Sets up a listener for the thread API response and returns a promise
-   * that resolves with the JSON data when the correct request is seen.
-   */
   private waitForApiResponse(page: Page): Promise<any> {
-    return new Promise((resolve, reject) => {
+    let resolved = false
+
+    return new Promise((resolve) => {
       const timeout = setTimeout(() => {
-        reject(new ConversationExtractor.NoDataError('API response timeout'))
-      }, 15000)
+        if (!resolved) {
+          logger.warn('API response timeout – resolving with null')
+          resolved = true
+          resolve(null)
+        }
+      }, 30000)
 
       page.on('response', async (response: Response) => {
+        if (resolved) return
+
         const url = response.url()
         if (!url.includes('/rest/thread/') || url.includes('list_ask_threads')) return
 
+        logger.info(`Found matching thread API response: ${url}`)
+        logger.debug(`Response status: ${response.status()}`)
+
+        // If the page is already closed, we cannot read the response body
+        if (page.isClosed()) {
+          logger.warn('Page is closed – cannot read response body')
+          return
+        }
+
         try {
           const json = await response.json()
-          if (json.entries) {
-            clearTimeout(timeout)
-            resolve(json)
+          if (resolved) return
+
+          logger.debug('Successfully parsed JSON response')
+          const parseResult = ConversationExtractor.ApiResponseSchema.safeParse(json)
+          if (parseResult.success) {
+            logger.debug('API response validation passed')
+          } else {
+            logger.warn(`API response validation failed: ${parseResult.error.message}`)
           }
-        } catch {
-          // Ignore non-JSON responses
+
+          clearTimeout(timeout)
+          resolved = true
+          resolve(json)
+        } catch (error) {
+          if (resolved) return
+          // Log the error but do not resolve – let the timeout handle it
+          logger.error(`Failed to parse JSON from thread API: ${error}`)
         }
       })
     })
   }
 
-  /**
-   * Navigates to the given URL and validates the HTTP response.
-   * @throws Appropriate error based on status code.
-   */
   private async navigateToPage(page: Page, url: string): Promise<void> {
     const response = await page.goto(url, {
       waitUntil: 'domcontentloaded',
@@ -145,9 +189,6 @@ export class ConversationExtractor {
     this.validateNavigationResponse(response)
   }
 
-  /**
-   * Throws appropriate errors based on the HTTP response status.
-   */
   private validateNavigationResponse(response: Response | null): void {
     if (!response) {
       throw new ConversationExtractor.NavigationError('Navigation failed – no response')
@@ -168,26 +209,28 @@ export class ConversationExtractor {
     }
   }
 
-  /**
-   * Parses the raw API response into an ExtractedConversation object.
-   * Returns null if the data cannot be parsed.
-   */
   private parseConversationData(data: any, url: string): ExtractedConversation | null {
     try {
       const entries = this.normalizeEntries(data)
 
-      if (!entries.length) {
-        logger.warn(`Thread has no entries: ${url}`)
+      const parseResult = z
+        .array(ConversationExtractor.EntrySchema)
+        .nonempty({ message: 'No valid entries found' })
+        .safeParse(entries)
+
+      if (!parseResult.success) {
+        logger.warn(`Entry validation failed for ${url}: ${parseResult.error.message}`)
         return null
       }
 
-      const firstEntry = entries[0]
+      const validEntries = parseResult.data
+      const firstEntry = validEntries[0]
       const id = this.extractIdFromUrl(url)
-      const title = firstEntry.thread_title ?? data.thread_title ?? 'Untitled'
+      const title = firstEntry?.thread_title ?? data.thread_title ?? 'Untitled'
       const spaceName =
-        firstEntry.collection_info?.title ?? data.collection_info?.title ?? 'General'
+        firstEntry?.collection_info?.title ?? data.collection_info?.title ?? 'General'
       const timestamp = this.extractTimestamp(firstEntry, data)
-      const content = this.formatEntries(entries)
+      const content = this.formatEntries(validEntries, title)
 
       if (!content) {
         logger.warn(`Thread has empty content after formatting: ${url}`)
@@ -197,17 +240,16 @@ export class ConversationExtractor {
       return { id, title, spaceName, timestamp, content }
       // oxlint-disable-next-line no-unused-vars
     } catch (_error) {
-      // Log the raw data for debugging when parsing fails
       logger.error('Failed to parse conversation data. Raw response:')
-      console.error(JSON.stringify(data, null, 2).slice(0, 1000)) // Limit output
+      console.error(JSON.stringify(data, null, 2).slice(0, 1000))
       return null
     }
   }
 
-  /**
-   * Normalizes entries to always return an array of conversation turns.
-   */
   private normalizeEntries(data: any): any[] {
+    if (Array.isArray(data)) {
+      return data
+    }
     if (Array.isArray(data.entries) && data.entries.length > 0) {
       return data.entries
     }
@@ -217,32 +259,33 @@ export class ConversationExtractor {
     return []
   }
 
-  /**
-   * Extracts the conversation ID from the URL.
-   */
   private extractIdFromUrl(url: string): string {
     const match = url.match(/\/search\/([^/?]+)/)
     return match?.[1] ?? 'unknown'
   }
 
-  /**
-   * Extracts the timestamp from the first entry or top-level data.
-   */
   private extractTimestamp(firstEntry: any, data: any): Date {
     const ts = firstEntry.updated_datetime ?? data.updated_datetime
     return ts ? new Date(ts) : new Date()
   }
 
-  /**
-   * Formats conversation entries into a Markdown string.
-   */
-  private formatEntries(entries: any[]): string {
+  private formatEntries(entries: any[], threadTitle: string): string {
     let markdown = ''
 
-    for (const entry of entries) {
-      const question = entry.query_str ?? ''
-      let fullAnswer = ''
+    for (let i = 0; i < entries.length; i++) {
+      const entry = entries[i]
+      let question = entry.query_str ?? ''
 
+      // Fallback for entries without a question
+      if (!question) {
+        if (i === 0) {
+          question = threadTitle // first turn gets the thread title
+        } else {
+          question = 'Follow‑up'
+        }
+      }
+
+      let fullAnswer = ''
       for (const block of entry.blocks ?? []) {
         if (block.markdown_block?.answer) {
           fullAnswer += block.markdown_block.answer + '\n\n'
