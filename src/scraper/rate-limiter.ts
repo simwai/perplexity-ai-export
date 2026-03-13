@@ -1,4 +1,5 @@
 import { config } from '../utils/config.js'
+import { logger } from '../utils/logger.js'
 
 export class RateLimiter {
   // ========== Custom Error Classes ==========
