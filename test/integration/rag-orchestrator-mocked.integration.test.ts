@@ -4,6 +4,7 @@ import { http, HttpResponse } from 'msw'
 import { RagOrchestrator } from '../../src/ai/rag-orchestrator.js'
 import { config } from '../../src/utils/config.js'
 import { VectorStore } from '../../src/search/vector-store.js'
+import { RgSearch } from '../../src/search/rg-search.js'
 
 const mockSearchOutcome = [
   {
@@ -27,29 +28,32 @@ const mswServer = setupServer(
           '{"strategy": "precise", "queries": ["What is in my history?"], "keywords": ["mocked"], "filters": {}}',
       })
     }
-    if (body.prompt.includes('Extract every specific fact')) {
+    if (body.prompt.includes('Verify the answer')) {
       return HttpResponse.json({
         model: 'deepseek-r1',
         response: '[{"fact": "Found mocked title", "source_title": "Mocked Title"}]',
       })
     }
+
     return HttpResponse.json({
-      model: 'deepseek-r1',
-      created_at: new Date().toISOString(),
-      response: 'Based on your history, the answer is found in your exports.',
-      done: true,
+      ...baseResponse,
+      response: '{"status": "ok"}'
     })
   })
 )
 
 beforeAll(() => mswServer.listen())
-afterEach(() => mswServer.resetHandlers())
+afterEach(() => {
+  mswServer.resetHandlers()
+  vi.restoreAllMocks()
+})
 afterAll(() => mswServer.close())
 
 describe('RagOrchestrator (MSW Mocked)', () => {
   it('should orchestrate the RAG flow successfully', async () => {
     vi.spyOn(VectorStore.prototype, 'search').mockResolvedValue(mockSearchOutcome)
     vi.spyOn(VectorStore.prototype, 'validate').mockResolvedValue(undefined)
+    vi.spyOn(RgSearch.prototype, 'captureSearchMatches').mockResolvedValue([])
 
     const ragOrchestratorInstance = new RagOrchestrator()
     const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
