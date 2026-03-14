@@ -78,7 +78,11 @@ export class VectorStore {
   async search(query: string, limit = 10): Promise<VectorSearchResult[]> {
     try {
       const queryEmbedding = await this.generateQueryEmbedding(query)
-      const rawResults = await this.queryVectorIndex(queryEmbedding, query, limit)
+      const rawResults = await this.queryVectorIndex(
+        queryEmbedding,
+        query,
+        limit
+      )
       return this.formatVectorSearchResults(rawResults)
     } catch (_error) {
       throw new VectorStore.SearchError(
@@ -133,7 +137,8 @@ export class VectorStore {
 
     for (let i = 0; i < files.length; i++) {
       const filePath = files[i]!
-      const { contentChunks, fileMetadata } = this.extractContentAndMetadata(filePath)
+      const { contentChunks, fileMetadata } =
+        this.extractContentAndMetadata(filePath)
 
       for (let j = 0; j < contentChunks.length; j++) {
         const textChunk = contentChunks[j]!
@@ -146,7 +151,10 @@ export class VectorStore {
         })
 
         if (pendingTextsToEmbed.length >= EMBEDDING_BATCH_SIZE) {
-          await this.processAndInsertEmbeddingBatch(pendingTextsToEmbed, pendingMetadataToInsert)
+          await this.processAndInsertEmbeddingBatch(
+            pendingTextsToEmbed,
+            pendingMetadataToInsert
+          )
           pendingTextsToEmbed = []
           pendingMetadataToInsert = []
         }
@@ -158,13 +166,19 @@ export class VectorStore {
     }
 
     if (pendingTextsToEmbed.length > 0) {
-      await this.processAndInsertEmbeddingBatch(pendingTextsToEmbed, pendingMetadataToInsert)
+      await this.processAndInsertEmbeddingBatch(
+        pendingTextsToEmbed,
+        pendingMetadataToInsert
+      )
     }
 
     await this.vectorIndex.endUpdate()
   }
 
-  private extractContentAndMetadata(path: string): { contentChunks: string[]; fileMetadata: VectorDocMeta } {
+  private extractContentAndMetadata(path: string): {
+    contentChunks: string[]
+    fileMetadata: VectorDocMeta
+  } {
     const content = readFileSync(path, 'utf-8')
     const titleMatch = content.match(/^# (.+)$/m)
     const spaceMatch = content.match(/^\*\*Space:\*\* (.+?)\s{2,}$/m)
@@ -184,7 +198,10 @@ export class VectorStore {
     }
   }
 
-  private async processAndInsertEmbeddingBatch(texts: string[], metas: VectorDocMeta[]): Promise<void> {
+  private async processAndInsertEmbeddingBatch(
+    texts: string[],
+    metas: VectorDocMeta[]
+  ): Promise<void> {
     try {
       const embeddingVectors = await this.ollamaClient.embed(texts)
       for (let k = 0; k < embeddingVectors.length; k++) {
@@ -203,12 +220,18 @@ export class VectorStore {
   private async generateQueryEmbedding(query: string): Promise<number[]> {
     const [queryEmbedding] = await this.ollamaClient.embed([query])
     if (!queryEmbedding) {
-      throw new VectorStore.EmbeddingError('Failed to generate embedding for query')
+      throw new VectorStore.EmbeddingError(
+        'Failed to generate embedding for query'
+      )
     }
     return queryEmbedding
   }
 
-  private async queryVectorIndex(embedding: number[], query: string, limit: number): Promise<any[]> {
+  private async queryVectorIndex(
+    embedding: number[],
+    query: string,
+    limit: number
+  ): Promise<any[]> {
     return this.vectorIndex.queryItems(embedding, query, limit)
   }
 

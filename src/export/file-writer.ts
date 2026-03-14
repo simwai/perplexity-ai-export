@@ -18,10 +18,14 @@ export class FileWriter {
 
   write(conversation: ExtractedConversation): string {
     try {
-      const destinationFilePath = this.constructDestinationFilePath(conversation)
+      const destinationFilePath =
+        this.constructDestinationFilePath(conversation)
       const markdownContent = this.formatConversationAsMarkdown(conversation)
 
-      const spaceSpecificDirectory = join(config.exportDir, sanitizeSpaceName(conversation.spaceName))
+      const spaceSpecificDirectory = join(
+        config.exportDir,
+        sanitizeSpaceName(conversation.spaceName)
+      )
       if (!existsSync(spaceSpecificDirectory)) {
         mkdirSync(spaceSpecificDirectory, { recursive: true })
       }
@@ -41,14 +45,18 @@ export class FileWriter {
     }
   }
 
-  private constructDestinationFilePath(conversation: ExtractedConversation): string {
+  private constructDestinationFilePath(
+    conversation: ExtractedConversation
+  ): string {
     const safeSpaceName = sanitizeSpaceName(conversation.spaceName)
     const safeFileTitle = sanitizeFilename(conversation.title)
     const fileNameWithId = `${safeFileTitle} (${conversation.id}).md`
     return join(config.exportDir, safeSpaceName, fileNameWithId)
   }
 
-  private formatConversationAsMarkdown(conversation: ExtractedConversation): string {
+  private formatConversationAsMarkdown(
+    conversation: ExtractedConversation
+  ): string {
     const header = `# ${conversation.title}\n\n`
     const metadata =
       `**Space:** ${conversation.spaceName}  \n` +

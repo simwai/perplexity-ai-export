@@ -40,7 +40,8 @@ describe('sanitizeSpaceName', () => {
 
 describe('sanitizeMarkdownContent', () => {
   it('should return content unchanged for normal markdown', () => {
-    const rawMarkdownContent = '## My Header\n\nContent with `code` and **bold**'
+    const rawMarkdownContent =
+      '## My Header\n\nContent with `code` and **bold**'
     const processedContent = sanitizeMarkdownContent(rawMarkdownContent)
 
     expect(processedContent).toContain('## My Header')

@@ -1,4 +1,9 @@
-import { chromium, type Browser, type BrowserContext, type Page } from '@playwright/test'
+import {
+  chromium,
+  type Browser,
+  type BrowserContext,
+  type Page,
+} from '@playwright/test'
 import { readFileSync, writeFileSync, existsSync, statSync } from 'node:fs'
 import { config } from '../utils/config.js'
 import { logger } from '../utils/logger.js'
@@ -46,7 +51,9 @@ export class BrowserManager {
       return this.getActivePage()
     } catch (_error) {
       if (_error instanceof Error) throw _error
-      throw new BrowserManager.BrowserLaunchError(`Unexpected error: ${String(_error)}`)
+      throw new BrowserManager.BrowserLaunchError(
+        `Unexpected error: ${String(_error)}`
+      )
     }
   }
 
@@ -70,16 +77,22 @@ export class BrowserManager {
   }
 
   private async initializeBrowserContext(): Promise<void> {
-    if (!this.browserInstance) throw new BrowserManager.ContextError('Browser not initialized')
+    if (!this.browserInstance)
+      throw new BrowserManager.ContextError('Browser not initialized')
 
     const authStoragePath = config.authStoragePath
-    const isSavedAuthValid = this.checkIfSavedAuthenticationIsFresh(authStoragePath)
+    const isSavedAuthValid =
+      this.checkIfSavedAuthenticationIsFresh(authStoragePath)
 
     if (isSavedAuthValid) {
       logger.info('Loading saved authentication state...')
       try {
-        const storageStateData = JSON.parse(readFileSync(authStoragePath, 'utf-8'))
-        this.activeContext = await this.browserInstance.newContext({ storageState: storageStateData })
+        const storageStateData = JSON.parse(
+          readFileSync(authStoragePath, 'utf-8')
+        )
+        this.activeContext = await this.browserInstance.newContext({
+          storageState: storageStateData,
+        })
       } catch (_error) {
         logger.warn('Failed to load saved auth state, starting fresh.', _error)
         this.activeContext = await this.browserInstance.newContext()
@@ -163,10 +176,17 @@ export class BrowserManager {
 
   private async verifyLoginStatus(page: Page): Promise<boolean> {
     await page.waitForTimeout(1000).catch(() => {})
-    await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => {})
+    await page
+      .waitForLoadState('networkidle', { timeout: 5000 })
+      .catch(() => {})
     const currentUrl = page.url()
 
-    const authenticatedUrlPaths = ['/settings', '/library', '/collections', '/account/details']
+    const authenticatedUrlPaths = [
+      '/settings',
+      '/library',
+      '/collections',
+      '/account/details',
+    ]
     if (authenticatedUrlPaths.some((path) => currentUrl.includes(path))) {
       return true
     }
@@ -184,7 +204,10 @@ export class BrowserManager {
       throw new BrowserManager.AuthError('No browser context available to save')
     }
     const currentStorageState = await this.activeContext.storageState()
-    writeFileSync(config.authStoragePath, JSON.stringify(currentStorageState, null, 2))
+    writeFileSync(
+      config.authStoragePath,
+      JSON.stringify(currentStorageState, null, 2)
+    )
   }
 
   private getActivePage(): Page {

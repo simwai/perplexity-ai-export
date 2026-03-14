@@ -1,4 +1,12 @@
-import { describe, it, expect, beforeAll, afterEach, afterAll, vi } from 'vitest'
+import {
+  describe,
+  it,
+  expect,
+  beforeAll,
+  afterEach,
+  afterAll,
+  vi,
+} from 'vitest'
 import { setupServer } from 'msw/node'
 import { http, HttpResponse } from 'msw'
 import { RagOrchestrator } from '../../src/ai/rag-orchestrator.js'
@@ -34,7 +42,9 @@ afterAll(() => mswServer.close())
 
 describe('RagOrchestrator (MSW Mocked)', () => {
   it('should orchestrate the RAG flow successfully', async () => {
-    vi.spyOn(VectorStore.prototype, 'search').mockResolvedValue(mockSearchOutcome)
+    vi.spyOn(VectorStore.prototype, 'search').mockResolvedValue(
+      mockSearchOutcome
+    )
     vi.spyOn(VectorStore.prototype, 'validate').mockResolvedValue(undefined)
 
     const ragOrchestratorInstance = new RagOrchestrator()
@@ -42,8 +52,12 @@ describe('RagOrchestrator (MSW Mocked)', () => {
 
     await ragOrchestratorInstance.answerQuestion('What is in my history?')
 
-    expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('Based on your history'))
-    expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('Mocked Title'))
+    expect(consoleLogSpy).toHaveBeenCalledWith(
+      expect.stringContaining('Based on your history')
+    )
+    expect(consoleLogSpy).toHaveBeenCalledWith(
+      expect.stringContaining('Mocked Title')
+    )
 
     consoleLogSpy.mockRestore()
   })

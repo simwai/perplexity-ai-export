@@ -1,5 +1,28 @@
 {
+  "env": {
+    "node": true,
+    "browser": true
+  },
   "rules": {
+    "no-empty-interface": "warn",
+    "no-unreachable": "error",
+    "no-constant-condition": "warn",
+    "no-duplicate-case": "error",
+    "no-self-compare": "error",
+    "no-unsafe-optional-chaining": "warn",
+    "use-isnan": "error",
+    "no-debugger": "warn",
+    "no-lonely-if": "warn",
+    "no-var": "error",
+    "no-accumulating-spread": "warn",
     "no-unused-vars": "off"
-  }
+  },
+  "ignorePatterns": [
+    "node_modules",
+    "dist",
+    "coverage",
+    "playwright-repot",
+    ".husky",
+    "test-results"
+  ]
 }
