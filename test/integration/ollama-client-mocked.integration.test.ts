@@ -13,7 +13,7 @@ const mswServer = setupServer(
   http.post(`${config.ollamaUrl}/api/generate`, async ({ request }) => {
     const requestBody = (await request.json()) as { prompt: string }
     return HttpResponse.json({
-      model: 'deepseek-r1',
+      model: config.ollamaModel,
       created_at: new Date().toISOString(),
       response: `Mocked response for prompt: ${requestBody.prompt}`,
       done: true,
