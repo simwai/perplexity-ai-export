@@ -85,7 +85,10 @@ Return JSON: {"strategy": "...", "queries": [], "hardKeywords": [], "filters": {
     }
   }
 
-  private async executeAdaptiveHybridSearch(plan: { queries: string[], hardKeywords: string[] }): Promise<VectorSearchResult[]> {
+  private async executeAdaptiveHybridSearch(plan: {
+    queries: string[]
+    hardKeywords: string[]
+  }): Promise<VectorSearchResult[]> {
     const searchPools: VectorSearchResult[][] = []
 
     for (const q of plan.queries || []) {
@@ -169,14 +172,14 @@ Return JSON array: [{"fact": "...", "node_id": N, "thread": "..."}]
           findings.push({
             fact: f.fact,
             source_title: original?.meta['title'] || f.thread || 'Unknown',
-            thread: f.thread || original?.meta['title'] || 'Unknown'
+            thread: f.thread || original?.meta['title'] || 'Unknown',
           })
         })
       } catch (_err) {
         batch.forEach((r) => {
           findings.push({
             fact: r.meta['snippet'],
-            source_title: r.meta['title']
+            source_title: r.meta['title'],
           })
         })
       }
