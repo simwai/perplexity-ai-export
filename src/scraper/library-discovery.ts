@@ -3,7 +3,6 @@ import { logger } from '../utils/logger.js'
 import type { ConversationMetadata } from './checkpoint-manager.js'
 
 export class LibraryDiscovery {
-  // ========== Custom Error Classes ==========
   static readonly VersionCaptureError = class extends Error {
     constructor(message: string) {
       super(message)
@@ -25,87 +24,74 @@ export class LibraryDiscovery {
     }
   }
 
-  async discoverFromLibrary(page: Page): Promise<ConversationMetadata[]> {
+  async discoverAllConversationsFromLibrary(page: Page): Promise<ConversationMetadata[]> {
+    const perplexityLibraryUrl = 'https://www.perplexity.ai/library'
     logger.info('Discovering threads via REST API...')
 
-    await page.goto('https://www.perplexity.ai/library')
+    await page.goto(perplexityLibraryUrl)
     await page.waitForLoadState('domcontentloaded')
 
-    // 1. Capture API version from a real request (fallback to default)
-    const apiVersion = await this.captureApiVersion(page)
+    const activeApiVersion = await this.detectCurrentApiVersion(page)
 
-    // 2. Paginate until no more threads
-    const conversations = await this.paginateAllThreads(page, apiVersion)
+    const discoveredConversations = await this.paginateAndFetchAllThreads(page, activeApiVersion)
 
-    logger.success(`Discovered ${conversations.length} threads`)
-    return conversations
+    logger.success(`Discovered ${discoveredConversations.length} threads`)
+    return discoveredConversations
   }
 
-  /**
-   * Attempts to extract the API version from a live network request.
-   * Falls back to '2.18' if detection fails.
-   */
-  private async captureApiVersion(page: Page): Promise<string> {
-    const defaultVersion = '2.18'
+  private async detectCurrentApiVersion(page: Page): Promise<string> {
+    const defaultFallbackVersion = '2.18'
 
     try {
-      const request = await page.waitForRequest(
-        (req) => req.url().includes('/rest/thread/list_ask_threads'),
+      const interceptedRequest = await page.waitForRequest(
+        (request) => request.url().includes('/rest/thread/list_ask_threads'),
         { timeout: 5000 }
       )
 
-      const url = request.url()
-      const match = url.match(/[?&]version=([^&]+)/)
+      const requestUrl = interceptedRequest.url()
+      const versionQueryParameterMatch = requestUrl.match(/[?&]version=([^&]+)/)
 
-      if (match?.[1]) {
-        const version = match[1]
-        logger.info(`Discovered API version: ${version}`)
-        return version
+      if (versionQueryParameterMatch?.[1]) {
+        const detectedVersion = versionQueryParameterMatch[1]
+        logger.info(`Discovered API version: ${detectedVersion}`)
+        return detectedVersion
       }
 
       logger.warn('Found list_ask_threads request but no version parameter, using fallback')
-      return defaultVersion
-      // oxlint-disable-next-line no-unused-vars
+      return defaultFallbackVersion
     } catch (_error) {
-      // waitForRequest timed out or failed – no request seen
       logger.warn('No list_ask_threads request detected, using fallback version')
-      return defaultVersion
+      return defaultFallbackVersion
     }
   }
 
-  /**
-   * Fetches all threads by paginating through the API.
-   */
-  private async paginateAllThreads(
+  private async paginateAndFetchAllThreads(
     page: Page,
     apiVersion: string
   ): Promise<ConversationMetadata[]> {
-    const pageSize = 20
-    let offset = 0
-    const conversations: ConversationMetadata[] = []
+    const batchPageSize = 20
+    let currentOffset = 0
+    const allDiscoveredConversations: ConversationMetadata[] = []
 
     while (true) {
-      const batch = await this.fetchThreadBatch(page, apiVersion, offset, pageSize)
+      const threadBatch = await this.fetchThreadBatchFromApi(page, apiVersion, currentOffset, batchPageSize)
 
-      if (!batch.length) {
-        logger.info(`No more threads at offset ${offset}`)
+      if (!threadBatch.length) {
+        logger.info(`No more threads found at offset ${currentOffset}`)
         break
       }
 
-      const processed = this.processBatch(batch)
-      conversations.push(...processed)
+      const formattedMetadata = this.mapRawBatchToMetadata(threadBatch)
+      allDiscoveredConversations.push(...formattedMetadata)
 
-      logger.info(`Fetched ${batch.length} threads (offset ${offset})`)
-      offset += pageSize
+      logger.info(`Fetched ${threadBatch.length} threads (offset ${currentOffset})`)
+      currentOffset += batchPageSize
     }
 
-    return conversations
+    return allDiscoveredConversations
   }
 
-  /**
-   * Fetches a single batch of threads from the API.
-   */
-  private async fetchThreadBatch(
+  private async fetchThreadBatchFromApi(
     page: Page,
     apiVersion: string,
     offset: number,
@@ -114,7 +100,7 @@ export class LibraryDiscovery {
     try {
       return await page.evaluate(
         async ({ offset, limit, version }) => {
-          const res = await fetch(
+          const response = await fetch(
             `/rest/thread/list_ask_threads?version=${version}&source=default`,
             {
               method: 'POST',
@@ -123,29 +109,26 @@ export class LibraryDiscovery {
             }
           )
 
-          if (!res.ok) {
-            throw new Error(`API responded with ${res.status}`)
+          if (!response.ok) {
+            throw new Error(`API responded with ${response.status}`)
           }
 
-          const data = await res.json()
-          return Array.isArray(data) ? data : []
+          const responseData = await response.json()
+          return Array.isArray(responseData) ? responseData : []
         },
         { offset, limit, version: apiVersion }
       )
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
+    } catch (_error) {
+      const errorMessage = _error instanceof Error ? _error.message : String(_error)
       throw new LibraryDiscovery.PaginationError(
-        `Failed to fetch batch at offset ${offset}: ${message}`
+        `Failed to fetch batch at offset ${offset}: ${errorMessage}`
       )
     }
   }
 
-  /**
-   * Converts raw thread items into ConversationMetadata objects.
-   */
-  private processBatch(batch: any[]): ConversationMetadata[] {
+  private mapRawBatchToMetadata(batch: any[]): ConversationMetadata[] {
     return batch
-      .filter((item) => this.isValidThreadItem(item))
+      .filter((item) => this.isMinimumRequiredThreadDataPresent(item))
       .map((item) => ({
         url: `https://www.perplexity.ai/search/${item.slug}`,
         title: item.title ?? 'Untitled',
@@ -154,13 +137,7 @@ export class LibraryDiscovery {
       }))
   }
 
-  /**
-   * Validates that a thread item has the minimum required fields.
-   */
-  private isValidThreadItem(item: any): boolean {
-    if (!item || typeof item !== 'object') return false
-    if (!item.slug || typeof item.slug !== 'string') return false
-    // slug must be present and non-empty for URL construction
-    return true
+  private isMinimumRequiredThreadDataPresent(item: any): boolean {
+    return !!(item && typeof item === 'object' && item.slug && typeof item.slug === 'string')
   }
 }

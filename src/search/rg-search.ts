@@ -12,7 +12,6 @@ export interface RgSearchOptions {
 }
 
 export class RgSearch {
-  // ========== Custom Error Classes ==========
   static readonly RgSearchError = class extends Error {
     constructor(message: string) {
       super(message)
@@ -28,21 +27,19 @@ export class RgSearch {
   }
 
   async search(options: RgSearchOptions): Promise<void> {
-    this.ensureExportDirExists()
-    const args = this.buildRgArgs(options)
-    await this.executeRg(args)
+    this.ensureExportDirectoryIsAccessible()
+    const ripgrepCommandArguments = this.constructRipgrepArguments(options)
+    await this.spawnRipgrepProcess(ripgrepCommandArguments)
   }
 
-  // ========== Private Methods ==========
-
-  private ensureExportDirExists(): void {
+  private ensureExportDirectoryIsAccessible(): void {
     if (!existsSync(config.exportDir)) {
-      throw new RgSearch.RgSearchError('No exports directory found. Run "start" command first.')
+      throw new RgSearch.RgSearchError('No exports directory found. Please run the "start" command first to export your history.')
     }
   }
 
-  private buildRgArgs(options: RgSearchOptions): string[] {
-    const args: string[] = [
+  private constructRipgrepArguments(options: RgSearchOptions): string[] {
+    const argumentsList: string[] = [
       '--color=always',
       '--heading',
       '--line-number',
@@ -52,68 +49,68 @@ export class RgSearch {
     ]
 
     if (options.caseSensitive) {
-      args.push('--case-sensitive')
+      argumentsList.push('--case-sensitive')
     }
 
     if (options.wholeWord) {
-      args.push('--word-regexp')
+      argumentsList.push('--word-regexp')
     }
 
     if (options.regex) {
-      args.push('--regexp', options.pattern)
+      argumentsList.push('--regexp', options.pattern)
     } else {
-      args.push('--fixed-strings', options.pattern)
+      argumentsList.push('--fixed-strings', options.pattern)
     }
 
-    args.push('--type', 'markdown')
-    return args
+    argumentsList.push('--type', 'markdown')
+    return argumentsList
   }
 
-  private executeRg(args: string[]): Promise<void> {
+  private spawnRipgrepProcess(args: string[]): Promise<void> {
     return new Promise((resolve, reject) => {
-      const rg = spawn('rg', args, {
+      const ripgrepProcess = spawn('rg', args, {
         cwd: config.exportDir,
         stdio: ['ignore', 'pipe', 'pipe'],
       })
 
-      let hasResults = false
+      let matchedResultsFound = false
 
-      rg.stdout.on('data', (data) => {
-        hasResults = true
+      ripgrepProcess.stdout.on('data', (data) => {
+        matchedResultsFound = true
         process.stdout.write(data)
       })
 
-      rg.stderr.on('data', (data) => {
-        const errorMsg = data.toString()
-        if (!errorMsg.includes('No such file or directory')) {
+      ripgrepProcess.stderr.on('data', (data) => {
+        const errorText = data.toString()
+        if (!errorText.includes('No such file or directory')) {
           process.stderr.write(chalk.red(data))
         }
       })
 
-      rg.on('error', (error) => {
+      ripgrepProcess.on('error', (error) => {
         if (error.message.includes('ENOENT')) {
-          reject(new RgSearch.RgNotFoundError(this.getInstallInstructions()))
+          reject(new RgSearch.RgNotFoundError(this.getRipgrepInstallationInstructions()))
         } else {
           reject(new RgSearch.RgSearchError(`Search failed: ${error.message}`))
         }
       })
 
-      rg.on('close', (code) => {
-        if (code === 0 || code === 1) {
-          if (!hasResults && code === 1) {
+      ripgrepProcess.on('close', (exitCode) => {
+        if (exitCode === 0 || exitCode === 1) {
+          if (!matchedResultsFound && exitCode === 1) {
             logger.info('No results found.')
           }
           resolve()
         } else {
-          reject(new RgSearch.RgSearchError(`rg exited with code ${code}`))
+          reject(new RgSearch.RgSearchError(`ripgrep exited with code ${exitCode}`))
         }
       })
     })
   }
 
-  private getInstallInstructions(): string {
+  private getRipgrepInstallationInstructions(): string {
     return (
-      'ripgrep (rg) not found. Please install it:\n' +
+      'ripgrep (rg) not found. Please install it to use exact text search:\n' +
       '  macOS: brew install ripgrep\n' +
       '  Linux: apt install ripgrep / dnf install ripgrep\n' +
       '  Windows: choco install ripgrep / scoop install ripgrep'

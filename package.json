@@ -32,10 +32,11 @@
     "@types/sanitize-filename": "^1.1.28",
     "@vitest/ui": "^4.0.18",
     "husky": "^9.1.7",
+    "msw": "^2.12.10",
     "oxfmt": "^0.32.0",
     "oxlint": "^1.47.0",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3",
     "vitest": "^4.0.18"
-  },
+  }
 }

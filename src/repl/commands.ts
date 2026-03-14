@@ -10,7 +10,6 @@ import { LibraryDiscovery } from '../scraper/library-discovery.js'
 import { config } from '../utils/config.js'
 
 export class CommandHandler {
-  // ========== Custom Error Classes ==========
   static readonly ScraperError = class extends Error {
     constructor(message: string) {
       super(message)
@@ -46,175 +45,159 @@ export class CommandHandler {
     }
   }
 
-  private checkpointManager: CheckpointManager
-  private searchOrchestrator: SearchOrchestrator
+  private progressCheckpointManager: CheckpointManager
+  private conversationSearchOrchestrator: SearchOrchestrator
 
   constructor() {
-    this.checkpointManager = new CheckpointManager()
-    this.searchOrchestrator = new SearchOrchestrator()
+    this.progressCheckpointManager = new CheckpointManager()
+    this.conversationSearchOrchestrator = new SearchOrchestrator()
   }
 
-  // ========== Public Command Handlers ==========
-  async handleStartLibrary(): Promise<void> {
+  async handleStartLibraryExport(): Promise<void> {
     try {
-      await this.runScraperLibrary()
-    } catch (error) {
-      logger.error('Scraper failed:', error instanceof Error ? error : String(error))
+      await this.executeFullScrapingFlow()
+    } catch (_error) {
+      logger.error('Scraper failed:', _error instanceof Error ? _error : String(_error))
     }
   }
 
-  async handleStartWizard(): Promise<void> {
-    const progress = this.checkpointManager.getProgress()
+  async handleScraperWizard(): Promise<void> {
+    const progress = this.progressCheckpointManager.getProcessingProgress()
 
     if (progress.total > 0) {
-      await this.handleCheckpointPrompt()
+      await this.promptUserForCheckpointAction()
     }
 
-    await this.runScraperLibrary()
+    await this.executeFullScrapingFlow()
   }
 
   async handleSearchWizard(): Promise<void> {
-    const query = await this.promptSearchQuery()
-    const mode = await this.promptSearchMode()
-    const rgOptions = {
-      pattern: query,
+    const searchQuery = await this.promptForSearchQuery()
+    const searchMode = await this.promptForSearchMode()
+    const ripgrepSearchOptions = {
+      pattern: searchQuery,
       caseSensitive: false,
       wholeWord: false,
       regex: false,
     }
 
-    logger.info(`Searching for: "${query}" (mode: ${mode})\n`)
+    logger.info(`Searching for: "${searchQuery}" (mode: ${searchMode})\n`)
 
     try {
-      if (mode === 'vector' || mode === 'auto') {
-        await this.validateVectorIfNeeded(mode)
+      const vectorEnabledModes = ['vector', 'auto', 'rag']
+      if (vectorEnabledModes.includes(searchMode)) {
+        await this.ensureVectorSearchIsAvailable(searchMode)
       }
 
-      await this.searchOrchestrator.search(query, mode as 'auto' | 'vector' | 'rg', rgOptions)
-    } catch (error) {
-      if (error instanceof Error) {
-        logger.error(error.message)
+      await this.conversationSearchOrchestrator.search(searchQuery, searchMode as 'auto' | 'vector' | 'rg' | 'rag', ripgrepSearchOptions)
+    } catch (_error) {
+      if (_error instanceof Error) {
+        logger.error(_error.message)
       }
     }
   }
 
   async handleVectorizeWizard(): Promise<void> {
-    const confirmVectorize = await confirm({
+    const shouldRebuildIndex = await confirm({
       message: 'Rebuild the vector index from exports now?',
       default: true,
     })
 
-    if (!confirmVectorize) {
+    if (!shouldRebuildIndex) {
       logger.info('Vectorization cancelled.')
       return
     }
 
     try {
-      await this.searchOrchestrator.validateVectorSearch()
-    } catch (error) {
-      await this.handleValidationRetry(error)
+      await this.conversationSearchOrchestrator.validateVectorSearch()
+    } catch (_error) {
+      await this.handleVectorSearchValidationRetry(_error)
       return
     }
 
-    await this.searchOrchestrator.vectorizeNow()
+    await this.conversationSearchOrchestrator.vectorizeNow()
   }
 
-  async handleReset(): Promise<void> {
-    const confirmed = await confirm({
+  async handleDataReset(): Promise<void> {
+    const isUserCertainOfReset = await confirm({
       message:
         '⚠️  This will delete all stored checkpoints, authentication data, and vector index. Are you sure?',
       default: false,
     })
 
-    if (!confirmed) {
+    if (!isUserCertainOfReset) {
       logger.info('Reset cancelled.')
       return
     }
 
     try {
-      this.deleteStorageFolder()
-      this.checkpointManager.reset() // also reset in-memory state
+      this.wipeStorageDirectory()
+      this.progressCheckpointManager.resetCheckpoint()
       logger.success('✅ Storage folder deleted. All progress has been reset.')
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      throw new CommandHandler.ResetError(`Failed to reset: ${message}`)
+    } catch (_error) {
+      const errorMessage = _error instanceof Error ? _error.message : String(_error)
+      throw new CommandHandler.ResetError(`Failed to reset: ${errorMessage}`)
     }
   }
 
-  handleHelp(): void {
+  handleShowHelp(): void {
     showHelp()
   }
 
-  // ========== Private Helpers ==========
-
-  /**
-   * Run the full library scraping process.
-   * @throws {CommandHandler.ScraperError} on fatal errors.
-   */
-  private async runScraperLibrary(): Promise<void> {
+  private async executeFullScrapingFlow(): Promise<void> {
     const browserManager = new BrowserManager()
 
     try {
-      const page = await browserManager.launch()
+      const activePage = await browserManager.launch()
 
-      if (!this.checkpointManager.isDiscoveryComplete()) {
-        await this.runDiscoveryPhase(page)
+      if (!this.progressCheckpointManager.isDiscoveryPhaseComplete()) {
+        await this.runDiscoveryPhase(activePage)
       }
 
-      const pending = this.checkpointManager.getPendingConversations()
+      const pendingConversations = this.progressCheckpointManager.getPendingConversations()
 
-      if (pending.length === 0) {
+      if (pendingConversations.length === 0) {
         logger.success('All conversations already processed!')
         return
       }
 
-      await this.runExtractionPhase(browserManager, pending)
+      await this.runExtractionPhase(browserManager, pendingConversations)
 
       logger.success('\n✨ Export complete!')
-    } catch (error) {
+    } catch (_error) {
       throw new CommandHandler.ScraperError(
-        `Scraping failed: ${error instanceof Error ? error.message : String(error)}`
+        `Scraping failed: ${_error instanceof Error ? _error.message : String(_error)}`
       )
     } finally {
       await browserManager.close()
     }
   }
 
-  /**
-   * Phase 1: Discover all conversations via library API.
-   */
   private async runDiscoveryPhase(page: any): Promise<void> {
     logger.info('\n=== Phase 1: Library Discovery ===\n')
-    const libraryDiscovery = new LibraryDiscovery()
-    const conversations = await libraryDiscovery.discoverFromLibrary(page)
-    this.checkpointManager.setDiscoveredConversations(conversations)
+    const libraryDiscoveryTool = new LibraryDiscovery()
+    const discoveredConversations = await libraryDiscoveryTool.discoverAllConversationsFromLibrary(page)
+    this.progressCheckpointManager.setDiscoveredConversations(discoveredConversations)
   }
 
-  /**
-   * Phase 2: Extract conversations using worker pool.
-   */
   private async runExtractionPhase(browserManager: BrowserManager, pending: any[]): Promise<void> {
     logger.info(`\n=== Phase 2: Parallel Extraction (${pending.length} pending) ===\n`)
 
-    const browser = browserManager.browser
-    if (!browser) {
+    const activeBrowser = browserManager.browserInstance
+    if (!activeBrowser) {
       throw new CommandHandler.ScraperError('Browser was not initialized')
     }
 
-    const pool = new WorkerPool(this.checkpointManager, browser)
-    await pool.initialize()
-    await pool.processConversations(pending)
-    await pool.close()
-    await browser.close()
+    const workerPool = new WorkerPool(this.progressCheckpointManager, activeBrowser)
+    await workerPool.initialize()
+    await workerPool.processConversations(pending)
+    await workerPool.close()
   }
 
-  /**
-   * Prompt user about resuming/restarting when a checkpoint exists.
-   */
-  private async handleCheckpointPrompt(): Promise<void> {
-    const progress = this.checkpointManager.getProgress()
+  private async promptUserForCheckpointAction(): Promise<void> {
+    const progress = this.progressCheckpointManager.getProcessingProgress()
 
-    const resumeChoice = await select({
+    const chosenAction = await select({
       message: `Found checkpoint (${progress.processed}/${progress.total} processed). What do you want to do?`,
       choices: [
         { name: 'Resume from checkpoint', value: 'resume' },
@@ -223,99 +206,83 @@ export class CommandHandler {
       ],
     })
 
-    if (resumeChoice === 'cancel') {
+    if (chosenAction === 'cancel') {
       logger.info('Start cancelled.')
       process.exit(0)
     }
 
-    if (resumeChoice === 'restart') {
-      this.checkpointManager.reset()
+    if (chosenAction === 'restart') {
+      this.progressCheckpointManager.resetCheckpoint()
     }
   }
 
-  /**
-   * Prompt for search query.
-   */
-  private async promptSearchQuery(): Promise<string> {
+  private async promptForSearchQuery(): Promise<string> {
     return input({
       message: 'Search query:',
-      validate: (value) => (value.trim().length === 0 ? 'Please enter a query.' : true),
+      validate: (inputValue) => (inputValue.trim().length === 0 ? 'Please enter a query.' : true),
     })
   }
 
-  /**
-   * Prompt for search mode.
-   */
-  private async promptSearchMode(): Promise<string> {
+  private async promptForSearchMode(): Promise<string> {
     return select({
       message: 'Search mode:',
       choices: [
         { name: 'Auto (semantic for long queries, exact for short)', value: 'auto' },
         { name: 'Semantic (Ollama + Vectra)', value: 'vector' },
+        { name: 'RAG (Ask history with Ollama)', value: 'rag' },
         { name: 'Exact text (ripgrep)', value: 'rg' },
       ],
       default: 'auto',
     })
   }
 
-  /**
-   * Validate vector search availability if mode requires it.
-   */
-  private async validateVectorIfNeeded(mode: string): Promise<void> {
+  private async ensureVectorSearchIsAvailable(mode: string): Promise<void> {
     if (mode === 'rg') return
 
     try {
-      await this.searchOrchestrator.validateVectorSearch()
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      logger.error(message)
+      await this.conversationSearchOrchestrator.validateVectorSearch()
+    } catch (_error) {
+      const errorMessage = _error instanceof Error ? _error.message : String(_error)
+      logger.error(errorMessage)
       logger.info('Start Ollama with the embedding model, then run "vectorize".')
-      throw new CommandHandler.ValidationError(message)
+      throw new CommandHandler.ValidationError(errorMessage)
     }
   }
 
-  /**
-   * Handle validation failure during vectorize wizard.
-   */
-  private async handleValidationRetry(error: unknown): Promise<void> {
-    const message = error instanceof Error ? error.message : String(error)
-    logger.error(message)
+  private async handleVectorSearchValidationRetry(error: unknown): Promise<void> {
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    logger.error(errorMessage)
 
-    const retry = await confirm({
+    const shouldRetry = await confirm({
       message:
         'Ollama validation failed. Start Ollama (with the embedding model) and retry vectorization?',
       default: false,
     })
 
-    if (!retry) {
+    if (!shouldRetry) {
       return
     }
 
     try {
-      await this.searchOrchestrator.validateVectorSearch()
+      await this.conversationSearchOrchestrator.validateVectorSearch()
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err)
-      logger.error(msg)
+      const nestedErrorMessage = err instanceof Error ? err.message : String(err)
+      logger.error(nestedErrorMessage)
       return
     }
 
-    // If validation passed, continue to vectorization
-    await this.searchOrchestrator.vectorizeNow()
+    await this.conversationSearchOrchestrator.vectorizeNow()
   }
 
-  /**
-   * Delete the .storage folder and all its contents.
-   * Uses the storage path from config
-   */
-  private deleteStorageFolder(): void {
-    const storagePath = config.authStoragePath || '.storage' // fallback if not defined
+  private wipeStorageDirectory(): void {
+    const configuredAuthPath = config.authStoragePath
+    const storageRootDirectory = configuredAuthPath ? configuredAuthPath.split('/')[0] : '.storage'
     try {
-      rmSync(storagePath, { recursive: true, force: true })
-      logger.debug(`Deleted storage folder: ${storagePath}`)
-    } catch (error) {
-      // If folder doesn't exist, it's fine – we just do nothing
-      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
-        throw error
+      rmSync(storageRootDirectory!, { recursive: true, force: true })
+      logger.debug(`Deleted storage folder: ${storageRootDirectory}`)
+    } catch (_error) {
+      if ((_error as NodeJS.ErrnoException).code !== 'ENOENT') {
+        throw _error
       }
     }
   }

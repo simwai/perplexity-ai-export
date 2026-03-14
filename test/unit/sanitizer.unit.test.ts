@@ -5,13 +5,12 @@ import {
   sanitizeSpaceName,
 } from '../../src/export/sanitizer.js'
 
-describe('sanitizeFilename - Path Safety Logic', () => {
+describe('sanitizeFilename', () => {
   it('should replace illegal filesystem characters', () => {
-    const dangerous = 'file<>:"/\\|?*test'
-    const result = sanitizeFilename(dangerous)
+    const dangerousName = 'file<>:"/\\|?*test'
+    const sanitizedName = sanitizeFilename(dangerousName)
 
-    // sanitize-filename handles all illegal chars
-    expect(result).not.toMatch(/[<>:"/\\|?*]/)
+    expect(sanitizedName).not.toMatch(/[<>:"/\\|?*]/)
   })
 
   it('should replace spaces with underscores', () => {
@@ -19,40 +18,39 @@ describe('sanitizeFilename - Path Safety Logic', () => {
   })
 
   it('should truncate to 100 chars to prevent path length issues', () => {
-    const tooLong = 'a'.repeat(200)
-    const result = sanitizeFilename(tooLong)
+    const excessivelyLongName = 'a'.repeat(200)
+    const truncatedName = sanitizeFilename(excessivelyLongName)
 
-    expect(result.length).toBeLessThanOrEqual(100)
+    expect(truncatedName.length).toBeLessThanOrEqual(100)
   })
 
   it('should handle problematic filenames gracefully', () => {
     expect(sanitizeFilename('..')).toBeTruthy()
-    expect(sanitizeFilename('CON')).not.toBe('CON') // Windows reserved
+    expect(sanitizeFilename('CON')).not.toBe('CON')
     expect(sanitizeFilename('')).toBe('')
   })
 })
 
 describe('sanitizeSpaceName', () => {
   it('should behave identically to sanitizeFilename', () => {
-    const input = 'My Space: 2024'
-    expect(sanitizeSpaceName(input)).toBe(sanitizeFilename(input))
+    const rawSpaceName = 'My Space: 2024'
+    expect(sanitizeSpaceName(rawSpaceName)).toBe(sanitizeFilename(rawSpaceName))
   })
 })
 
 describe('sanitizeMarkdownContent', () => {
   it('should return content unchanged for normal markdown', () => {
-    const markdown = '## My Header\n\nContent with `code` and **bold**'
-    const result = sanitizeMarkdownContent(markdown)
+    const rawMarkdownContent = '## My Header\n\nContent with `code` and **bold**'
+    const processedContent = sanitizeMarkdownContent(rawMarkdownContent)
 
-    // If using minimal sanitization, content should pass through
-    expect(result).toContain('## My Header')
+    expect(processedContent).toContain('## My Header')
   })
 
   it('should handle empty input gracefully', () => {
     expect(sanitizeMarkdownContent('')).toBe('')
   })
 
-  it('should handle null/undefined input', () => {
+  it('should handle null or undefined input by returning empty string', () => {
     expect(sanitizeMarkdownContent(null as any)).toBe('')
     expect(sanitizeMarkdownContent(undefined as any)).toBe('')
   })
