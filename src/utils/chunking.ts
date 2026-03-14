@@ -1,8 +1,4 @@
-export function chunkMarkdown(
-  markdown: string,
-  maxChars = 1500,
-  overlap = 150
-): string[] {
+export function chunkMarkdown(markdown: string, maxChars = 1500, overlap = 150): string[] {
   const splitByHeaderOrRule = /(?=^#{1,3}\s)|(?=^---)/gm
 
   const sections = markdown.split(splitByHeaderOrRule)
@@ -14,10 +10,7 @@ export function chunkMarkdown(
     const trimmedSection = section.trim()
     if (!trimmedSection) continue
 
-    if (
-      currentChunk.length + trimmedSection.length > maxChars &&
-      currentChunk.length > 0
-    ) {
+    if (currentChunk.length + trimmedSection.length > maxChars && currentChunk.length > 0) {
       chunks.push(currentChunk.trim())
 
       const overlapText = currentChunk.slice(-overlap).replace(/^---\s*/, '')

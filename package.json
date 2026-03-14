@@ -7,7 +7,7 @@
     "start": "node dist/index.js",
     "build": "tsc",
     "type-check": "tsc --noEmit",
-    "format": "oxlint --fix && oxfmt",
+    "format": "oxlint --fix --format=stylish && oxfmt",
     "test": "vitest",
     "test:unit": "vitest run test/unit",
     "test:integration": "vitest run test/integration",

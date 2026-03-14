@@ -116,16 +116,12 @@ export class ConversationExtractor {
 
       const apiData = await apiDataPromise
       if (!apiData) {
-        throw new ConversationExtractor.NoDataError(
-          'API response timeout or not found'
-        )
+        throw new ConversationExtractor.NoDataError('API response timeout or not found')
       }
 
       const parsed = this.parseConversationData(apiData, url)
       if (!parsed) {
-        throw new ConversationExtractor.ParsingError(
-          'Failed to parse conversation data'
-        )
+        throw new ConversationExtractor.ParsingError('Failed to parse conversation data')
       }
 
       return parsed
@@ -143,16 +139,12 @@ export class ConversationExtractor {
 
   private async ensureContextIsAlive(): Promise<void> {
     if (!this.context) {
-      throw new ConversationExtractor.ExtractionError(
-        'Browser context is missing'
-      )
+      throw new ConversationExtractor.ExtractionError('Browser context is missing')
     }
     try {
       await this.context.pages()
     } catch (_error) {
-      throw new ConversationExtractor.ExtractionError(
-        'Browser context is no longer available'
-      )
+      throw new ConversationExtractor.ExtractionError('Browser context is no longer available')
     }
   }
 
@@ -172,8 +164,7 @@ export class ConversationExtractor {
         if (resolved) return
 
         const url = response.url()
-        if (!url.includes('/rest/thread/') || url.includes('list_ask_threads'))
-          return
+        if (!url.includes('/rest/thread/') || url.includes('list_ask_threads')) return
 
         logger.info(`Found matching thread API response: ${url}`)
 
@@ -186,12 +177,9 @@ export class ConversationExtractor {
           const json = await response.json()
           if (resolved) return
 
-          const parseResult =
-            ConversationExtractor.ApiResponseSchema.safeParse(json)
+          const parseResult = ConversationExtractor.ApiResponseSchema.safeParse(json)
           if (!parseResult.success) {
-            logger.warn(
-              `API response validation failed: ${parseResult.error.message}`
-            )
+            logger.warn(`API response validation failed: ${parseResult.error.message}`)
           }
 
           clearTimeout(timeout)
@@ -205,10 +193,7 @@ export class ConversationExtractor {
     })
   }
 
-  private async navigateToConversationUrl(
-    page: Page,
-    url: string
-  ): Promise<void> {
+  private async navigateToConversationUrl(page: Page, url: string): Promise<void> {
     const response = await page.goto(url, {
       waitUntil: 'domcontentloaded',
       timeout: 30000,
@@ -219,21 +204,15 @@ export class ConversationExtractor {
 
   private validateNavigationResponse(response: Response | null): void {
     if (!response) {
-      throw new ConversationExtractor.NavigationError(
-        'Navigation failed – no response'
-      )
+      throw new ConversationExtractor.NavigationError('Navigation failed – no response')
     }
 
     const status = response.status()
     if (status === 404) {
-      throw new ConversationExtractor.NotFoundError(
-        'Conversation not found (404)'
-      )
+      throw new ConversationExtractor.NotFoundError('Conversation not found (404)')
     }
     if (status === 403 || status === 401) {
-      throw new ConversationExtractor.AuthError(
-        'Authentication required or expired'
-      )
+      throw new ConversationExtractor.AuthError('Authentication required or expired')
     }
     if (status >= 500) {
       throw new ConversationExtractor.ServerError(`Server error (${status})`)
@@ -243,10 +222,7 @@ export class ConversationExtractor {
     }
   }
 
-  private parseConversationData(
-    data: any,
-    url: string
-  ): ExtractedConversation | null {
+  private parseConversationData(data: any, url: string): ExtractedConversation | null {
     try {
       const entries = this.ensureEntriesFormat(data)
 
@@ -256,9 +232,7 @@ export class ConversationExtractor {
         .safeParse(entries)
 
       if (!parseResult.success) {
-        logger.warn(
-          `Entry validation failed for ${url}: ${parseResult.error.message}`
-        )
+        logger.warn(`Entry validation failed for ${url}: ${parseResult.error.message}`)
         return null
       }
 
@@ -267,9 +241,7 @@ export class ConversationExtractor {
       const id = this.extractIdFromUrl(url)
       const title = firstEntry.thread_title ?? data.thread_title ?? 'Untitled'
       const spaceName =
-        firstEntry.collection_info?.title ??
-        data.collection_info?.title ??
-        'General'
+        firstEntry.collection_info?.title ?? data.collection_info?.title ?? 'General'
       const timestamp = this.extractTimestamp(firstEntry, data)
       const content = this.convertEntriesToMarkdown(validEntries, title)
 
@@ -308,10 +280,7 @@ export class ConversationExtractor {
     return ts ? new Date(ts) : new Date()
   }
 
-  private convertEntriesToMarkdown(
-    entries: any[],
-    threadTitle: string
-  ): string {
+  private convertEntriesToMarkdown(entries: any[], threadTitle: string): string {
     let markdown = ''
 
     for (let i = 0; i < entries.length; i++) {

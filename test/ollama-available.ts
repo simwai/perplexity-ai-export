@@ -8,9 +8,7 @@ export async function isOllamaAvailable(): Promise<boolean> {
     return true
   } catch (error) {
     logger.warn('⚠ Ollama not available, skipping tests that require it.')
-    logger.warn(
-      `   Reason: ${error instanceof Error ? error.message : String(error)}`
-    )
+    logger.warn(`   Reason: ${error instanceof Error ? error.message : String(error)}`)
     return false
   }
 }

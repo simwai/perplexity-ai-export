@@ -12,13 +12,9 @@ describe('chunkMarkdown', () => {
   })
 
   it('should split by horizontal rules for conversation turns', () => {
-    const multiTurnConversation = [
-      '## Question 1',
-      'Answer 1',
-      '---',
-      '## Question 2',
-      'Answer 2',
-    ].join('\n\n')
+    const multiTurnConversation = ['## Question 1', 'Answer 1', '---', '## Question 2', 'Answer 2'].join(
+      '\n\n'
+    )
 
     const contentChunks = chunkMarkdown(multiTurnConversation, 50)
 
@@ -27,16 +23,13 @@ describe('chunkMarkdown', () => {
   })
 
   it('should respect overlap to preserve context across boundaries', () => {
-    const multiSectionMarkdown =
-      'Section A content here\n\n---\n\nSection B content'
+    const multiSectionMarkdown = 'Section A content here\n\n---\n\nSection B content'
 
     const contentChunks = chunkMarkdown(multiSectionMarkdown, 30, 10)
 
     expect(contentChunks.length).toBeGreaterThan(1)
     const overlapCharactersFromFirstChunk = contentChunks[0]!.slice(-10)
-    expect(contentChunks[1]).toContain(
-      overlapCharactersFromFirstChunk.trim().slice(0, 5)
-    )
+    expect(contentChunks[1]).toContain(overlapCharactersFromFirstChunk.trim().slice(0, 5))
   })
 
   it('should handle empty input without errors', () => {

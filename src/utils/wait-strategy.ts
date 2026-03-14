@@ -9,9 +9,7 @@ export interface WaitStrategy {
 
 class DynamicWaitStrategy implements WaitStrategy {
   async afterClick(page: Page): Promise<void> {
-    await page
-      .waitForLoadState('networkidle', { timeout: 2000 })
-      .catch(() => {})
+    await page.waitForLoadState('networkidle', { timeout: 2000 }).catch(() => {})
   }
 
   async afterScroll(page: Page): Promise<void> {

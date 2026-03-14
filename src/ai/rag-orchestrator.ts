@@ -1,257 +1,211 @@
 import { VectorStore, type VectorSearchResult } from '../search/vector-store.js'
 import { OllamaClient } from './ollama-client.js'
+import { RgSearch } from '../search/rg-search.js'
 import { logger } from '../utils/logger.js'
 import chalk from 'chalk'
+import { join } from 'node:path'
+import { config } from '../utils/config.js'
 
 export class RagOrchestrator {
   private vectorStore: VectorStore
   private ollamaClient: OllamaClient
+  private ripgrep: RgSearch
 
   constructor() {
     this.vectorStore = new VectorStore()
     this.ollamaClient = new OllamaClient()
+    this.ripgrep = new RgSearch()
   }
 
   async answerQuestion(question: string): Promise<void> {
-    logger.info(`Deep analyzing request: "${question}"`)
+    logger.info(`Mightiest RAG analyzing request: "${question}"`)
 
     try {
-      const analysis = await this.performDeepQueryAnalysis(question)
-      logger.info(`Intent: ${chalk.gray(analysis.intent)}`)
-      logger.info(`Search variations: ${chalk.gray(analysis.queries.join(' | '))}`)
+      const plan = await this.developExecutionPlan(question)
+      logger.info(`Strategy: ${chalk.bold.yellow(plan.strategy.toUpperCase())}`)
+      logger.info(`Search Variations: ${chalk.gray(plan.queries.join(' | '))}`)
 
-      const rawResultsPool = await this.collectMultiQueryResults(analysis.queries, analysis.filters)
+      const searchResults = await this.executeHybridSearch(plan)
 
-      let rankedResults = this.applyReciprocalRankFusion(rawResultsPool)
-
-      if (analysis.temporalRequirement) {
-        rankedResults = this.applyTemporalWeighting(rankedResults, analysis.temporalRequirement)
+      if (searchResults.length === 0) {
+        logger.warn('History is silent on this topic. Using core AI knowledge.')
       }
 
-      const candidatePoolSize = analysis.intent === 'broad' ? 40 : 20
-      const topCandidates = rankedResults.slice(0, candidatePoolSize)
+      const exhaustiveMode = plan.strategy === 'exhaustive'
+      const contextFacts = await this.extractFactsWithGranularMapReduce(question, searchResults, exhaustiveMode)
 
-      if (topCandidates.length === 0) {
-        logger.warn('No relevant context found in history. Using general knowledge.')
+      logger.info(`Synthesizing final answer from ${contextFacts.length} verified facts...`)
+      const finalAnswer = await this.generateMightiestResponse(question, contextFacts, plan.strategy)
+
+      console.log(`\n${chalk.bold.green('Mightiest AI Response:')}\n`)
+      console.log(finalAnswer)
+
+      this.displaySourceList(contextFacts)
+
+      const feedback = await this.verifyAnswerQuality(question, finalAnswer, contextFacts)
+      if (feedback.status === 'improvement-needed') {
+        logger.warn(`Self-Correction: ${chalk.gray(feedback.suggestion)}`)
       }
 
-      const rerankedContext = await this.rerankWithLlm(question, topCandidates)
-      const groupedContext = this.groupChunksByParentThread(rerankedContext)
-
-      logger.info(`Synthesizing answer from ${groupedContext.size} relevant conversations...`)
-
-      const atomicFacts = await this.extractKeyFindings(question, groupedContext)
-      if (atomicFacts) {
-        logger.info(`Extracted ${chalk.gray(atomicFacts.split('\n').length)} key observations from history.`)
-      }
-
-      const finalPrompt = this.constructAdvancedRagPrompt(question, groupedContext, analysis.intent, atomicFacts)
-      const response = await this.ollamaClient.generate(finalPrompt)
-
-      console.log(`\n${chalk.bold.green('AI Insights:')}\n`)
-      console.log(response)
-
-      if (groupedContext.size > 0) {
-        this.displaySourceThreads(groupedContext)
-      }
     } catch (_error) {
       const errorMessage = _error instanceof Error ? _error.message : String(_error)
-      logger.error(`Advanced RAG process failed: ${errorMessage}`)
+      logger.error(`Mightiest RAG failed: ${errorMessage}`)
     }
   }
 
-  private async performDeepQueryAnalysis(originalQuestion: string): Promise<{
+  private async developExecutionPlan(originalQuestion: string): Promise<{
+    strategy: 'precise' | 'exhaustive';
     queries: string[];
-    intent: 'specific' | 'broad';
-    filters?: { title?: string; space?: string };
-    temporalRequirement?: 'latest' | 'recent' | 'all'
+    keywords: string[];
+    filters: any;
   }> {
-    const analysisPrompt = `
-Analyze: "${originalQuestion}"
-1. Intent: "broad" (summary/list/overview) or "specific" (detailed fact/how-to).
-2. Variations: 3 distinct search queries (keyword-heavy, natural language, conceptual).
-3. Metadata: Any title/space filters mentioned.
-4. Temporal: Does the user want "latest", "recent", or "all" history?
+    const plannerPrompt = `
+Analyze the user request: "${originalQuestion}"
+Decide the best RAG strategy:
+- "precise": The user wants a specific fact, code snippet, or a direct answer to a narrow question.
+- "exhaustive": The user wants to know everything said about a topic, a summary of all threads, or a broad overview where missing one detail would be a failure.
 
-Return EXACTLY this JSON:
+Generate:
+1. strategy: "precise" or "exhaustive"
+2. queries: 3 semantic search variations.
+3. keywords: 3-5 exact keywords for ripgrep (focus on names, unique technical terms).
+4. filters: Any mentioned thread titles or space names.
+
+Return EXACTLY JSON:
 {
-  "intent": "broad" | "specific",
+  "strategy": "precise" | "exhaustive",
   "queries": ["q1", "q2", "q3"],
-  "filters": { "title": "...", "space": "..." },
-  "temporal": "latest" | "recent" | "all"
+  "keywords": ["k1", "k2", "k3"],
+  "filters": { "title": "...", "space": "..." }
 }
 `
     try {
-      const response = await this.ollamaClient.generate(analysisPrompt)
-      const jsonMatch = response.match(/\{[\s\S]*\}/)
-      if (jsonMatch) {
-        const parsed = JSON.parse(jsonMatch[0])
-        return {
-          queries: parsed.queries && Array.isArray(parsed.queries) ? parsed.queries : [originalQuestion],
-          intent: parsed.intent === 'broad' ? 'broad' : 'specific',
-          filters: (parsed.filters?.title || parsed.filters?.space) ? parsed.filters : undefined,
-          temporalRequirement: parsed.temporal || 'all'
-        }
+      const response = await this.ollamaClient.generate(plannerPrompt)
+      const json = JSON.parse(response.match(/\{[\s\S]*\}/)?.[0] || '{}')
+      return {
+        strategy: json.strategy || 'precise',
+        queries: json.queries || [originalQuestion],
+        keywords: json.keywords || [],
+        filters: json.filters || {}
       }
-    } catch (_err) { /* fallback */ }
-
-    return { queries: [originalQuestion], intent: 'specific', temporalRequirement: 'all' }
-  }
-
-  private async collectMultiQueryResults(queries: string[], filters?: any): Promise<VectorSearchResult[][]> {
-    const resultsPool: VectorSearchResult[][] = []
-    for (const query of queries) {
-      let results: VectorSearchResult[]
-      if (filters && (filters.title || filters.space)) {
-        results = await this.vectorStore.searchWithMetadataFilter(query, (meta: Record<string, any>) => {
-          let match = true
-          if (filters.title) match = match && !!(meta['title'] as string)?.toLowerCase().includes(filters.title.toLowerCase())
-          if (filters.space) match = match && !!(meta['spaceName'] as string)?.toLowerCase().includes(filters.space.toLowerCase())
-          return match
-        }, 30)
-      } else {
-        results = await this.vectorStore.search(query, 30)
-      }
-      resultsPool.push(results)
+    } catch (_err) {
+      return { strategy: 'precise', queries: [originalQuestion], keywords: [], filters: {} }
     }
-    return resultsPool
   }
 
-  private applyReciprocalRankFusion(resultsPool: VectorSearchResult[][]): VectorSearchResult[] {
-    const fusionScores = new Map<string, { result: VectorSearchResult; score: number }>()
-    const k_constant = 60
+  private async executeHybridSearch(plan: any): Promise<VectorSearchResult[]> {
+    const resultsPool: VectorSearchResult[][] = []
 
-    resultsPool.forEach((results) => {
-      results.forEach((res, rank) => {
-        const id = res.meta['id']!
-        const score = 1.0 / (k_constant + rank)
-        const existing = fusionScores.get(id)
-        if (existing) {
-          existing.score += score
-        } else {
-          fusionScores.set(id, { result: res, score })
-        }
+    for (const q of plan.queries) {
+      const res = await this.vectorStore.search(q, 40)
+      resultsPool.push(res)
+    }
+
+    for (const k of plan.keywords) {
+      try {
+        const matches = await this.ripgrep.captureSearchMatches({ pattern: k })
+        const converted = matches.map(m => ({
+          meta: { path: join(config.exportDir, m.path), snippet: m.text, title: m.path.split('/').pop() || 'Untitled', id: m.path + m.line },
+          score: 1.0
+        }))
+        resultsPool.push(converted as any)
+      } catch (_err) { /* oxlint-disable-next-line no-empty */ }
+    }
+
+    return this.reciprocalRankFusion(resultsPool)
+  }
+
+  private reciprocalRankFusion(pools: VectorSearchResult[][]): VectorSearchResult[] {
+    const scores = new Map<string, { res: VectorSearchResult; score: number }>()
+    pools.forEach(pool => {
+      pool.forEach((res, rank) => {
+        const path = res.meta['path'] || 'unknown'
+        const snippet = res.meta['snippet'] || ''
+        const id = res.meta['id'] || `${path}:${snippet}`
+        const s = 1 / (60 + rank)
+        if (scores.has(id)) scores.get(id)!.score += s
+        else scores.set(id, { res, score: s })
       })
     })
-
-    return Array.from(fusionScores.values())
-      .sort((a, b) => b.score - a.score)
-      .map(v => v.result)
+    return Array.from(scores.values()).sort((a, b) => b.score - a.score).map(v => v.res)
   }
 
-  private applyTemporalWeighting(results: VectorSearchResult[], requirement: 'latest' | 'recent' | 'all'): VectorSearchResult[] {
-    if (requirement === 'all') return results
+  private async extractFactsWithGranularMapReduce(question: string, results: VectorSearchResult[], exhaustive: boolean): Promise<any[]> {
+    const poolLimit = exhaustive ? 60 : 20
+    const pool = results.slice(0, poolLimit)
+    if (pool.length === 0) return []
 
-    return [...results].sort((a, b) => {
-      const dateA = new Date(a.meta['date'] || 0).getTime()
-      const dateB = new Date(b.meta['date'] || 0).getTime()
-      if (requirement === 'latest') return dateB - dateA
-      return dateB - dateA
-    })
-  }
+    const chunkSize = 5
+    const factBatches: any[][] = []
 
-  private async rerankWithLlm(question: string, candidates: VectorSearchResult[]): Promise<VectorSearchResult[]> {
-    if (candidates.length <= 5) return candidates
+    logger.info(`Processing ${pool.length} context snippets in batches of ${chunkSize}...`)
 
-    logger.info(`LLM Reranking ${candidates.length} candidates pool...`)
-    const rerankPrompt = `
+    for (let i = 0; i < pool.length; i += chunkSize) {
+      const chunk = pool.slice(i, i + chunkSize)
+      const batchPrompt = `
 Question: "${question}"
-Snippets:
-${candidates.map((c, i) => `[${i}] Thread: ${c.meta['title']}\nSnippet: ${c.meta['snippet']}`).join('\n\n')}
+Context Snippets:
+${chunk.map((r, j) => `[ID ${j}] Thread: ${r.meta['title']}\nSnippet: ${r.meta['snippet']}`).join('\n\n')}
 
-Identify the indexes of the most relevant snippets to answer the question.
-Return ONLY a comma-separated list of numbers.
+Extract every specific fact, detail, or mention relevant to the question.
+Include technical terms, dates, and names.
+Return as JSON array: [{"fact": "...", "source_title": "..."}]
 `
-    try {
-      const response = await this.ollamaClient.generate(rerankPrompt)
-      const indexes = response.match(/\d+/g)?.map(Number) || []
-      const filtered = indexes
-        .filter(idx => idx >= 0 && idx < candidates.length)
-        .map(idx => candidates[idx]!)
-
-      return filtered.length > 0 ? filtered : candidates.slice(0, 10)
-    } catch (_err) {
-      return candidates.slice(0, 10)
-    }
-  }
-
-  private async extractKeyFindings(question: string, groupedContext: Map<string, { title: string; snippets: string[] }>): Promise<string | null> {
-    if (groupedContext.size === 0) return null
-
-    let contextBlob = ''
-    for (const [_, data] of groupedContext) {
-      contextBlob += `Thread: ${data.title}\n${data.snippets.join('\n')}\n\n`
-    }
-
-    const extractionPrompt = `
-Extract the most important specific facts, numbers, or technical details from the following conversations that are relevant to the question: "${question}"
-Focus on "Atomic Facts".
-Context:
-${contextBlob}
-
-Return as a bulleted list of findings. If nothing relevant, return "None".
-`
-    try {
-      const findings = await this.ollamaClient.generate(extractionPrompt)
-      return findings.trim() === 'None' ? null : findings
-    } catch (_err) {
-      return null
-    }
-  }
-
-  private groupChunksByParentThread(chunks: VectorSearchResult[]): Map<string, { title: string; path: string; snippets: string[] }> {
-    const threadGroups = new Map<string, { title: string; path: string; snippets: string[] }>()
-    for (const chunk of chunks) {
-      const threadPath = chunk.meta['path']!
-      if (!threadGroups.has(threadPath)) {
-        threadGroups.set(threadPath, { title: chunk.meta['title']!, path: threadPath, snippets: [] })
+      try {
+        const response = await this.ollamaClient.generate(batchPrompt)
+        const facts = JSON.parse(response.match(/\[[\s\S]*\]/)?.[0] || '[]')
+        factBatches.push(facts)
+      } catch (_err) {
+        factBatches.push(chunk.map(r => ({ fact: r.meta['snippet'], source_title: r.meta['title'] })))
       }
-      const group = threadGroups.get(threadPath)!
-      if (!group.snippets.includes(chunk.meta['snippet']!)) group.snippets.push(chunk.meta['snippet']!)
     }
-    return threadGroups
+
+    return factBatches.flat()
   }
 
-  private constructAdvancedRagPrompt(question: string, groupedContext: Map<string, { title: string; snippets: string[] }>, intent: string, keyFindings: string | null): string {
-    let contextDescription = ''
-    let sourceIndex = 1
-    for (const [_, data] of groupedContext) {
-      contextDescription += `### Thread [${sourceIndex}]: ${data.title}\n`
-      data.snippets.forEach(s => { contextDescription += `- ${s}\n` })
-      contextDescription += '\n'
-      sourceIndex++
-    }
+  private async generateMightiestResponse(question: string, facts: any[], strategy: string): Promise<string> {
+    const factsList = facts.map((f, i) => `[Fact ${i}] (${f.source_title}): ${f.fact}`).join('\n')
 
-    const findingsSection = keyFindings ? `KEY FINDINGS FROM HISTORY:\n${keyFindings}\n\n` : ''
+    const prompt = `
+SYSTEM: You are the MIGHTIEST personal assistant. You have absolute mastery over the user's Perplexity history.
+STRATEGY: ${strategy}
 
-    const modeInstructions = intent === 'broad'
-      ? 'Provide a thematic summary across these conversations. Group by thread and provide a recap for each.'
-      : 'Provide a direct, high-fidelity answer based on the context and key findings.'
+ALL RELEVANT FACTS EXTRACTED FROM HISTORY:
+${factsList || 'No relevant facts found in history.'}
 
-    return `
-You are a high-level personal knowledge assistant. Synthesize the provided history.
-
-${findingsSection}RAW CONTEXT:
-${contextDescription || 'No history found.'}
-
-QUESTION: ${question}
+USER QUESTION: "${question}"
 
 INSTRUCTIONS:
-1. ${modeInstructions}
-2. Prioritize "Key Findings" for specific details.
-3. Cross-reference threads if related.
-4. Cite using [Thread N].
+1. Provide a definitive, detailed answer.
+2. If STRATEGY is "exhaustive", you MUST mention every unique thread and fact found. Do not summarize away important details.
+3. Use Chain-of-Thought reasoning to connect dots across different conversations.
+4. Cite sources using [Fact N].
+5. If something is missing from history, state it clearly before using your general knowledge.
 
 ANSWER:`
+    return this.ollamaClient.generate(prompt)
   }
 
-  private displaySourceThreads(groupedContext: Map<string, { title: string; path: string }>): void {
-    console.log(`\n${chalk.bold.cyan('Found in Conversations:')}`)
-    let index = 1
-    for (const [_, data] of groupedContext) {
-      console.log(`[Thread ${index}] ${data.title} (${chalk.gray(data.path)})`)
-      index++
+  private displaySourceList(facts: any[]): void {
+    const uniqueThreads = new Set(facts.map(f => f.source_title))
+    if (uniqueThreads.size > 0) {
+      console.log(`\n${chalk.bold.cyan('History Sources Explored:')}`)
+      uniqueThreads.forEach(t => console.log(` - ${t}`))
     }
-    console.log('')
+  }
+
+  private async verifyAnswerQuality(question: string, answer: string, facts: any[]): Promise<{ status: string; suggestion?: string }> {
+    const prompt = `
+Question: "${question}"
+Facts: ${facts.length}
+Answer: "${answer.slice(0, 500)}..."
+
+Check: Did the answer overlook any of the facts?
+Return JSON: {"status": "ok" | "improvement-needed", "suggestion": "..."}
+`
+    try {
+      const res = await this.ollamaClient.generate(prompt)
+      return JSON.parse(res.match(/\{[\s\S]*\}/)?.[0] || '{"status": "ok"}')
+    } catch (_err) { return { status: 'ok' } }
   }
 }
