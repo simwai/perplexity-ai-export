@@ -27,7 +27,9 @@ export class RagOrchestrator {
         logger.info(`Hard Keywords detected: ${chalk.gray(researchPlan.hardKeywords.join(', '))}`)
       }
 
-      const exhaustiveMode = plan.strategy === 'exhaustive'
+      const searchResults = await this.executeAdaptiveHybridSearch(researchPlan)
+      const exhaustiveMode = researchPlan.strategy === 'exhaustive'
+
       const contextFacts = await this.extractFactsWithGranularMapReduce(
         question,
         searchResults,
@@ -38,13 +40,13 @@ export class RagOrchestrator {
       const finalAnswer = await this.generateMightiestResponse(
         question,
         contextFacts,
-        plan.strategy
+        researchPlan.strategy
       )
 
       console.log(`\n${chalk.bold.green('Mightiest AI Response:')}\n`)
-      console.log(finalResponse)
+      console.log(finalAnswer)
 
-      this.displaySourceProvenance(intermediateFindings)
+      this.displaySourceProvenance(contextFacts)
 
       const feedback = await this.verifyAnswerQuality(question, finalAnswer, contextFacts)
       if (feedback.status === 'improvement-needed') {
@@ -56,10 +58,10 @@ export class RagOrchestrator {
     }
   }
 
-  private async developExecutionPlan(originalQuestion: string): Promise<{
+  private async developResearchPlan(originalQuestion: string): Promise<{
     strategy: 'precise' | 'exhaustive'
     queries: string[]
-    keywords: string[]
+    hardKeywords: string[]
     filters: any
   }> {
     const plannerPrompt = `
@@ -75,7 +77,7 @@ Return JSON: {"strategy": "...", "queries": [], "hardKeywords": [], "filters": {
       return {
         strategy: json.strategy || 'precise',
         queries: json.queries || [originalQuestion],
-        keywords: json.keywords || [],
+        hardKeywords: json.hardKeywords || [],
         filters: json.filters || {},
       }
     } catch (_err) {
@@ -83,7 +85,7 @@ Return JSON: {"strategy": "...", "queries": [], "hardKeywords": [], "filters": {
     }
   }
 
-  private async executeAdaptiveHybridSearch(plan: any): Promise<VectorSearchResult[]> {
+  private async executeAdaptiveHybridSearch(plan: { queries: string[], hardKeywords: string[] }): Promise<VectorSearchResult[]> {
     const searchPools: VectorSearchResult[][] = []
 
     for (const q of plan.queries || []) {
@@ -91,10 +93,11 @@ Return JSON: {"strategy": "...", "queries": [], "hardKeywords": [], "filters": {
       searchPools.push(res)
     }
 
+    const keywordPool: VectorSearchResult[] = []
     for (const k of plan.hardKeywords || []) {
       try {
         const matches = await this.ripgrep.captureSearchMatches({ pattern: k })
-        const converted = matches.map((m) => ({
+        const converted: VectorSearchResult[] = matches.map((m) => ({
           meta: {
             path: join(config.exportDir, m.path),
             snippet: m.text,
@@ -103,10 +106,14 @@ Return JSON: {"strategy": "...", "queries": [], "hardKeywords": [], "filters": {
           },
           score: 1.0,
         }))
-        resultsPool.push(converted as any)
+        keywordPool.push(...converted)
       } catch (_err) {
         /* oxlint-disable-next-line no-empty */
       }
+    }
+
+    if (keywordPool.length > 0) {
+      searchPools.push(keywordPool)
     }
 
     return this.mergeAndFusionRank(searchPools)
@@ -120,8 +127,11 @@ Return JSON: {"strategy": "...", "queries": [], "hardKeywords": [], "filters": {
         const snippet = res.meta['snippet'] || ''
         const id = res.meta['id'] || `${path}:${snippet}`
         const s = 1 / (60 + rank)
-        if (scores.has(id)) scores.get(id)!.score += s
-        else scores.set(id, { res, score: s })
+        if (scores.has(id)) {
+          scores.get(id)!.score += s
+        } else {
+          scores.set(id, { res, score: s })
+        }
       })
     })
     return Array.from(scores.values())
@@ -155,12 +165,20 @@ Return JSON array: [{"fact": "...", "node_id": N, "thread": "..."}]
         const response = await this.ollamaClient.generate(researchPrompt)
         const extracted = JSON.parse(response.match(/\[[\s\S]*\]/)?.[0] || '[]')
         extracted.forEach((f: any) => {
-          findings.push({ ...f, original: pool[f.node_id - i] })
+          const original = pool[f.node_id - i]
+          findings.push({
+            fact: f.fact,
+            source_title: original?.meta['title'] || f.thread || 'Unknown',
+            thread: f.thread || original?.meta['title'] || 'Unknown'
+          })
         })
       } catch (_err) {
-        factBatches.push(
-          chunk.map((r) => ({ fact: r.meta['snippet'], source_title: r.meta['title'] }))
-        )
+        batch.forEach((r) => {
+          findings.push({
+            fact: r.meta['snippet'],
+            source_title: r.meta['title']
+          })
+        })
       }
     }
 
@@ -169,28 +187,14 @@ Return JSON array: [{"fact": "...", "node_id": N, "thread": "..."}]
 
   private async generateMightiestResponse(
     question: string,
-    facts: any[],
+    findings: any[],
     strategy: string
   ): Promise<string> {
-    const factsList = facts.map((f, i) => `[Fact ${i}] (${f.source_title}): ${f.fact}`).join('\n')
-
-    const prompt = `
-Based on history findings: ${findings.slice(0, 10).map(f => f.fact).join('; ')}
-What's missing for the question: "${question}"?
-Return JSON: {"gapsFound": boolean, "followUpQueries": [], "followUpKeywords": []}
-`
-    try {
-      const res = await this.ollamaClient.generate(prompt)
-      return JSON.parse(res.match(/\{[\s\S]*\}/)?.[0] || '{"gapsFound": false}')
-    } catch (_err) { return { gapsFound: false } }
-  }
-
-  private async narrateMightiestAnswer(question: string, findings: any[], strategy: string): Promise<string> {
     const prompt = `
 You are the Narrator. Synthesize these research findings into a cohesive, mightiest answer for: "${question}"
 Strategy: ${strategy}
 Findings:
-${findings.map((f, i) => `[Find ${i}] (${f.thread}): ${f.fact}`).join('\n')}
+${findings.map((f, i) => `[Find ${i}] (${f.source_title}): ${f.fact}`).join('\n')}
 
 INSTRUCTIONS:
 1. Provide a comprehensive, authoritative response.
@@ -203,8 +207,8 @@ ANSWER:
     return this.ollamaClient.generate(prompt)
   }
 
-  private displaySourceList(facts: any[]): void {
-    const uniqueThreads = new Set(facts.map((f) => f.source_title))
+  private displaySourceProvenance(facts: any[]): void {
+    const uniqueThreads = new Set(facts.map((f: any) => f.source_title))
     if (uniqueThreads.size > 0) {
       console.log(`\n${chalk.bold.cyan('History Sources Explored:')}`)
       uniqueThreads.forEach((t) => console.log(` - ${t}`))
@@ -214,7 +218,7 @@ ANSWER:
   private async verifyAnswerQuality(
     question: string,
     answer: string,
-    facts: any[]
+    _facts: any[]
   ): Promise<{ status: string; suggestion?: string }> {
     const prompt = `
 Verify the answer.

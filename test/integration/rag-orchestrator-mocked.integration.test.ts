@@ -21,23 +21,25 @@ const mockSearchOutcome = [
 const mswServer = setupServer(
   http.post(`${config.ollamaUrl}/api/generate`, async ({ request }) => {
     const body = (await request.json()) as { prompt: string }
-    if (body.prompt.includes('Analyze the user request')) {
-      return HttpResponse.json({
-        model: 'deepseek-r1',
-        response:
-          '{"strategy": "precise", "queries": ["What is in my history?"], "keywords": ["mocked"], "filters": {}}',
-      })
-    }
-    if (body.prompt.includes('Verify the answer')) {
-      return HttpResponse.json({
-        model: 'deepseek-r1',
-        response: '[{"fact": "Found mocked title", "source_title": "Mocked Title"}]',
-      })
+
+    let responseText = ''
+    if (body.prompt.includes('Analyze:')) {
+      responseText = '{"strategy": "precise", "queries": ["What is in my history?"], "hardKeywords": ["mocked"], "filters": {}}'
+    } else if (body.prompt.includes('You are the Researcher.')) {
+      responseText = '[{"fact": "Based on your history, there is a Mocked Title.", "node_id": 0, "thread": "Mocked Title"}]'
+    } else if (body.prompt.includes('You are the Narrator.')) {
+      responseText = 'Based on your history, there is a Mocked Title.'
+    } else if (body.prompt.includes('Verify the answer.')) {
+      responseText = '{"status": "ok"}'
+    } else {
+      responseText = '{"status": "ok"}'
     }
 
     return HttpResponse.json({
-      ...baseResponse,
-      response: '{"status": "ok"}'
+      model: 'deepseek-r1',
+      created_at: new Date().toISOString(),
+      response: responseText,
+      done: true
     })
   })
 )
