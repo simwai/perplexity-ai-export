@@ -42,12 +42,23 @@ export class RgSearch {
   async captureSearchMatches(options: RgSearchOptions): Promise<RgMatch[]> {
     this.ensureExportDirectoryIsAccessible()
     const args = this.constructRipgrepArguments(options)
-    const cleanArgs = args.filter((a) => a !== '--color=always').concat(['--color=never', '--json'])
+    const cleanArgs = args.filter((a) => a !== '--color=always').concat([
+      '--color=never',
+      '--json',
+      '--max-filesize', '1M',
+      '--no-binary'
+    ])
 
     return new Promise((resolve, reject) => {
       const MAX_MATCHES_PER_KEYWORD = 100
+      const TIMEOUT_MS = 30000
       const matches: RgMatch[] = []
       const rg = spawn('rg', cleanArgs, { cwd: config.exportDir })
+
+      const timeout = setTimeout(() => {
+        logger.warn(`Ripgrep search for "${options.pattern}" timed out after ${TIMEOUT_MS/1000}s. Killing process.`)
+        rg.kill('SIGKILL')
+      }, TIMEOUT_MS)
 
       const rl = createInterface({
         input: rg.stdout,
@@ -74,17 +85,17 @@ export class RgSearch {
         }
       })
 
-      // Drain stderr to prevent blocking
       rg.stderr.on('data', () => {})
 
       rg.on('error', (err) => {
+        clearTimeout(timeout)
         rl.close()
         reject(err)
       })
 
       rg.on('close', (code) => {
+        clearTimeout(timeout)
         rl.close()
-        // Code 0 = matches found, 1 = no matches, null = killed by us
         if (code === 0 || code === 1 || code === null || rg.killed) {
           resolve(matches)
         } else {
