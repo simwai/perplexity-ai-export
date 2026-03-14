@@ -20,7 +20,6 @@
   "dependencies": {
     "chalk": "^5.6.2",
     "dotenv": "^17.2.4",
-    "husky": "^9.1.7",
     "inquirer": "^13.2.2",
     "sanitize-filename": "^1.6.3",
     "vectra": "^0.12.3",
@@ -32,14 +31,11 @@
     "@types/node": "^25.2.3",
     "@types/sanitize-filename": "^1.1.28",
     "@vitest/ui": "^4.0.18",
-    "lint-staged": "^16.2.7",
+    "husky": "^9.1.7",
     "oxfmt": "^0.32.0",
     "oxlint": "^1.47.0",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3",
     "vitest": "^4.0.18"
   },
-  "lint-staged": {
-    "*": "npm run format"
-  }
 }
