@@ -99,8 +99,6 @@ export class OllamaClient {
       return [legacyResult.data.embedding]
     }
 
-    throw new OllamaClient.OllamaError(
-      'Unexpected response format from Ollama embeddings endpoint'
-    )
+    throw new OllamaClient.OllamaError('Unexpected response format from Ollama embeddings endpoint')
   }
 }

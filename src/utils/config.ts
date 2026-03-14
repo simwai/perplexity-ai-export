@@ -38,7 +38,10 @@ function parseEnvConfig(): Config {
     waitMode: process.env['WAIT_MODE'] ?? 'dynamic',
     rateLimitMs: parseInt(process.env['RATE_LIMIT_MS'] ?? defaultRateLimitMs, 10),
     parallelWorkers: parseInt(process.env['PARALLEL_WORKERS'] ?? defaultParallelWorkers, 10),
-    checkpointSaveInterval: parseInt(process.env['CHECKPOINT_SAVE_INTERVAL'] ?? defaultCheckpointInterval, 10),
+    checkpointSaveInterval: parseInt(
+      process.env['CHECKPOINT_SAVE_INTERVAL'] ?? defaultCheckpointInterval,
+      10
+    ),
     exportDir: process.env['EXPORT_DIR'] ?? 'exports',
     checkpointPath: process.env['CHECKPOINT_PATH'] ?? '.storage/checkpoint.json',
     vectorIndexPath: process.env['VECTOR_INDEX_PATH'] ?? '.storage/vector-index',

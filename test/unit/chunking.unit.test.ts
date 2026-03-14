@@ -12,9 +12,13 @@ describe('chunkMarkdown', () => {
   })
 
   it('should split by horizontal rules for conversation turns', () => {
-    const multiTurnConversation = ['## Question 1', 'Answer 1', '---', '## Question 2', 'Answer 2'].join(
-      '\n\n'
-    )
+    const multiTurnConversation = [
+      '## Question 1',
+      'Answer 1',
+      '---',
+      '## Question 2',
+      'Answer 2',
+    ].join('\n\n')
 
     const contentChunks = chunkMarkdown(multiTurnConversation, 50)
 

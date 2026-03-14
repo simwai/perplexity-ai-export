@@ -83,6 +83,7 @@ npm run dev
 ## Advanced RAG Usage
 
 The RAG mode is designed to handle different types of queries:
+
 - **Broad Queries**: "Show me all threads about babadeluxe" -> Will provide a list of relevant threads with summaries.
 - **Specific Queries**: "How did I solve that TypeScript error in the worker pool?" -> Will find specific code snippets and explanations across your history.
 - **Cross-Thread Analysis**: "How has my understanding of React hooks evolved?" -> Will synthesize information across multiple conversations.

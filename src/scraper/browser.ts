@@ -79,7 +79,9 @@ export class BrowserManager {
       logger.info('Loading saved authentication state...')
       try {
         const storageStateData = JSON.parse(readFileSync(authStoragePath, 'utf-8'))
-        this.activeContext = await this.browserInstance.newContext({ storageState: storageStateData })
+        this.activeContext = await this.browserInstance.newContext({
+          storageState: storageStateData,
+        })
       } catch (_error) {
         logger.warn('Failed to load saved auth state, starting fresh.', _error)
         this.activeContext = await this.browserInstance.newContext()

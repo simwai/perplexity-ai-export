@@ -94,10 +94,15 @@ export class VectorStore {
   ): Promise<VectorSearchResult[]> {
     try {
       const queryEmbedding = await this.generateQueryEmbedding(query)
-      const rawResults = await this.vectorIndex.queryItems(queryEmbedding, query, limit, filter as any)
+      const rawResults = await this.vectorIndex.queryItems(
+        queryEmbedding,
+        query,
+        limit,
+        filter as any
+      )
       return this.formatVectorSearchResults(rawResults)
     } catch (_error) {
-       throw new VectorStore.SearchError(
+      throw new VectorStore.SearchError(
         `Filtered vector search failed: ${_error instanceof Error ? _error.message : String(_error)}`
       )
     }
@@ -164,7 +169,10 @@ export class VectorStore {
     await this.vectorIndex.endUpdate()
   }
 
-  private extractContentAndMetadata(path: string): { contentChunks: string[]; fileMetadata: VectorDocMeta } {
+  private extractContentAndMetadata(path: string): {
+    contentChunks: string[]
+    fileMetadata: VectorDocMeta
+  } {
     const content = readFileSync(path, 'utf-8')
     const titleMatch = content.match(/^# (.+)$/m)
     const spaceMatch = content.match(/^\*\*Space:\*\* (.+?)\s{2,}$/m)
@@ -184,7 +192,10 @@ export class VectorStore {
     }
   }
 
-  private async processAndInsertEmbeddingBatch(texts: string[], metas: VectorDocMeta[]): Promise<void> {
+  private async processAndInsertEmbeddingBatch(
+    texts: string[],
+    metas: VectorDocMeta[]
+  ): Promise<void> {
     try {
       const embeddingVectors = await this.ollamaClient.embed(texts)
       for (let k = 0; k < embeddingVectors.length; k++) {
@@ -208,7 +219,11 @@ export class VectorStore {
     return queryEmbedding
   }
 
-  private async queryVectorIndex(embedding: number[], query: string, limit: number): Promise<any[]> {
+  private async queryVectorIndex(
+    embedding: number[],
+    query: string,
+    limit: number
+  ): Promise<any[]> {
     return this.vectorIndex.queryItems(embedding, query, limit)
   }
 

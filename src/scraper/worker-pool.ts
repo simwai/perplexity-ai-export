@@ -101,7 +101,9 @@ export class WorkerPool {
     logger.info(`Processing ${conversations.length} conversations in parallel...`)
 
     const conversationQueue = [...conversations]
-    const workerLoops = this.activeWorkers.map((worker) => this.runWorkerTaskLoop(worker, conversationQueue))
+    const workerLoops = this.activeWorkers.map((worker) =>
+      this.runWorkerTaskLoop(worker, conversationQueue)
+    )
 
     await Promise.all(workerLoops)
     this.displayProcessingSummary()
@@ -273,7 +275,10 @@ export class WorkerPool {
     }
   }
 
-  private performFileIntegrityChecks(filepath: string, extracted: ExtractedConversation): string | null {
+  private performFileIntegrityChecks(
+    filepath: string,
+    extracted: ExtractedConversation
+  ): string | null {
     try {
       if (!existsSync(filepath)) {
         return 'File not found after write'
@@ -309,7 +314,11 @@ export class WorkerPool {
     }
   }
 
-  private handleConversationSkipped(worker: Worker, conversation: ConversationMetadata, reason: string): void {
+  private handleConversationSkipped(
+    worker: Worker,
+    conversation: ConversationMetadata,
+    reason: string
+  ): void {
     logger.warn(`Worker ${worker.id} skipped: ${conversation.title} (${reason})`)
     this.processingStats.skipped++
     this.processingStats.failures.push({
