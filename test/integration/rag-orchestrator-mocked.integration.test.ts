@@ -11,7 +11,7 @@ const mockSearchOutcome = [
       title: 'Mocked Title',
       path: 'path/to/mocked.md',
       snippet: 'This is some mocked content from a Perplexity export.',
-      id: 'mock-1'
+      id: 'mock-1',
     },
     score: 0.95,
   },
@@ -19,17 +19,18 @@ const mockSearchOutcome = [
 
 const mswServer = setupServer(
   http.post(`${config.ollamaUrl}/api/generate`, async ({ request }) => {
-    const body = await request.json() as { prompt: string }
+    const body = (await request.json()) as { prompt: string }
     if (body.prompt.includes('Analyze the user request')) {
       return HttpResponse.json({
         model: 'deepseek-r1',
-        response: '{"strategy": "precise", "queries": ["What is in my history?"], "keywords": ["mocked"], "filters": {}}'
+        response:
+          '{"strategy": "precise", "queries": ["What is in my history?"], "keywords": ["mocked"], "filters": {}}',
       })
     }
     if (body.prompt.includes('Extract every specific fact')) {
       return HttpResponse.json({
         model: 'deepseek-r1',
-        response: '[{"fact": "Found mocked title", "source_title": "Mocked Title"}]'
+        response: '[{"fact": "Found mocked title", "source_title": "Mocked Title"}]',
       })
     }
     return HttpResponse.json({

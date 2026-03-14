@@ -21,7 +21,10 @@ export class FileWriter {
       const destinationFilePath = this.constructDestinationFilePath(conversation)
       const markdownContent = this.formatConversationAsMarkdown(conversation)
 
-      const spaceSpecificDirectory = join(config.exportDir, sanitizeSpaceName(conversation.spaceName))
+      const spaceSpecificDirectory = join(
+        config.exportDir,
+        sanitizeSpaceName(conversation.spaceName)
+      )
       if (!existsSync(spaceSpecificDirectory)) {
         mkdirSync(spaceSpecificDirectory, { recursive: true })
       }

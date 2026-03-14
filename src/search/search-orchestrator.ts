@@ -34,7 +34,8 @@ export class SearchOrchestrator {
 
   async validateVectorSearch(): Promise<void> {
     if (!config.enableVectorSearch) {
-      const vectorSearchDisabledErrorMessage = 'Vector search is disabled (ENABLE_VECTOR_SEARCH=false).'
+      const vectorSearchDisabledErrorMessage =
+        'Vector search is disabled (ENABLE_VECTOR_SEARCH=false).'
       throw new SearchOrchestrator.ValidationError(vectorSearchDisabledErrorMessage)
     }
     await this.vectorStore.validate()

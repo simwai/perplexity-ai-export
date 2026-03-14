@@ -74,7 +74,12 @@ export class LibraryDiscovery {
     const allDiscoveredConversations: ConversationMetadata[] = []
 
     while (true) {
-      const threadBatch = await this.fetchThreadBatchFromApi(page, apiVersion, currentOffset, batchPageSize)
+      const threadBatch = await this.fetchThreadBatchFromApi(
+        page,
+        apiVersion,
+        currentOffset,
+        batchPageSize
+      )
 
       if (!threadBatch.length) {
         logger.info(`No more threads found at offset ${currentOffset}`)

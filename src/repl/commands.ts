@@ -89,7 +89,11 @@ export class CommandHandler {
         await this.ensureVectorSearchIsAvailable(searchMode)
       }
 
-      await this.conversationSearchOrchestrator.search(searchQuery, searchMode as 'auto' | 'vector' | 'rg' | 'rag', ripgrepSearchOptions)
+      await this.conversationSearchOrchestrator.search(
+        searchQuery,
+        searchMode as 'auto' | 'vector' | 'rg' | 'rag',
+        ripgrepSearchOptions
+      )
     } catch (_error) {
       if (_error instanceof Error) {
         logger.error(_error.message)
@@ -176,7 +180,8 @@ export class CommandHandler {
   private async runDiscoveryPhase(page: any): Promise<void> {
     logger.info('\n=== Phase 1: Library Discovery ===\n')
     const libraryDiscoveryTool = new LibraryDiscovery()
-    const discoveredConversations = await libraryDiscoveryTool.discoverAllConversationsFromLibrary(page)
+    const discoveredConversations =
+      await libraryDiscoveryTool.discoverAllConversationsFromLibrary(page)
     this.progressCheckpointManager.setDiscoveredConversations(discoveredConversations)
   }
 
