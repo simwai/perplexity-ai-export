@@ -22,13 +22,18 @@ export class RagOrchestrator {
 
     try {
       const researchPlan = await this.developResearchPlan(question)
+      const exhaustiveMode = researchPlan.strategy === 'exhaustive'
+
       logger.info(`Plan: ${chalk.bold.yellow(researchPlan.strategy.toUpperCase())}`)
+      if (exhaustiveMode) {
+        logger.warn(`Exhaustive mode enabled. This may take a while as I'll be doing a deep dive into your history.`)
+      }
+
       if (researchPlan.hardKeywords?.length) {
         logger.info(`Hard Keywords detected: ${chalk.gray(researchPlan.hardKeywords.join(', '))}`)
       }
 
       const searchResults = await this.executeAdaptiveHybridSearch(researchPlan)
-      const exhaustiveMode = researchPlan.strategy === 'exhaustive'
 
       const contextFacts = await this.extractFactsWithGranularMapReduce(
         question,
@@ -88,13 +93,17 @@ Return JSON: {"strategy": "...", "queries": [], "hardKeywords": [], "filters": {
   private async executeAdaptiveHybridSearch(plan: { queries: string[], hardKeywords: string[] }): Promise<VectorSearchResult[]> {
     const searchPools: VectorSearchResult[][] = []
 
-    for (const q of plan.queries || []) {
+    for (let i = 0; i < (plan.queries || []).length; i++) {
+      const q = plan.queries[i]!
+      logger.debug(`Executing semantic search [${i + 1}/${plan.queries.length}]: "${q}"`)
       const res = await this.vectorStore.search(q, 40)
       searchPools.push(res)
     }
 
     const keywordPool: VectorSearchResult[] = []
-    for (const k of plan.hardKeywords || []) {
+    for (let i = 0; i < (plan.hardKeywords || []).length; i++) {
+      const k = plan.hardKeywords[i]!
+      logger.debug(`Executing keyword search [${i + 1}/${plan.hardKeywords.length}]: "${k}"`)
       try {
         const matches = await this.ripgrep.captureSearchMatches({ pattern: k })
         const converted: VectorSearchResult[] = matches.map((m) => ({
@@ -150,9 +159,12 @@ Return JSON: {"strategy": "...", "queries": [], "hardKeywords": [], "filters": {
 
     const findings: any[] = []
     const batchSize = 10
+    const totalBatches = Math.ceil(pool.length / batchSize)
 
-    for (let i = 0; i < pool.length; i += batchSize) {
+    for (let i = 0, batchIdx = 0; i < pool.length; i += batchSize, batchIdx++) {
       const batch = pool.slice(i, i + batchSize)
+      logger.info(`Analyzing history snippets... batch ${batchIdx + 1} of ${totalBatches}`)
+
       const researchPrompt = `
 You are the Researcher. Analyze these snippets from the user's history for the question: "${question}"
 Context:
