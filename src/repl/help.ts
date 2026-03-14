@@ -40,5 +40,7 @@ export function showHelp(): void {
   logger.info(
     '  • Semantic: Best for finding conceptually similar topics even without exact keyword matches.'
   )
-  logger.info('  • Exact: Ideal for finding specific phrases or technical terms.\n')
+  logger.info(
+    '  • Exact: Ideal for finding specific phrases or technical terms.\n'
+  )
 }

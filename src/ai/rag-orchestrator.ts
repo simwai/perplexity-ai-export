@@ -36,12 +36,16 @@ export class RagOrchestrator {
         this.displaySources(relevantChunks)
       }
     } catch (_error) {
-      const errorMessage = _error instanceof Error ? _error.message : String(_error)
+      const errorMessage =
+        _error instanceof Error ? _error.message : String(_error)
       logger.error(`RAG process failed: ${errorMessage}`)
     }
   }
 
-  private constructRagPrompt(question: string, contextChunks: VectorSearchResult[]): string {
+  private constructRagPrompt(
+    question: string,
+    contextChunks: VectorSearchResult[]
+  ): string {
     const contextText = contextChunks
       .map((chunk, index) => {
         const sourceReferenceNumber = index + 1
@@ -66,7 +70,9 @@ Answer:`
     console.log(`\n${chalk.bold.cyan('Sources:')}`)
     chunks.forEach((chunk, index) => {
       const sourceReferenceNumber = index + 1
-      console.log(`[${sourceReferenceNumber}] ${chunk.meta['title']} (${chunk.meta['path']})`)
+      console.log(
+        `[${sourceReferenceNumber}] ${chunk.meta['title']} (${chunk.meta['path']})`
+      )
     })
     console.log('')
   }

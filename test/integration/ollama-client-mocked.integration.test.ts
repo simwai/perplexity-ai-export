@@ -4,7 +4,10 @@ import { http, HttpResponse } from 'msw'
 import { OllamaClient } from '../../src/ai/ollama-client.js'
 import { config } from '../../src/utils/config.js'
 
-const mockEmbeddingsResponse = [{ embedding: [0.1, 0.2, 0.3] }, { embedding: [0.4, 0.5, 0.6] }]
+const mockEmbeddingsResponse = [
+  { embedding: [0.1, 0.2, 0.3] },
+  { embedding: [0.4, 0.5, 0.6] },
+]
 
 const mswServer = setupServer(
   http.post(`${config.ollamaUrl}/v1/embeddings`, () => {

@@ -30,7 +30,9 @@ describe('Scraper E2E - Critical Path', () => {
 
     // ✅ Now we expect it to THROW with a descriptive error
     await expect(
-      extractor.extract('https://www.perplexity.ai/search/nonexistent-xyz-12345')
+      extractor.extract(
+        'https://www.perplexity.ai/search/nonexistent-xyz-12345'
+      )
     ).rejects.toThrow(/Authentication required|403|401|No API response/)
 
     await context.close()

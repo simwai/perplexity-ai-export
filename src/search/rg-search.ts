@@ -91,7 +91,11 @@ export class RgSearch {
 
       ripgrepProcess.on('error', (error) => {
         if (error.message.includes('ENOENT')) {
-          reject(new RgSearch.RgNotFoundError(this.getRipgrepInstallationInstructions()))
+          reject(
+            new RgSearch.RgNotFoundError(
+              this.getRipgrepInstallationInstructions()
+            )
+          )
         } else {
           reject(new RgSearch.RgSearchError(`Search failed: ${error.message}`))
         }
@@ -104,7 +108,9 @@ export class RgSearch {
           }
           resolve()
         } else {
-          reject(new RgSearch.RgSearchError(`ripgrep exited with code ${exitCode}`))
+          reject(
+            new RgSearch.RgSearchError(`ripgrep exited with code ${exitCode}`)
+          )
         }
       })
     })

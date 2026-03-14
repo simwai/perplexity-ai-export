@@ -36,7 +36,9 @@ export class SearchOrchestrator {
     if (!config.enableVectorSearch) {
       const vectorSearchDisabledErrorMessage =
         'Vector search is disabled (ENABLE_VECTOR_SEARCH=false).'
-      throw new SearchOrchestrator.ValidationError(vectorSearchDisabledErrorMessage)
+      throw new SearchOrchestrator.ValidationError(
+        vectorSearchDisabledErrorMessage
+      )
     }
     await this.vectorStore.validate()
   }
@@ -45,7 +47,11 @@ export class SearchOrchestrator {
     await this.vectorStore.rebuildFromExports()
   }
 
-  async search(query: string, mode: SearchMode, rgOptions: RgSearchOptions): Promise<void> {
+  async search(
+    query: string,
+    mode: SearchMode,
+    rgOptions: RgSearchOptions
+  ): Promise<void> {
     try {
       if (mode === 'rg') {
         await this.rgSearch.search(rgOptions)
@@ -59,15 +65,21 @@ export class SearchOrchestrator {
     } catch (_error) {
       if (_error instanceof Error) {
         const searchFailedErrorMessage = `Search failed: ${_error.message}`
-        throw new SearchOrchestrator.SearchOrchestratorError(searchFailedErrorMessage)
+        throw new SearchOrchestrator.SearchOrchestratorError(
+          searchFailedErrorMessage
+        )
       }
       throw _error
     }
   }
 
-  private async executeAutoSearch(query: string, rgOptions: RgSearchOptions): Promise<void> {
+  private async executeAutoSearch(
+    query: string,
+    rgOptions: RgSearchOptions
+  ): Promise<void> {
     const queryWordCountThreshold = 5
-    const isLongQuery = query.trim().split(/\s+/).length > queryWordCountThreshold
+    const isLongQuery =
+      query.trim().split(/\s+/).length > queryWordCountThreshold
     if (isLongQuery) {
       await this.performVectorOnlySearch(query)
     } else {
@@ -78,7 +90,10 @@ export class SearchOrchestrator {
   private async performVectorOnlySearch(query: string): Promise<void> {
     logger.info('Using vector search (Ollama + Vectra)...')
     const searchResultLimit = 10
-    const searchResults = await this.vectorStore.search(query, searchResultLimit)
+    const searchResults = await this.vectorStore.search(
+      query,
+      searchResultLimit
+    )
 
     if (searchResults.length === 0) {
       logger.info('No vector search results found.')

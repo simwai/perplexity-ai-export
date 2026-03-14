@@ -29,7 +29,10 @@ export class OllamaClient {
       input: texts,
     }
 
-    const responseData = await this.performOllamaHttpRequest('/v1/embeddings', requestBody)
+    const responseData = await this.performOllamaHttpRequest(
+      '/v1/embeddings',
+      requestBody
+    )
     return this.parseEmbeddingsFromResponse(responseData)
   }
 
@@ -40,7 +43,10 @@ export class OllamaClient {
       stream: false,
     }
 
-    const responseData = await this.performOllamaHttpRequest('/api/generate', requestBody)
+    const responseData = await this.performOllamaHttpRequest(
+      '/api/generate',
+      requestBody
+    )
     const validatedData = generationResponseSchema.parse(responseData)
     return validatedData.response
   }
@@ -56,7 +62,10 @@ export class OllamaClient {
     }
   }
 
-  private async performOllamaHttpRequest(endpoint: string, body: object): Promise<unknown> {
+  private async performOllamaHttpRequest(
+    endpoint: string,
+    body: object
+  ): Promise<unknown> {
     const url = `${config.ollamaUrl}${endpoint}`
 
     try {
@@ -73,7 +82,10 @@ export class OllamaClient {
         } catch (_errorReadingResponseBody) {
           /* oxlint-disable-next-line no-empty */
         }
-        logger.error(`Ollama HTTP ${response.status}`, { body, errorBody: errorBody.slice(0, 500) })
+        logger.error(`Ollama HTTP ${response.status}`, {
+          body,
+          errorBody: errorBody.slice(0, 500),
+        })
         throw new OllamaClient.OllamaError(
           `Ollama request failed with status ${response.status} – ${errorBody.slice(0, 200)}`
         )
@@ -99,6 +111,8 @@ export class OllamaClient {
       return [legacyResult.data.embedding]
     }
 
-    throw new OllamaClient.OllamaError('Unexpected response format from Ollama embeddings endpoint')
+    throw new OllamaClient.OllamaError(
+      'Unexpected response format from Ollama embeddings endpoint'
+    )
   }
 }

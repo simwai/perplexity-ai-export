@@ -1,5 +1,11 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest'
-import { rmSync, existsSync, mkdirSync, writeFileSync, readFileSync } from 'node:fs'
+import {
+  rmSync,
+  existsSync,
+  mkdirSync,
+  writeFileSync,
+  readFileSync,
+} from 'node:fs'
 import { join } from 'node:path'
 import { isOllamaAvailable } from '../ollama-available.js'
 

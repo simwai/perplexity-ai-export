@@ -15,7 +15,7 @@
   "bracketSpacing": true,
   "arrowParens": "always",
   "endOfLine": "lf",
-  "printWidth": 100,
+  "printWidth": 80,
   "experimentalSortPackageJson": false,
   "ignorePatterns": []
 }
