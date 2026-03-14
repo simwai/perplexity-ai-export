@@ -6,7 +6,7 @@ import { logger } from '../utils/logger.js'
 import { OllamaClient } from '../ai/ollama-client.js'
 import { chunkMarkdown } from '../utils/chunking.js'
 
-type VectorDocMeta = Record<string, string>
+export type VectorDocMeta = Record<string, string>
 
 export interface VectorSearchResult {
   meta: VectorDocMeta
@@ -91,6 +91,22 @@ export class VectorStore {
     }
   }
 
+  async searchWithMetadataFilter(
+    query: string,
+    filter: (meta: Record<string, any>) => boolean,
+    limit = 10
+  ): Promise<VectorSearchResult[]> {
+    try {
+      const queryEmbedding = await this.generateQueryEmbedding(query)
+      const rawResults = await this.vectorIndex.queryItems(queryEmbedding, query, limit, filter as any)
+      return this.formatVectorSearchResults(rawResults)
+    } catch (_error) {
+       throw new VectorStore.SearchError(
+        `Filtered vector search failed: ${_error instanceof Error ? _error.message : String(_error)}`
+      )
+    }
+  }
+
   private async ensureIndexExists(): Promise<void> {
     if (!(await this.vectorIndex.isIndexCreated())) {
       await this.vectorIndex.createIndex()
@@ -167,16 +183,18 @@ export class VectorStore {
     const titleMatch = content.match(/^# (.+)$/m)
     const spaceMatch = content.match(/^\*\*Space:\*\* (.+?)\s{2,}$/m)
     const idMatch = content.match(/^\*\*ID:\*\* (.+?)\s{2,}$/m)
+    const dateMatch = content.match(/^\*\*Date:\*\* (.+?)\s{2,}$/m)
 
     const title = titleMatch?.[1] ?? 'Untitled'
     const spaceName = spaceMatch?.[1] ?? 'General'
     const baseId = idMatch?.[1] ?? path
+    const dateIso = dateMatch?.[1] ?? new Date().toISOString()
 
     const contentChunks = chunkMarkdown(content, 1500, 100)
 
     return {
       contentChunks,
-      fileMetadata: { id: baseId, path, title, spaceName },
+      fileMetadata: { id: baseId, path, title, spaceName, date: dateIso },
     }
   }
 
@@ -191,7 +209,7 @@ export class VectorStore {
         if (!vector) continue
         await this.vectorIndex.insertItem({
           vector,
-          metadata: metas[k]!,
+          metadata: metas[k] as Record<string, any>,
         })
       }
     } catch (_error) {
