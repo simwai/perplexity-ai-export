@@ -11,6 +11,12 @@ export interface RgSearchOptions {
   regex?: boolean
 }
 
+export interface RgMatch {
+  path: string
+  line: number
+  text: string
+}
+
 export class RgSearch {
   static readonly RgSearchError = class extends Error {
     constructor(message: string) {
@@ -32,11 +38,41 @@ export class RgSearch {
     await this.spawnRipgrepProcess(ripgrepCommandArguments)
   }
 
+  async captureSearchMatches(options: RgSearchOptions): Promise<RgMatch[]> {
+    this.ensureExportDirectoryIsAccessible()
+    const args = this.constructRipgrepArguments(options)
+    // Remove color for easier parsing
+    const cleanArgs = args.filter(a => a !== '--color=always').concat(['--color=never', '--json'])
+
+    return new Promise((resolve, reject) => {
+      const rg = spawn('rg', cleanArgs, { cwd: config.exportDir })
+      let output = ''
+
+      rg.stdout.on('data', (data) => output += data.toString())
+      rg.on('error', (err) => reject(err))
+      rg.on('close', () => {
+        const matches: RgMatch[] = []
+        output.split('\n').forEach(line => {
+          try {
+            if (!line) return
+            const parsed = JSON.parse(line)
+            if (parsed.type === 'match') {
+              matches.push({
+                path: parsed.data.path.text,
+                line: parsed.data.line_number,
+                text: parsed.data.lines.text
+              })
+            }
+          } catch (_err) { /* ignore */ }
+        })
+        resolve(matches)
+      })
+    })
+  }
+
   private ensureExportDirectoryIsAccessible(): void {
     if (!existsSync(config.exportDir)) {
-      throw new RgSearch.RgSearchError(
-        'No exports directory found. Please run the "start" command first to export your history.'
-      )
+      throw new RgSearch.RgSearchError('No exports directory found. Please run the "start" command first to export your history.')
     }
   }
 
@@ -91,11 +127,7 @@ export class RgSearch {
 
       ripgrepProcess.on('error', (error) => {
         if (error.message.includes('ENOENT')) {
-          reject(
-            new RgSearch.RgNotFoundError(
-              this.getRipgrepInstallationInstructions()
-            )
-          )
+          reject(new RgSearch.RgNotFoundError(this.getRipgrepInstallationInstructions()))
         } else {
           reject(new RgSearch.RgSearchError(`Search failed: ${error.message}`))
         }
@@ -108,9 +140,7 @@ export class RgSearch {
           }
           resolve()
         } else {
-          reject(
-            new RgSearch.RgSearchError(`ripgrep exited with code ${exitCode}`)
-          )
+          reject(new RgSearch.RgSearchError(`ripgrep exited with code ${exitCode}`))
         }
       })
     })

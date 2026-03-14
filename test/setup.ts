@@ -7,9 +7,7 @@ beforeAll(async () => {
   try {
     sharedBrowserInstance = await chromium.launch({ headless: true })
   } catch (_error) {
-    console.warn(
-      'Could not launch browser in setup.ts, some tests might fail if they require it.'
-    )
+    console.warn('Could not launch browser in setup.ts, some tests might fail if they require it.')
   }
 })
 

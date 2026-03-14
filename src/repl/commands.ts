@@ -57,10 +57,7 @@ export class CommandHandler {
     try {
       await this.executeFullScrapingFlow()
     } catch (_error) {
-      logger.error(
-        'Scraper failed:',
-        _error instanceof Error ? _error : String(_error)
-      )
+      logger.error('Scraper failed:', _error instanceof Error ? _error : String(_error))
     }
   }
 
@@ -92,11 +89,7 @@ export class CommandHandler {
         await this.ensureVectorSearchIsAvailable(searchMode)
       }
 
-      await this.conversationSearchOrchestrator.search(
-        searchQuery,
-        searchMode as 'auto' | 'vector' | 'rg' | 'rag',
-        ripgrepSearchOptions
-      )
+      await this.conversationSearchOrchestrator.search(searchQuery, searchMode as 'auto' | 'vector' | 'rg' | 'rag', ripgrepSearchOptions)
     } catch (_error) {
       if (_error instanceof Error) {
         logger.error(_error.message)
@@ -142,8 +135,7 @@ export class CommandHandler {
       this.progressCheckpointManager.resetCheckpoint()
       logger.success('✅ Storage folder deleted. All progress has been reset.')
     } catch (_error) {
-      const errorMessage =
-        _error instanceof Error ? _error.message : String(_error)
+      const errorMessage = _error instanceof Error ? _error.message : String(_error)
       throw new CommandHandler.ResetError(`Failed to reset: ${errorMessage}`)
     }
   }
@@ -162,8 +154,7 @@ export class CommandHandler {
         await this.runDiscoveryPhase(activePage)
       }
 
-      const pendingConversations =
-        this.progressCheckpointManager.getPendingConversations()
+      const pendingConversations = this.progressCheckpointManager.getPendingConversations()
 
       if (pendingConversations.length === 0) {
         logger.success('All conversations already processed!')
@@ -185,30 +176,19 @@ export class CommandHandler {
   private async runDiscoveryPhase(page: any): Promise<void> {
     logger.info('\n=== Phase 1: Library Discovery ===\n')
     const libraryDiscoveryTool = new LibraryDiscovery()
-    const discoveredConversations =
-      await libraryDiscoveryTool.discoverAllConversationsFromLibrary(page)
-    this.progressCheckpointManager.setDiscoveredConversations(
-      discoveredConversations
-    )
+    const discoveredConversations = await libraryDiscoveryTool.discoverAllConversationsFromLibrary(page)
+    this.progressCheckpointManager.setDiscoveredConversations(discoveredConversations)
   }
 
-  private async runExtractionPhase(
-    browserManager: BrowserManager,
-    pending: any[]
-  ): Promise<void> {
-    logger.info(
-      `\n=== Phase 2: Parallel Extraction (${pending.length} pending) ===\n`
-    )
+  private async runExtractionPhase(browserManager: BrowserManager, pending: any[]): Promise<void> {
+    logger.info(`\n=== Phase 2: Parallel Extraction (${pending.length} pending) ===\n`)
 
     const activeBrowser = browserManager.browserInstance
     if (!activeBrowser) {
       throw new CommandHandler.ScraperError('Browser was not initialized')
     }
 
-    const workerPool = new WorkerPool(
-      this.progressCheckpointManager,
-      activeBrowser
-    )
+    const workerPool = new WorkerPool(this.progressCheckpointManager, activeBrowser)
     await workerPool.initialize()
     await workerPool.processConversations(pending)
     await workerPool.close()
@@ -239,8 +219,7 @@ export class CommandHandler {
   private async promptForSearchQuery(): Promise<string> {
     return input({
       message: 'Search query:',
-      validate: (inputValue) =>
-        inputValue.trim().length === 0 ? 'Please enter a query.' : true,
+      validate: (inputValue) => (inputValue.trim().length === 0 ? 'Please enter a query.' : true),
     })
   }
 
@@ -248,10 +227,7 @@ export class CommandHandler {
     return select({
       message: 'Search mode:',
       choices: [
-        {
-          name: 'Auto (semantic for long queries, exact for short)',
-          value: 'auto',
-        },
+        { name: 'Auto (semantic for long queries, exact for short)', value: 'auto' },
         { name: 'Semantic (Ollama + Vectra)', value: 'vector' },
         { name: 'RAG (Ask history with Ollama)', value: 'rag' },
         { name: 'Exact text (ripgrep)', value: 'rg' },
@@ -266,19 +242,14 @@ export class CommandHandler {
     try {
       await this.conversationSearchOrchestrator.validateVectorSearch()
     } catch (_error) {
-      const errorMessage =
-        _error instanceof Error ? _error.message : String(_error)
+      const errorMessage = _error instanceof Error ? _error.message : String(_error)
       logger.error(errorMessage)
-      logger.info(
-        'Start Ollama with the embedding model, then run "vectorize".'
-      )
+      logger.info('Start Ollama with the embedding model, then run "vectorize".')
       throw new CommandHandler.ValidationError(errorMessage)
     }
   }
 
-  private async handleVectorSearchValidationRetry(
-    error: unknown
-  ): Promise<void> {
+  private async handleVectorSearchValidationRetry(error: unknown): Promise<void> {
     const errorMessage = error instanceof Error ? error.message : String(error)
     logger.error(errorMessage)
 
@@ -295,8 +266,7 @@ export class CommandHandler {
     try {
       await this.conversationSearchOrchestrator.validateVectorSearch()
     } catch (err) {
-      const nestedErrorMessage =
-        err instanceof Error ? err.message : String(err)
+      const nestedErrorMessage = err instanceof Error ? err.message : String(err)
       logger.error(nestedErrorMessage)
       return
     }
@@ -306,9 +276,7 @@ export class CommandHandler {
 
   private wipeStorageDirectory(): void {
     const configuredAuthPath = config.authStoragePath
-    const storageRootDirectory = configuredAuthPath
-      ? configuredAuthPath.split('/')[0]
-      : '.storage'
+    const storageRootDirectory = configuredAuthPath ? configuredAuthPath.split('/')[0] : '.storage'
     try {
       rmSync(storageRootDirectory!, { recursive: true, force: true })
       logger.debug(`Deleted storage folder: ${storageRootDirectory}`)

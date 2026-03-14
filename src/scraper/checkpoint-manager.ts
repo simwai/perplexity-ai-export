@@ -66,9 +66,7 @@ export class CheckpointManager {
     this.currentCheckpoint.discoveredConversations = conversations
     this.currentCheckpoint.discoveryCompleted = true
     this.saveCheckpointToDisk()
-    logger.success(
-      `Discovery complete: ${conversations.length} conversations found`
-    )
+    logger.success(`Discovery complete: ${conversations.length} conversations found`)
   }
 
   markProcessed(url: string): void {
@@ -80,9 +78,7 @@ export class CheckpointManager {
 
     if (this.pendingOperationsSinceLastSave >= config.checkpointSaveInterval) {
       this.saveCheckpointToDisk()
-      logger.debug(
-        `Checkpoint saved (${this.currentCheckpoint.totalProcessed} processed)`
-      )
+      logger.debug(`Checkpoint saved (${this.currentCheckpoint.totalProcessed} processed)`)
       this.pendingOperationsSinceLastSave = 0
     }
   }
@@ -93,18 +89,10 @@ export class CheckpointManager {
     )
   }
 
-  getProcessingProgress(): {
-    total: number
-    processed: number
-    pending: number
-  } {
+  getProcessingProgress(): { total: number; processed: number; pending: number } {
     const totalCount = this.currentCheckpoint.discoveredConversations.length
     const processedCount = this.currentCheckpoint.processedUrls.length
-    return {
-      total: totalCount,
-      processed: processedCount,
-      pending: totalCount - processedCount,
-    }
+    return { total: totalCount, processed: processedCount, pending: totalCount - processedCount }
   }
 
   isDiscoveryPhaseComplete(): boolean {
@@ -135,16 +123,13 @@ export class CheckpointManager {
       this.assertValidCheckpointStructure(parsedCheckpointData)
       return parsedCheckpointData
     } catch (_error) {
-      const errorMessage =
-        _error instanceof Error ? _error.message : String(_error)
+      const errorMessage = _error instanceof Error ? _error.message : String(_error)
       logger.warn(`Failed to load checkpoint (${errorMessage}), starting fresh`)
       return this.createInitialCheckpoint()
     }
   }
 
-  private assertValidCheckpointStructure(
-    data: any
-  ): asserts data is Checkpoint {
+  private assertValidCheckpointStructure(data: any): asserts data is Checkpoint {
     if (!data || typeof data !== 'object') {
       throw new CheckpointManager.ValidationError('Checkpoint is not an object')
     }
@@ -160,9 +145,7 @@ export class CheckpointManager {
 
     for (const key of requiredKeys) {
       if (!(key in data)) {
-        throw new CheckpointManager.ValidationError(
-          `Missing required field: ${key}`
-        )
+        throw new CheckpointManager.ValidationError(`Missing required field: ${key}`)
       }
     }
   }
@@ -181,10 +164,7 @@ export class CheckpointManager {
   private saveCheckpointToDisk(): void {
     this.currentCheckpoint.lastUpdated = new Date().toISOString()
     try {
-      writeFileSync(
-        config.checkpointPath,
-        JSON.stringify(this.currentCheckpoint, null, 2)
-      )
+      writeFileSync(config.checkpointPath, JSON.stringify(this.currentCheckpoint, null, 2))
     } catch (_error) {
       throw new CheckpointManager.SaveError(
         `Failed to write checkpoint: ${_error instanceof Error ? _error.message : String(_error)}`

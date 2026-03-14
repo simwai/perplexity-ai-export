@@ -24,9 +24,7 @@ export class LibraryDiscovery {
     }
   }
 
-  async discoverAllConversationsFromLibrary(
-    page: Page
-  ): Promise<ConversationMetadata[]> {
+  async discoverAllConversationsFromLibrary(page: Page): Promise<ConversationMetadata[]> {
     const perplexityLibraryUrl = 'https://www.perplexity.ai/library'
     logger.info('Discovering threads via REST API...')
 
@@ -35,10 +33,7 @@ export class LibraryDiscovery {
 
     const activeApiVersion = await this.detectCurrentApiVersion(page)
 
-    const discoveredConversations = await this.paginateAndFetchAllThreads(
-      page,
-      activeApiVersion
-    )
+    const discoveredConversations = await this.paginateAndFetchAllThreads(page, activeApiVersion)
 
     logger.success(`Discovered ${discoveredConversations.length} threads`)
     return discoveredConversations
@@ -62,14 +57,10 @@ export class LibraryDiscovery {
         return detectedVersion
       }
 
-      logger.warn(
-        'Found list_ask_threads request but no version parameter, using fallback'
-      )
+      logger.warn('Found list_ask_threads request but no version parameter, using fallback')
       return defaultFallbackVersion
     } catch (_error) {
-      logger.warn(
-        'No list_ask_threads request detected, using fallback version'
-      )
+      logger.warn('No list_ask_threads request detected, using fallback version')
       return defaultFallbackVersion
     }
   }
@@ -83,12 +74,7 @@ export class LibraryDiscovery {
     const allDiscoveredConversations: ConversationMetadata[] = []
 
     while (true) {
-      const threadBatch = await this.fetchThreadBatchFromApi(
-        page,
-        apiVersion,
-        currentOffset,
-        batchPageSize
-      )
+      const threadBatch = await this.fetchThreadBatchFromApi(page, apiVersion, currentOffset, batchPageSize)
 
       if (!threadBatch.length) {
         logger.info(`No more threads found at offset ${currentOffset}`)
@@ -98,9 +84,7 @@ export class LibraryDiscovery {
       const formattedMetadata = this.mapRawBatchToMetadata(threadBatch)
       allDiscoveredConversations.push(...formattedMetadata)
 
-      logger.info(
-        `Fetched ${threadBatch.length} threads (offset ${currentOffset})`
-      )
+      logger.info(`Fetched ${threadBatch.length} threads (offset ${currentOffset})`)
       currentOffset += batchPageSize
     }
 
@@ -121,12 +105,7 @@ export class LibraryDiscovery {
             {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                limit,
-                ascending: false,
-                offset,
-                search_term: '',
-              }),
+              body: JSON.stringify({ limit, ascending: false, offset, search_term: '' }),
             }
           )
 
@@ -140,8 +119,7 @@ export class LibraryDiscovery {
         { offset, limit, version: apiVersion }
       )
     } catch (_error) {
-      const errorMessage =
-        _error instanceof Error ? _error.message : String(_error)
+      const errorMessage = _error instanceof Error ? _error.message : String(_error)
       throw new LibraryDiscovery.PaginationError(
         `Failed to fetch batch at offset ${offset}: ${errorMessage}`
       )
@@ -160,11 +138,6 @@ export class LibraryDiscovery {
   }
 
   private isMinimumRequiredThreadDataPresent(item: any): boolean {
-    return !!(
-      item &&
-      typeof item === 'object' &&
-      item.slug &&
-      typeof item.slug === 'string'
-    )
+    return !!(item && typeof item === 'object' && item.slug && typeof item.slug === 'string')
   }
 }
