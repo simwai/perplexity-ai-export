@@ -25,10 +25,8 @@ async function main() {
     target: 'node22',
     outfile: bundleFile,
     format: 'cjs',
-    alias: {
-      '@playwright/test': 'playwright-core',
-    },
-    // Mocking require.resolve to avoid playwright-core looking for internal files that aren't bundled
+    alias: {},
+    // Mocking require.resolve to avoid patchright looking for internal files that aren't bundled
     banner: {
       js: `
 const { createRequire } = require('module');
