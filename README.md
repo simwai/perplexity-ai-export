@@ -93,7 +93,7 @@ Launch the system:
 
 ```bash
 # Start the system
-# npm run dev
+npm run dev
 ```
 
 ## RAG Capabilities
