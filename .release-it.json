@@ -22,6 +22,6 @@
     }
   },
   "hooks": {
-    "before:init": ["npm test", "npm run build:exe"]
+    "before:init": ["npm test", "npm run build:exe", "npm run format"]
   }
 }
