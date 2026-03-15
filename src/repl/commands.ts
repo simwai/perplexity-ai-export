@@ -1,5 +1,6 @@
 import { input, select, confirm } from '@inquirer/prompts'
 import { rmSync } from 'node:fs'
+import { sep } from 'node:path'
 import { BrowserManager } from '../scraper/browser.js'
 import { CheckpointManager } from '../scraper/checkpoint-manager.js'
 import { WorkerPool } from '../scraper/worker-pool.js'
@@ -281,7 +282,8 @@ export class CommandHandler {
 
   private wipeStorageDirectory(): void {
     const configuredAuthPath = config.authStoragePath
-    const storageRootDirectory = configuredAuthPath ? configuredAuthPath.split('/')[0] : '.storage'
+    // Use path.sep instead of hardcoded '/'
+    const storageRootDirectory = configuredAuthPath ? configuredAuthPath.split(sep)[0] : '.storage'
     try {
       rmSync(storageRootDirectory!, { recursive: true, force: true })
       logger.debug(`Deleted storage folder: ${storageRootDirectory}`)

@@ -14,7 +14,6 @@ To effectively interact with the codebase, your local environment must support t
 - **Ollama**: Essential for local embedding generation and RAG-based reasoning.
   - `ollama pull nomic-embed-text` (for semantic vectors)
   - `ollama pull deepseek-r1` (for generative synthesis)
-- **ripgrep (rg)**: Required for high-velocity exact pattern matching.
 - **Playwright**: Our interface for navigating the complexities of the web.
 
 ---
