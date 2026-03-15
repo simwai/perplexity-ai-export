@@ -7,7 +7,7 @@ import {
   NativeExportExtractionStrategy,
   AiScrapeExtractionStrategy,
   type ExtractionStrategy,
-  type ExtractedConversation,
+  type ExtractedConversation
 } from './extraction-strategy.js'
 import { handleCloudflare } from '../utils/cloudflare.js'
 
@@ -21,13 +21,13 @@ export class ConversationExtractor {
       new ApiExtractionStrategy(),
       new DomScrapeExtractionStrategy(),
       new NativeExportExtractionStrategy(),
-      new AiScrapeExtractionStrategy(),
+      new AiScrapeExtractionStrategy()
     ]
 
     const primaryMode = config.extractionMode
     this.strategies = [
-      all.find((s) => s.constructor.name.toLowerCase().includes(primaryMode)) || all[0]!,
-      ...all.filter((s) => !s.constructor.name.toLowerCase().includes(primaryMode)),
+      all.find(s => s.constructor.name.toLowerCase().includes(primaryMode)) || all[0]!,
+      ...all.filter(s => !s.constructor.name.toLowerCase().includes(primaryMode))
     ]
   }
 
@@ -54,9 +54,7 @@ export class ConversationExtractor {
             logger.warn(`Confirmed Cloudflare block for ${strategyName}. Trying fallback...`)
             continue
           }
-          logger.error(
-            `Non-Cloudflare error in ${strategyName}: ${e instanceof Error ? e.message : String(e)}`
-          )
+          logger.error(`Non-Cloudflare error in ${strategyName}: ${e instanceof Error ? e.message : String(e)}`)
         }
       }
       throw new Error(`All extraction strategies failed for ${url}`)

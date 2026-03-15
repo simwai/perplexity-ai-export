@@ -17,10 +17,15 @@ const configSchema = z.object({
   exportDir: z.string().min(1),
   checkpointPath: z.string().min(1),
   vectorIndexPath: z.string().min(1),
+
+  // AI Configuration
+  llmSource: z.enum(['ollama', 'openrouter']),
+  llmRagModel: z.string().min(1),
+  llmVisionModel: z.string().min(1),
+  llmEmbedModel: z.string().min(1),
   ollamaUrl: z.string().url(),
-  ollamaModel: z.string().min(1),
-  ollamaVisionModel: z.string().min(1),
-  ollamaEmbedModel: z.string().min(1),
+  openrouterApiKey: z.string().optional(),
+
   enableVectorSearch: z
     .string()
     .optional()
@@ -59,10 +64,15 @@ function parseEnvConfig(): Config {
     exportDir: process.env['EXPORT_DIR'] ?? 'exports',
     checkpointPath: process.env['CHECKPOINT_PATH'] ?? join('.storage', 'checkpoint.json'),
     vectorIndexPath: process.env['VECTOR_INDEX_PATH'] ?? join('.storage', 'vector-index'),
+
+    // AI
+    llmSource: (process.env['LLM_SOURCE'] as any) ?? 'ollama',
+    llmRagModel: process.env['LLM_RAG_MODEL'] ?? 'cogito',
+    llmVisionModel: process.env['LLM_VISION_MODEL'] ?? 'ministral-3',
+    llmEmbedModel: process.env['LLM_EMBED_MODEL'] ?? 'nomic-embed-text',
     ollamaUrl: process.env['OLLAMA_URL'] ?? defaultOllamaUrl,
-    ollamaModel: process.env['OLLAMA_MODEL'] ?? 'cogito',
-    ollamaVisionModel: process.env['OLLAMA_VISION_MODEL'] ?? 'ministral-3',
-    ollamaEmbedModel: process.env['OLLAMA_EMBED_MODEL'] ?? 'nomic-embed-text',
+    openrouterApiKey: process.env['OPENROUTER_API_KEY'],
+
     enableVectorSearch: process.env['ENABLE_VECTOR_SEARCH'],
     headless: headlessValue,
   }
@@ -73,18 +83,13 @@ function parseEnvConfig(): Config {
     logger.error('Invalid configuration detected:')
     result.error.issues.forEach((issue) => {
       const path = issue.path.join('.')
-      const envVar = camelToSnakeCase(path).toUpperCase()
-      logger.error(`  ${envVar}: ${issue.message}`)
+      logger.error(`  ${path.toUpperCase()}: ${issue.message}`)
     })
     logger.error('\nPlease check your .env file and fix the above errors.')
     process.exit(1)
   }
 
   return result.data
-}
-
-function camelToSnakeCase(str: string): string {
-  return str.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)
 }
 
 function ensureDirectory(path: string): void {

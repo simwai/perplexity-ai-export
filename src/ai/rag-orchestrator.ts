@@ -1,5 +1,5 @@
 import { VectorStore, type VectorSearchResult } from '../search/vector-store.js'
-import { OllamaClient } from './ollama-client.js'
+import { getAiProvider, type AiProvider } from './ai-provider.js'
 import { RgSearch } from '../search/rg-search.js'
 import { logger } from '../utils/logger.js'
 import chalk from 'chalk'
@@ -8,12 +8,12 @@ import { config } from '../utils/config.js'
 
 export class RagOrchestrator {
   private vectorStore: VectorStore
-  private ollamaClient: OllamaClient
+  private ai: AiProvider
   private ripgrep: RgSearch
 
   constructor() {
     this.vectorStore = new VectorStore()
-    this.ollamaClient = new OllamaClient()
+    this.ai = getAiProvider()
     this.ripgrep = new RgSearch()
   }
 
@@ -78,7 +78,7 @@ Analyze: "${originalQuestion}"
 Return JSON: {"strategy": "...", "queries": [], "hardKeywords": [], "filters": {}}
 `
     try {
-      const response = await this.ollamaClient.generate(plannerPrompt)
+      const response = await this.ai.generate(plannerPrompt)
       const json = JSON.parse(response.match(/\{[\s\S]*\}/)?.[0] || '{}')
       return {
         strategy: json.strategy || 'precise',
@@ -178,7 +178,7 @@ Extract every specific fact, mention, date, or piece of code.
 Return JSON array: [{"fact": "...", "node_id": N, "thread": "..."}]
 `
       try {
-        const response = await this.ollamaClient.generate(researchPrompt)
+        const response = await this.ai.generate(researchPrompt)
         const extracted = JSON.parse(response.match(/\[[\s\S]*\]/)?.[0] || '[]')
         extracted.forEach((f: any) => {
           const original = pool[f.node_id - i]
@@ -220,7 +220,7 @@ INSTRUCTIONS:
 
 ANSWER:
 `
-    return this.ollamaClient.generate(prompt)
+    return this.ai.generate(prompt)
   }
 
   private displaySourceProvenance(facts: any[]): void {
@@ -244,7 +244,7 @@ Did I miss anything important?
 Return JSON: {"status": "ok" | "missed-info", "suggestion": "..."}
 `
     try {
-      const res = await this.ollamaClient.generate(prompt)
+      const res = await this.ai.generate(prompt)
       return JSON.parse(res.match(/\{[\s\S]*\}/)?.[0] || '{"status": "ok"}')
     } catch (_err) {
       return { status: 'ok' }

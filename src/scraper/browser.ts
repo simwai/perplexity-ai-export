@@ -66,9 +66,7 @@ export class BrowserManager {
           return this.getActivePage()
         }
 
-        logger.warn(
-          'Saved authentication expired or invalid. Restarting in headful mode for login...'
-        )
+        logger.warn('Saved authentication expired or invalid. Restarting in headful mode for login...')
         await this.close()
       }
 
@@ -78,9 +76,7 @@ export class BrowserManager {
       await this.ensureUserIsAuthenticated()
 
       if (config.headless !== false) {
-        logger.info(
-          'Authentication successful. Restarting in headless mode with session warming...'
-        )
+        logger.info('Authentication successful. Restarting in headless mode with session warming...')
         await this.close()
         await this.launchBrowser(config.headless)
         await this.initializeBrowserContext()
@@ -130,10 +126,9 @@ export class BrowserManager {
 
     const isSavedAuthValid = this.checkIfSavedAuthenticationIsFresh(config.authStoragePath)
     const contextOptions = {
-      userAgent:
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
       deviceScaleFactor: 1,
-      viewport: { width: 1920, height: 1080 },
+      viewport: { width: 1920, height: 1080 }
     }
 
     if (isSavedAuthValid) {
@@ -153,12 +148,12 @@ export class BrowserManager {
     }
 
     await this.activeContext.addInitScript(() => {
-      Object.defineProperty(navigator, 'webdriver', { get: () => undefined })
-      Object.defineProperty(navigator, 'deviceMemory', { get: () => 8 })
-      Object.defineProperty(navigator, 'hardwareConcurrency', { get: () => 8 })
-      Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] })
-      Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] })
-    })
+      Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+      Object.defineProperty(navigator, 'deviceMemory', { get: () => 8 });
+      Object.defineProperty(navigator, 'hardwareConcurrency', { get: () => 8 });
+      Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
+      Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
+    });
   }
 
   private async ensurePageIsInitialized(): Promise<void> {
@@ -186,7 +181,7 @@ export class BrowserManager {
     try {
       await this.activePage!.goto(perplexitySettingsUrl, {
         timeout: 15000,
-        waitUntil: 'domcontentloaded',
+        waitUntil: 'domcontentloaded'
       })
     } catch (_error) {
       throw new BrowserManager.NavigationError(
