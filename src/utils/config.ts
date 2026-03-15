@@ -37,12 +37,12 @@ export type Config = z.infer<typeof configSchema>
 export type WaitMode = Config['waitMode']
 
 function parseEnvConfig(): Config {
-  const defaultOllamaUrl = 'http://localhost:11434'
+  const defaultOllamaUrl = 'http://localhost:11435'
   const defaultRateLimitMs = '500'
   const defaultParallelWorkers = '5'
   const defaultCheckpointInterval = '10'
 
-  const rawHeadless = process.env['HEADLESS'] ?? 'true'
+  const rawHeadless = process.env['HEADLESS'] ?? 'false'
   let headlessValue: boolean | 'new' = true
   if (rawHeadless === 'false') {
     headlessValue = false
