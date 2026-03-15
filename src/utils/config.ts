@@ -19,6 +19,7 @@ const configSchema = z.object({
   vectorIndexPath: z.string().min(1),
   ollamaUrl: z.string().url(),
   ollamaModel: z.string().min(1),
+  ollamaVisionModel: z.string().min(1),
   ollamaEmbedModel: z.string().min(1),
   enableVectorSearch: z
     .string()
@@ -59,7 +60,8 @@ function parseEnvConfig(): Config {
     checkpointPath: process.env['CHECKPOINT_PATH'] ?? join('.storage', 'checkpoint.json'),
     vectorIndexPath: process.env['VECTOR_INDEX_PATH'] ?? join('.storage', 'vector-index'),
     ollamaUrl: process.env['OLLAMA_URL'] ?? defaultOllamaUrl,
-    ollamaModel: process.env['OLLAMA_MODEL'] ?? 'llama3.1',
+    ollamaModel: process.env['OLLAMA_MODEL'] ?? 'cogito',
+    ollamaVisionModel: process.env['OLLAMA_VISION_MODEL'] ?? 'ministral-3',
     ollamaEmbedModel: process.env['OLLAMA_EMBED_MODEL'] ?? 'nomic-embed-text',
     enableVectorSearch: process.env['ENABLE_VECTOR_SEARCH'],
     headless: headlessValue,
