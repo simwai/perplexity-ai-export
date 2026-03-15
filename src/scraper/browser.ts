@@ -39,7 +39,6 @@ export class BrowserManager {
 
   async launch(): Promise<Page> {
     try {
-
       const isSavedAuthValid = this.checkIfSavedAuthenticationIsFresh(config.authStoragePath)
 
       if (isSavedAuthValid) {
@@ -54,7 +53,9 @@ export class BrowserManager {
           return this.getActivePage()
         }
 
-        logger.warn('Saved authentication expired or invalid. Restarting in headful mode for login...')
+        logger.warn(
+          'Saved authentication expired or invalid. Restarting in headful mode for login...'
+        )
         await this.close()
       }
 
@@ -104,7 +105,6 @@ export class BrowserManager {
 
   private async initializeBrowserContext(): Promise<void> {
     if (!this.browserInstance) throw new BrowserManager.ContextError('Browser not initialized')
-
 
     const isSavedAuthValid = this.checkIfSavedAuthenticationIsFresh(config.authStoragePath)
 
@@ -160,7 +160,6 @@ export class BrowserManager {
     if (!this.activePage) {
       throw new BrowserManager.AuthError('Page not initialized')
     }
-
 
     const isActuallyLoggedIn = await this.verifyLoginStatus(this.activePage)
 

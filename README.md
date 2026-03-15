@@ -17,16 +17,16 @@
 - [Introduction](#introduction)
 - [Key Features](#key-features)
 - [Environment Setup Guide](#environment-setup-guide)
-  * [1. Install Node.js (The Engine)](#1-install-nodejs-the-engine)
-  * [2. Install Ollama (The AI Intelligence)](#2-install-ollama-the-ai-intelligence)
-  * [3. Download and Prepare the Project](#3-download-and-prepare-the-project)
+  - [1. Install Node.js (The Engine)](#1-install-nodejs-the-engine)
+  - [2. Install Ollama (The AI Intelligence)](#2-install-ollama-the-ai-intelligence)
+  - [3. Download and Prepare the Project](#3-download-and-prepare-the-project)
 - [Configuration](#configuration)
-  * [Key Environment Variables](#key-environment-variables)
+  - [Key Environment Variables](#key-environment-variables)
 - [Usage Guide](#usage-guide)
-  * [Operational Directives](#operational-directives)
+  - [Operational Directives](#operational-directives)
 - [RAG Capabilities](#rag-capabilities)
 - [Architecture & Deep Dive](#architecture--deep-dive)
-  * [Project Structure](#project-structure)
+  - [Project Structure](#project-structure)
 - [Testing](#testing)
 
 <!-- tocstop -->
@@ -83,6 +83,7 @@ We recommend using a version manager to install Node.js. This allows you to easi
 If you don't have the `git` command installed, you can simply download this project as a ZIP file from GitHub and extract it.
 
 Once extracted, open your terminal in the project folder and run:
+
 ```bash
 npm install
 npx playwright install chromium
