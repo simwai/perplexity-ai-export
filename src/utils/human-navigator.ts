@@ -22,7 +22,7 @@ export class HumanNavigator {
 
       await page.mouse.move(x, y)
       // Variable speed
-      await new Promise(r => setTimeout(r, Math.random() * 10 + 2))
+      await new Promise((r) => setTimeout(r, Math.random() * 10 + 2))
     }
   }
 
@@ -43,7 +43,7 @@ export class HumanNavigator {
       await page.mouse.wheel(0, delta)
       currentScroll = nextScroll
 
-      await new Promise(r => setTimeout(r, 50 + Math.random() * 100))
+      await new Promise((r) => setTimeout(r, 50 + Math.random() * 100))
     }
   }
 
@@ -63,7 +63,7 @@ export class HumanNavigator {
         await this.scrollNaturally(page, (Math.random() - 0.5) * 400)
       }
 
-      await new Promise(r => setTimeout(r, 500 + Math.random() * 1000))
+      await new Promise((r) => setTimeout(r, 500 + Math.random() * 1000))
     }
   }
 }

@@ -136,7 +136,9 @@ export class ScrollDiscoveryStrategy implements DiscoveryStrategy {
               }
             })
           }
-        } catch { /* ignore */ }
+        } catch {
+          /* ignore */
+        }
       }
     })
 

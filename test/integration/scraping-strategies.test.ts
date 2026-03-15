@@ -1,5 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { ApiExtractionStrategy, DomScrapeExtractionStrategy } from '../../src/scraper/extraction-strategy.js'
+import {
+  ApiExtractionStrategy,
+  DomScrapeExtractionStrategy,
+} from '../../src/scraper/extraction-strategy.js'
 import type { Page, Response } from 'patchright'
 
 describe('Scraping Strategies Integration', () => {
@@ -24,10 +27,12 @@ describe('Scraping Strategies Integration', () => {
     const strategy = new ApiExtractionStrategy()
     const mockData = {
       thread_title: 'Test Title',
-      entries: [{
-        query_str: 'Hello',
-        blocks: [{ markdown_block: { answer: 'World' } }]
-      }]
+      entries: [
+        {
+          query_str: 'Hello',
+          blocks: [{ markdown_block: { answer: 'World' } }],
+        },
+      ],
     }
 
     const capturePromise = (strategy as any).captureConversationApiResponse(mockPage)
@@ -36,13 +41,16 @@ describe('Scraping Strategies Integration', () => {
     await responseHandler({
       url: () => 'https://www.perplexity.ai/rest/thread/test-slug',
       status: () => 200,
-      json: () => Promise.resolve(mockData)
+      json: () => Promise.resolve(mockData),
     } as Response)
 
     const result = await capturePromise
     expect(result.thread_title).toBe('Test Title')
 
-    const parsed = (strategy as any).parseConversationData(result, 'https://www.perplexity.ai/search/test-slug')
+    const parsed = (strategy as any).parseConversationData(
+      result,
+      'https://www.perplexity.ai/search/test-slug'
+    )
     expect(parsed.title).toBe('Test Title')
     expect(parsed.content).toContain('## Hello')
     expect(parsed.content).toContain('World')
@@ -55,7 +63,7 @@ describe('Scraping Strategies Integration', () => {
       title: 'DOM Title',
       spaceName: 'General',
       timestamp: new Date(),
-      content: 'Scraped Content'
+      content: 'Scraped Content',
     })
 
     const result = await strategy.extract(mockPage as Page, 'https://www.perplexity.ai/search/test')

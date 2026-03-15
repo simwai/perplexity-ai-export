@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { gotScraping } from 'got-scraping'
 import { config } from '../utils/config.js'
 import { logger } from '../utils/logger.js'
 import { execSync } from 'node:child_process'
@@ -15,9 +16,11 @@ const generationResponseSchema = z.object({
 })
 
 const tagsResponseSchema = z.object({
-  models: z.array(z.object({
-    name: z.string(),
-  }))
+  models: z.array(
+    z.object({
+      name: z.string(),
+    })
+  ),
 })
 
 export class OllamaClient {
@@ -35,29 +38,36 @@ export class OllamaClient {
     return this.parseEmbeddingsFromResponse(responseData)
   }
 
-  async generate(prompt: string, options: { model?: string; temperature?: number } = {}): Promise<string> {
+  async generate(
+    prompt: string,
+    options: { model?: string; temperature?: number } = {}
+  ): Promise<string> {
     const requestBody = {
       model: options.model ?? config.ollamaModel,
       prompt,
       stream: false,
       options: {
-        temperature: options.temperature ?? 0.7,
-      }
+        temperature: options.temperature ?? 0.2,
+      },
     }
     const responseData = await this.performOllamaHttpRequest('/api/generate', requestBody)
     const validatedData = generationResponseSchema.parse(responseData)
     return validatedData.response
   }
 
-  async generateWithVision(prompt: string, base64Image: string, options: { model?: string; temperature?: number } = {}): Promise<string> {
+  async generateWithVision(
+    prompt: string,
+    base64Image: string,
+    options: { model?: string; temperature?: number } = {}
+  ): Promise<string> {
     const requestBody = {
       model: options.model ?? config.ollamaVisionModel,
       prompt,
       images: [base64Image],
       stream: false,
       options: {
-        temperature: options.temperature ?? 0.7,
-      }
+        temperature: options.temperature ?? 0.2,
+      },
     }
     const responseData = await this.performOllamaHttpRequest('/api/generate', requestBody)
     const validatedData = generationResponseSchema.parse(responseData)
@@ -82,24 +92,31 @@ export class OllamaClient {
       const { models } = tagsResponseSchema.parse(response)
 
       // Ollama model names can be 'model:latest', 'model:tag', or just 'model'
-      const installedModels = models.map(m => m.name)
-      const installedBaseNames = models.map(m => m.name.split(':')[0])
+      const installedModels = models.map((m) => m.name)
+      const installedBaseNames = models.map((m) => m.name.split(':')[0])
 
       const required = [config.ollamaModel, config.ollamaVisionModel, config.ollamaEmbedModel]
       for (const model of required) {
-        const isInstalled = installedModels.includes(model) ||
-                          installedModels.includes(`${model}:latest`) ||
-                          installedBaseNames.includes(model)
+        const isInstalled =
+          installedModels.includes(model) ||
+          installedModels.includes(`${model}:latest`) ||
+          installedBaseNames.includes(model)
 
         if (!isInstalled) {
-          logger.warn(`Model ${model} is missing. Triggering "ollama pull" for maximum reliability...`)
+          logger.warn(
+            `Model ${model} is missing. Triggering "ollama pull" for maximum reliability...`
+          )
           this.pullModel(model)
         }
       }
       logger.success('All required models are verified.')
     } catch (e) {
-      logger.warn(`Automated model verification via API failed: ${e instanceof Error ? e.message : String(e)}`)
-      logger.info('Falling back to manual check. If the models are missing, the system will error later.')
+      logger.warn(
+        `Automated model verification via API failed: ${e instanceof Error ? e.message : String(e)}`
+      )
+      logger.info(
+        'Falling back to manual check. If the models are missing, the system will error later.'
+      )
     }
   }
 
@@ -115,24 +132,42 @@ export class OllamaClient {
     }
   }
 
-  private async performOllamaHttpRequest(endpoint: string, body: object, method: 'POST' | 'GET' = 'POST'): Promise<unknown> {
+  private async performOllamaHttpRequest(
+    endpoint: string,
+    body: object,
+    method: 'POST' | 'GET' = 'POST'
+  ): Promise<unknown> {
     const url = `${config.ollamaUrl}${endpoint}`
+
     try {
-      const options: RequestInit = {
+      const response = await gotScraping({
+        url,
         method,
         headers: { 'Content-Type': 'application/json' },
-      }
-      if (method === 'POST') options.body = JSON.stringify(body)
+        ...(method === 'POST' ? { json: body } : {}),
+        responseType: 'json',
+      })
 
-      const response = await fetch(url, options)
-      if (!response.ok) {
-        const errorBody = await response.text().catch(() => '')
-        throw new OllamaClient.OllamaError(`Ollama request failed with status ${response.status} – ${errorBody.slice(0, 100)}`)
+      const status = response.statusCode
+      if (status < 200 || status >= 300) {
+        const errorBody =
+          typeof response.body === 'string' ? response.body : JSON.stringify(response.body ?? '')
+        throw new OllamaClient.OllamaError(
+          `Ollama request failed with status ${status} – ${errorBody.slice(0, 100)}`
+        )
       }
-      return await response.json()
+
+      return response.body
     } catch (_error) {
+      // Log raw error for debugging
+      logger.error('Ollama HTTP error', _error)
+
       if (_error instanceof OllamaClient.OllamaError) throw _error
-      throw new OllamaClient.OllamaError(`Network error while calling Ollama: ${_error instanceof Error ? _error.message : String(_error)}`)
+
+      const msg =
+        _error instanceof Error ? `${_error.name}: ${_error.message}` : JSON.stringify(_error)
+
+      throw new OllamaClient.OllamaError(`Network error while calling Ollama: ${msg}`)
     }
   }
 

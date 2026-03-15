@@ -22,9 +22,13 @@ const EntrySchema = z.object({
   collection_info: z.object({ title: z.string().optional() }).optional(),
   updated_datetime: z.string().optional(),
   query_str: z.string().optional(),
-  blocks: z.array(z.object({
-    markdown_block: z.object({ answer: z.string().optional() }).optional(),
-  })).optional(),
+  blocks: z
+    .array(
+      z.object({
+        markdown_block: z.object({ answer: z.string().optional() }).optional(),
+      })
+    )
+    .optional(),
 })
 
 export class ApiExtractionStrategy implements ExtractionStrategy {
@@ -49,19 +53,25 @@ export class ApiExtractionStrategy implements ExtractionStrategy {
       const timeout = setTimeout(() => resolve(null), 30000)
       page.on('response', async (response: Response) => {
         const url = response.url()
-        if (url.includes('/rest/thread/') && !url.includes('list_ask_threads') && response.status() === 200) {
+        if (
+          url.includes('/rest/thread/') &&
+          !url.includes('list_ask_threads') &&
+          response.status() === 200
+        ) {
           try {
             const json = await response.json()
             clearTimeout(timeout)
             resolve(json)
-          } catch { /* ignore */ }
+          } catch {
+            /* ignore */
+          }
         }
       })
     })
   }
 
   private parseConversationData(data: any, url: string): ExtractedConversation | null {
-    const entries = Array.isArray(data) ? data : (data.entries || [data])
+    const entries = Array.isArray(data) ? data : data.entries || [data]
     const parseResult = z.array(EntrySchema).safeParse(entries)
     if (!parseResult.success) return null
     const validEntries = parseResult.data
@@ -71,16 +81,20 @@ export class ApiExtractionStrategy implements ExtractionStrategy {
       title: firstEntry.thread_title ?? data.thread_title ?? 'Untitled',
       spaceName: firstEntry.collection_info?.title ?? data.collection_info?.title ?? 'General',
       timestamp: new Date(firstEntry.updated_datetime ?? data.updated_datetime ?? Date.now()),
-      content: this.convertToMarkdown(validEntries, firstEntry.thread_title ?? 'Conversation')
+      content: this.convertToMarkdown(validEntries, firstEntry.thread_title ?? 'Conversation'),
     }
   }
 
   private convertToMarkdown(entries: any[], title: string): string {
-    return entries.map((entry, i) => {
-      const question = entry.query_str || (i === 0 ? title : 'Follow-up')
-      const answer = (entry.blocks || []).map((b: any) => b.markdown_block?.answer || '').join('\n\n')
-      return `## ${question}\n\n${answer.trim()}`
-    }).join('\n\n---\n\n')
+    return entries
+      .map((entry, i) => {
+        const question = entry.query_str || (i === 0 ? title : 'Follow-up')
+        const answer = (entry.blocks || [])
+          .map((b: any) => b.markdown_block?.answer || '')
+          .join('\n\n')
+        return `## ${question}\n\n${answer.trim()}`
+      })
+      .join('\n\n---\n\n')
   }
 }
 
@@ -95,13 +109,15 @@ export class DomScrapeExtractionStrategy implements ExtractionStrategy {
 
     return await page.evaluate((url) => {
       const title = document.querySelector('h1')?.innerText || 'Untitled'
-      const content = Array.from(document.querySelectorAll('.prose')).map(p => (p as HTMLElement).innerText).join('\n\n')
+      const content = Array.from(document.querySelectorAll('.prose'))
+        .map((p) => (p as HTMLElement).innerText)
+        .join('\n\n')
       return {
         id: url.split('/').pop() || 'unknown',
         title,
         spaceName: 'General',
         timestamp: new Date(),
-        content
+        content,
       }
     }, url)
   }
@@ -115,28 +131,40 @@ export class NativeExportExtractionStrategy implements ExtractionStrategy {
     try {
       await HumanNavigator.simulateBrowsing(page)
 
-      const menuButton = page.locator('[data-testid="thread-actions-menu-button"]').or(page.locator('button:has-text("...")')).first()
+      const menuButton = page
+        .locator('[data-testid="thread-actions-menu-button"]')
+        .or(page.locator('button:has-text("...")'))
+        .first()
       const box = await menuButton.boundingBox()
       if (box) {
-          await HumanNavigator.moveMouseCurved(page, box.x + box.width / 2, box.y + box.height / 2)
-          await page.waitForTimeout(300)
-          await menuButton.click()
+        await HumanNavigator.moveMouseCurved(page, box.x + box.width / 2, box.y + box.height / 2)
+        await page.waitForTimeout(300)
+        await menuButton.click()
       } else {
-          await menuButton.click()
+        await menuButton.click()
       }
 
       await page.waitForTimeout(500)
-      const exportButton = page.locator('text=Export').or(page.locator('text=Markdown').or(page.locator('text=Download'))).first()
+      const exportButton = page
+        .locator('text=Export')
+        .or(page.locator('text=Markdown').or(page.locator('text=Download')))
+        .first()
 
-      const [ download ] = await Promise.all([
+      const [download] = await Promise.all([
         page.waitForEvent('download', { timeout: 10000 }),
-        exportButton.click()
+        exportButton.click(),
       ])
 
       await download.path()
       logger.success(`Native export download successful for ${url}`)
 
-      return { id: url.split('/').pop()!, title: 'Native Export', spaceName: 'Export', timestamp: new Date(), content: 'Content exported to download directory' }
+      return {
+        id: url.split('/').pop()!,
+        title: 'Native Export',
+        spaceName: 'Export',
+        timestamp: new Date(),
+        content: 'Content exported to download directory',
+      }
     } catch (e) {
       logger.warn(`Native interaction failed for ${url}: ${e}. Falling back...`)
       return null
@@ -154,7 +182,7 @@ export class AiScrapeExtractionStrategy implements ExtractionStrategy {
 
     const bodyHtml = await page.evaluate(() => {
       const clone = document.body.cloneNode(true) as HTMLElement
-      clone.querySelectorAll('script, style, svg, path, iframe').forEach(e => e.remove())
+      clone.querySelectorAll('script, style, svg, path, iframe').forEach((e) => e.remove())
       return clone.innerHTML.substring(0, 10000)
     })
 
@@ -168,11 +196,22 @@ export class AiScrapeExtractionStrategy implements ExtractionStrategy {
       const selectors = JSON.parse(response.match(/\{.*\}/s)?.[0] || '{}')
 
       if (selectors.title && selectors.answers) {
-        return await page.evaluate(({ url, selectors }) => {
-          const title = document.querySelector(selectors.title)?.innerText || 'Untitled'
-          const content = Array.from(document.querySelectorAll(selectors.answers)).map(p => (p as HTMLElement).innerText).join('\n\n')
-          return { id: url.split('/').pop()!, title, spaceName: 'AI Scrape', timestamp: new Date(), content }
-        }, { url, selectors })
+        return await page.evaluate(
+          ({ url, selectors }) => {
+            const title = document.querySelector(selectors.title)?.innerText || 'Untitled'
+            const content = Array.from(document.querySelectorAll(selectors.answers))
+              .map((p) => (p as HTMLElement).innerText)
+              .join('\n\n')
+            return {
+              id: url.split('/').pop()!,
+              title,
+              spaceName: 'AI Scrape',
+              timestamp: new Date(),
+              content,
+            }
+          },
+          { url, selectors }
+        )
       }
     } catch (e) {
       logger.warn(`AI selector extraction failed: ${e}. Using default DOM scraper.`)

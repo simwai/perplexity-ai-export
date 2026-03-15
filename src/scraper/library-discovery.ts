@@ -7,7 +7,7 @@ import {
   ScrollDiscoveryStrategy,
   InteractionDiscoveryStrategy,
   AiAssistedDiscoveryStrategy,
-  type DiscoveryStrategy
+  type DiscoveryStrategy,
 } from './discovery-strategy.js'
 import { handleCloudflare } from '../utils/cloudflare.js'
 
@@ -19,13 +19,13 @@ export class LibraryDiscovery {
       new ApiDiscoveryStrategy(),
       new ScrollDiscoveryStrategy(),
       new InteractionDiscoveryStrategy(),
-      new AiAssistedDiscoveryStrategy()
+      new AiAssistedDiscoveryStrategy(),
     ]
 
     const primaryMode = config.discoveryMode
     this.strategies = [
-      all.find(s => s.constructor.name.toLowerCase().includes(primaryMode)) || all[0]!,
-      ...all.filter(s => !s.constructor.name.toLowerCase().includes(primaryMode))
+      all.find((s) => s.constructor.name.toLowerCase().includes(primaryMode)) || all[0]!,
+      ...all.filter((s) => !s.constructor.name.toLowerCase().includes(primaryMode)),
     ]
   }
 
@@ -54,7 +54,9 @@ export class LibraryDiscovery {
           logger.warn(`Confirmed Cloudflare block for ${strategyName}. Trying next strategy...`)
           continue
         }
-        logger.error(`Unexpected failure in ${strategyName}: ${e instanceof Error ? e.message : String(e)}`)
+        logger.error(
+          `Unexpected failure in ${strategyName}: ${e instanceof Error ? e.message : String(e)}`
+        )
       }
     }
 

@@ -6,22 +6,24 @@ We welcome contributions! To ensure a smooth development process and maintain hi
 
 1. **Install Node.js**: Ensure you have Node.js 20+ installed.
 2. **Install Ollama**:
-  - Download and install [Ollama](https://ollama.ai/).
-  - \`ollama pull nomic-embed-text\` (for semantic vectors)
-  - \`ollama pull cogito\` (for generative synthesis)
-  - \`ollama pull ministral-3\` (for vision-based bypass)
+
+- Download and install [Ollama](https://ollama.ai/).
+- \`ollama pull nomic-embed-text\` (for semantic vectors)
+- \`ollama pull cogito\` (for generative synthesis)
+- \`ollama pull ministral-3\` (for vision-based bypass)
+
 3. **Install Dependencies**:
-  \`\`\`bash
-  npm install
-  \`\`\`
+   \`\`\`bash
+   npm install
+   \`\`\`
 4. **Prepare Environment Variables**:
-  \`\`\`bash
-  cp .env.example .env
-  \`\`\`
+   \`\`\`bash
+   cp .env.example .env
+   \`\`\`
 5. **Install Playwright Browsers**:
-  \`\`\`bash
-  npx playwright install chromium
-  \`\`\`
+   \`\`\`bash
+   npx playwright install chromium
+   \`\`\`
 
 ## Development Workflow
 
