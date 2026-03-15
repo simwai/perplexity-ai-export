@@ -4,6 +4,7 @@ import { createInterface } from 'node:readline'
 import { config } from '../utils/config.js'
 import { logger } from '../utils/logger.js'
 import chalk from 'chalk'
+import { rgPath } from '@vscode/ripgrep'
 
 export interface RgSearchOptions {
   pattern: string
@@ -50,7 +51,7 @@ export class RgSearch {
       const MAX_MATCHES_PER_KEYWORD = 100
       const TIMEOUT_MS = 30000
       const matches: RgMatch[] = []
-      const rg = spawn('rg', cleanArgs, { cwd: config.exportDir })
+      const rg = spawn(rgPath, cleanArgs, { cwd: config.exportDir })
 
       const timeout = setTimeout(() => {
         logger.warn(
@@ -142,7 +143,7 @@ export class RgSearch {
 
   private spawnRipgrepProcess(args: string[]): Promise<void> {
     return new Promise((resolve, reject) => {
-      const ripgrepProcess = spawn('rg', args, {
+      const ripgrepProcess = spawn(rgPath, args, {
         cwd: config.exportDir,
         stdio: ['ignore', 'pipe', 'pipe'],
       })
@@ -184,10 +185,8 @@ export class RgSearch {
 
   private getRipgrepInstallationInstructions(): string {
     return (
-      'ripgrep (rg) not found. Please install it to use exact text search:\n' +
-      '  macOS: brew install ripgrep\n' +
-      '  Linux: apt install ripgrep / dnf install ripgrep\n' +
-      '  Windows: choco install ripgrep / scoop install ripgrep'
+      'Bundled ripgrep (rg) not found or failed to execute. ' +
+      'Please ensure the application was installed correctly.'
     )
   }
 }

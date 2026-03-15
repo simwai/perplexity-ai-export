@@ -18,9 +18,8 @@
 - [Key Features](#key-features)
 - [Environment Setup Guide](#environment-setup-guide)
   * [1. Install Node.js (The Engine)](#1-install-nodejs-the-engine)
-  * [2. Install ripgrep (The Search Engine)](#2-install-ripgrep-the-search-engine)
-  * [3. Install Ollama (The AI Intelligence)](#3-install-ollama-the-ai-intelligence)
-  * [4. Download and Prepare the Project](#4-download-and-prepare-the-project)
+  * [2. Install Ollama (The AI Intelligence)](#2-install-ollama-the-ai-intelligence)
+  * [3. Download and Prepare the Project](#3-download-and-prepare-the-project)
 - [Configuration](#configuration)
   * [Key Environment Variables](#key-environment-variables)
 - [Usage Guide](#usage-guide)
@@ -70,21 +69,7 @@ We recommend using a version manager to install Node.js. This allows you to easi
      nvm use 20
      ```
 
-### 2. Install ripgrep (The Search Engine)
-
-`ripgrep` (rg) is used for high-speed exact matching.
-
-- **Windows**: Open PowerShell and run:
-  ```powershell
-  winget install BurntSushi.ripgrep
-  ```
-- **macOS**: Use [Homebrew](https://brew.sh/):
-  ```bash
-  brew install ripgrep
-  ```
-- **Linux**: Use your package manager (e.g., `sudo apt install ripgrep`).
-
-### 3. Install Ollama (The AI Intelligence)
+### 2. Install Ollama (The AI Intelligence)
 
 1. Download and install Ollama from [ollama.ai](https://ollama.ai).
 2. Open your terminal and pull the required models:
@@ -93,7 +78,7 @@ We recommend using a version manager to install Node.js. This allows you to easi
    ollama pull deepseek-r1
    ```
 
-### 4. Download and Prepare the Project
+### 3. Download and Prepare the Project
 
 If you don't have the `git` command installed, you can simply download this project as a ZIP file from GitHub and extract it.
 
@@ -124,8 +109,7 @@ Launch the system:
 
 ```bash
 # Start the development environment
-npm run d\
-ev
+npm run dev
 ```
 
 ### Operational Directives
@@ -135,7 +119,7 @@ ev
   - **Auto**: Heuristic selection between semantic and exact search.
   - **Semantic**: Fuzzy matching via high-dimensional vector space.
   - **RAG**: Direct inquiry—e.g., "What did I learn about emergent intelligence?"
-  - **Exact**: Rapid string matching via ripgrep.
+  - **Exact**: Rapid string matching via ripgrep (bundled).
 - **Build vector index**: Processes Markdown exports into a local vector store.
 - **Reset all data**: Purges checkpoints, authentication data, and the vector index.
 

@@ -1,6 +1,6 @@
 import { config as loadEnv } from 'dotenv'
 import { existsSync, mkdirSync } from 'node:fs'
-import { dirname } from 'node:path'
+import { dirname, join } from 'node:path'
 import { z } from 'zod'
 import { logger } from './logger.js'
 
@@ -22,6 +22,7 @@ const configSchema = z.object({
     .string()
     .optional()
     .transform((v) => v === 'true'),
+  headless: z.union([z.boolean(), z.literal('new')]),
 })
 
 export type Config = z.infer<typeof configSchema>
@@ -33,8 +34,16 @@ function parseEnvConfig(): Config {
   const defaultParallelWorkers = '5'
   const defaultCheckpointInterval = '10'
 
+  const rawHeadless = process.env['HEADLESS'] ?? 'true'
+  let headlessValue: boolean | 'new' = true
+  if (rawHeadless === 'false') {
+    headlessValue = false
+  } else if (rawHeadless === 'new') {
+    headlessValue = 'new'
+  }
+
   const rawConfig = {
-    authStoragePath: process.env['AUTH_STORAGE_PATH'] ?? '.storage/auth.json',
+    authStoragePath: process.env['AUTH_STORAGE_PATH'] ?? join('.storage', 'auth.json'),
     waitMode: process.env['WAIT_MODE'] ?? 'dynamic',
     rateLimitMs: parseInt(process.env['RATE_LIMIT_MS'] ?? defaultRateLimitMs, 10),
     parallelWorkers: parseInt(process.env['PARALLEL_WORKERS'] ?? defaultParallelWorkers, 10),
@@ -43,12 +52,13 @@ function parseEnvConfig(): Config {
       10
     ),
     exportDir: process.env['EXPORT_DIR'] ?? 'exports',
-    checkpointPath: process.env['CHECKPOINT_PATH'] ?? '.storage/checkpoint.json',
-    vectorIndexPath: process.env['VECTOR_INDEX_PATH'] ?? '.storage/vector-index',
+    checkpointPath: process.env['CHECKPOINT_PATH'] ?? join('.storage', 'checkpoint.json'),
+    vectorIndexPath: process.env['VECTOR_INDEX_PATH'] ?? join('.storage', 'vector-index'),
     ollamaUrl: process.env['OLLAMA_URL'] ?? defaultOllamaUrl,
     ollamaModel: process.env['OLLAMA_MODEL'] ?? 'llama3.1',
     ollamaEmbedModel: process.env['OLLAMA_EMBED_MODEL'] ?? 'nomic-embed-text',
     enableVectorSearch: process.env['ENABLE_VECTOR_SEARCH'],
+    headless: headlessValue,
   }
 
   const result = configSchema.safeParse(rawConfig)

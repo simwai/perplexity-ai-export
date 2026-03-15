@@ -39,10 +39,40 @@ export class BrowserManager {
 
   async launch(): Promise<Page> {
     try {
-      await this.launchHeadfulBrowser()
+
+      const isSavedAuthValid = this.checkIfSavedAuthenticationIsFresh(config.authStoragePath)
+
+      if (isSavedAuthValid) {
+        // Try starting in requested headless mode directly
+        await this.launchBrowser(config.headless)
+        await this.initializeBrowserContext()
+        await this.navigateToSettingsPage()
+        const isLoggedIn = await this.verifyLoginStatus(this.getActivePage())
+
+        if (isLoggedIn) {
+          logger.success('Already logged in!')
+          return this.getActivePage()
+        }
+
+        logger.warn('Saved authentication expired or invalid. Restarting in headful mode for login...')
+        await this.close()
+      }
+
+      // Need login: launch headful
+      await this.launchBrowser(false)
       await this.initializeBrowserContext()
       await this.navigateToSettingsPage()
       await this.ensureUserIsAuthenticated()
+
+      // If user wants headless, restart now that we are logged in
+      if (config.headless !== false) {
+        logger.info('Authentication successful. Restarting in headless mode...')
+        await this.close()
+        await this.launchBrowser(config.headless)
+        await this.initializeBrowserContext()
+        await this.navigateToSettingsPage()
+      }
+
       return this.getActivePage()
     } catch (_error) {
       if (_error instanceof Error) throw _error
@@ -54,12 +84,15 @@ export class BrowserManager {
     if (this.activePage) await this.activePage.close().catch(() => {})
     if (this.activeContext) await this.activeContext.close().catch(() => {})
     if (this.browserInstance) await this.browserInstance.close().catch(() => {})
+    this.activePage = null
+    this.activeContext = null
+    this.browserInstance = null
   }
 
-  private async launchHeadfulBrowser(): Promise<void> {
+  private async launchBrowser(headless: boolean | 'new'): Promise<void> {
     try {
       this.browserInstance = await chromium.launch({
-        headless: false,
+        headless: headless === 'new' ? true : headless,
         args: ['--disable-blink-features=AutomationControlled'],
       })
     } catch (_error) {
@@ -72,13 +105,13 @@ export class BrowserManager {
   private async initializeBrowserContext(): Promise<void> {
     if (!this.browserInstance) throw new BrowserManager.ContextError('Browser not initialized')
 
-    const authStoragePath = config.authStoragePath
-    const isSavedAuthValid = this.checkIfSavedAuthenticationIsFresh(authStoragePath)
+
+    const isSavedAuthValid = this.checkIfSavedAuthenticationIsFresh(config.authStoragePath)
 
     if (isSavedAuthValid) {
       logger.info('Loading saved authentication state...')
       try {
-        const storageStateData = JSON.parse(readFileSync(authStoragePath, 'utf-8'))
+        const storageStateData = JSON.parse(readFileSync(config.authStoragePath, 'utf-8'))
         this.activeContext = await this.browserInstance.newContext({
           storageState: storageStateData,
         })
@@ -87,7 +120,7 @@ export class BrowserManager {
         this.activeContext = await this.browserInstance.newContext()
       }
     } else {
-      if (existsSync(authStoragePath)) {
+      if (existsSync(config.authStoragePath)) {
         logger.info('Saved authentication is older than 1 day, discarding.')
       }
       this.activeContext = await this.browserInstance.newContext()
@@ -128,17 +161,12 @@ export class BrowserManager {
       throw new BrowserManager.AuthError('Page not initialized')
     }
 
-    const authStoragePath = config.authStoragePath
-    const isAuthFresh = this.checkIfSavedAuthenticationIsFresh(authStoragePath)
 
-    if (isAuthFresh) {
-      const isActuallyLoggedIn = await this.verifyLoginStatus(this.activePage)
+    const isActuallyLoggedIn = await this.verifyLoginStatus(this.activePage)
 
-      if (isActuallyLoggedIn) {
-        logger.success('Already logged in!')
-        return
-      }
-      logger.warn('Saved authentication expired or invalid.')
+    if (isActuallyLoggedIn) {
+      logger.success('Already logged in!')
+      return
     }
 
     logger.info('Please log in manually in the browser window...')
