@@ -1,40 +1,42 @@
 # Perplexity History Export Tool
 
-A high-performance tool to export your Perplexity.ai conversation history to organized Markdown files, with support for semantic search and advanced RAG (Retrieval-Augmented Generation) using local AI.
+Welcome to a bridge between ephemeral inquiry and structured knowledge. This tool is designed to externalize your Perplexity.ai conversation history into organized, semantically searchable Markdown files, facilitating the emergence of a personal knowledge base powered by local AI.
 
-## Features
+## Evolutionary Features
 
-- **Parallel Scraping** – Uses Playwright to extract multiple conversations simultaneously for high speed.
-- **Resilient to failures** – Automatically recreates browser context if it crashes; retries failed conversations.
-- **Advanced RAG Search Mode** – Ask complex questions about your history. The tool uses intent analysis to provide either broad summaries or specific answers, complete with thread-based context grouping.
-- **Semantic Search** – Find conversations based on meaning, not just keywords.
-- **Checkpoint & Resumability** – Progress is saved frequently so you can resume after interruptions.
-- **REPL-style CLI** – User-friendly interactive command-line interface.
+- **Parallelized Extraction** – Leverages Playwright to navigate the digital landscape, extracting multiple conversation threads simultaneously for high-velocity data retrieval.
+- **Architectural Resilience** – Automatically restores browser contexts and retries operations, ensuring the continuity of the data flow even amidst environmental instability.
+- **Advanced RAG (Retrieval-Augmented Generation)** – Engage in a cognitive dialogue with your own history. The system employs intent analysis to synthesize broad summaries or pinpoint specific technical insights with thread-based context.
+- **Semantic Vector Search** – Move beyond keyword matching. Locate information based on conceptual depth and semantic relevance.
+- **Persistent State Tracking** – Frequent checkpoints allow the system to resume its evolutionary progress after any interruption.
+- **Interactive Synthesis (REPL)** – A streamlined command-line interface for human-system synergy.
 
 ---
 
-## Requirements
+## Environmental Substrates (Requirements)
 
-- Node.js 20+
-- [Ollama](https://ollama.ai) – For embeddings and RAG generation.
-- [ripgrep](https://github.com/BurntSushi/ripgrep) (rg) – For exact text search.
-- Playwright (installed via npm install).
+- **Node.js 20+** – The core substrate for our logic.
+- **[Ollama](https://ollama.ai)** – Our local engine for embedding generation and cognitive synthesis.
+- **[ripgrep](https://github.com/BurntSushi/ripgrep)** (rg) – For high-speed exact pattern matching.
+- **Playwright** – Installed via npm, providing our sensory interface to the web.
 
-### Ollama Setup
+### Configuring Your Local Intelligence (Ollama)
 
-Pull the required models:
+Initialize the necessary models:
 
 ```bash
-# For embeddings
+# For generating semantic embeddings
 ollama pull nomic-embed-text
 
-# For RAG generation (default)
+# For RAG-based generative synthesis
 ollama pull deepseek-r1
 ```
 
 ---
 
-## Installation
+## Initiation (Installation)
+
+Instantiate the project dependencies:
 
 ```bash
 npm install
@@ -42,72 +44,72 @@ npm install
 
 ---
 
-## Configuration
+## Parameters of Existence (Configuration)
 
-Copy the example environment file and adjust as needed:
+Establish your environment by duplicating the template:
 
 ```bash
 cp .env.example .env
 ```
 
-### Key Environment Variables
+### Key Variables for System Alignment
 
-- OLLAMA_URL: URL where Ollama is running (default: http://localhost:11434).
-- OLLAMA_MODEL: Model used for RAG generation (e.g., deepseek-r1).
-- OLLAMA_EMBED_MODEL: Model used for creating vector embeddings (e.g., nomic-embed-text).
-- ENABLE_VECTOR_SEARCH: Set to true to enable semantic search and RAG.
+- **OLLAMA_URL**: The access point for your local AI engine (default: http://localhost:11434).
+- **OLLAMA_MODEL**: The cognitive model for RAG synthesis (e.g., deepseek-r1).
+- **OLLAMA_EMBED_MODEL**: The model for generating vector representations (e.g., nomic-embed-text).
+- **ENABLE_VECTOR_SEARCH**: Set to `true` to activate the semantic and RAG layers.
 
 ---
 
-## Usage
+## Operational Modalities (Usage)
 
-Run the tool:
+Launch the system:
 
 ```bash
 npm run dev
 ```
 
-### Available Commands
+### Available Directives
 
-- Start scraper (Library): Begins the export process. Authenticate manually in the browser window if prompted.
-- Search conversations: Search through your exports. Choose between:
-  - **Auto**: Heuristic switch between semantic and exact.
-  - **Semantic**: Fuzzy matching via vector embeddings.
-  - **RAG**: Ask questions like "What did I learn about X?" or "List all threads about Y".
-  - **Exact**: Precise string matching via ripgrep.
-- Build vector index: Processes your Markdown exports into a local vector database for search and RAG.
-- Reset all data: Clears checkpoints, auth data, and the vector index.
-
----
-
-## Advanced RAG Usage
-
-The RAG mode is designed to handle different types of queries:
-
-- **Broad Queries**: "Show me all threads about babadeluxe" -> Will provide a list of relevant threads with summaries.
-- **Specific Queries**: "How did I solve that TypeScript error in the worker pool?" -> Will find specific code snippets and explanations across your history.
-- **Cross-Thread Analysis**: "How has my understanding of React hooks evolved?" -> Will synthesize information across multiple conversations.
+- **Start scraper (Library)**: Initiates the extraction process. Authenticate manually if the system encounters a security gate.
+- **Search conversations**: Interface with your history using various cognitive modes:
+  - **Auto**: A heuristic selection between semantic and exact search based on query intent.
+  - **Semantic**: Fuzzy matching via high-dimensional vector space.
+  - **RAG**: Direct inquiry—e.g., "What did I learn about emergent intelligence?" or "Synthesize my notes on quantum biology."
+  - **Exact**: Rapid string matching via ripgrep.
+- **Build vector index**: Processes your Markdown exports into a local vector store for enhanced retrieval.
+- **Reset all data**: Purges checkpoints, authentication data, and the vector index to allow for a fresh evolutionary cycle.
 
 ---
 
-## Testing
+## Advanced RAG Capabilities
 
-The project uses Vitest for testing, following the "Testing Trophy" philosophy with a strong emphasis on integration tests.
+The RAG modality is engineered to handle various levels of cognitive inquiry:
+
+- **Broad Synthesis**: "Summarize all threads regarding babadeluxe" -> Generates a high-level overview of relevant discussions.
+- **Granular Retrieval**: "Locate the specific TypeScript pattern I used for the worker pool" -> Isolates and presents precise code and explanations.
+- **Cross-Thread Integration**: "How has my conceptual understanding of React hooks shifted over time?" -> Analyzes and synthesizes data across multiple chronological points.
+
+---
+
+## Verifying Integrity (Testing)
+
+We prioritize a "Testing Trophy" architecture, emphasizing integration tests to ensure the harmonious emergence of system behavior.
 
 ```bash
-# Run unit tests
+# Execute unit-level verifications
 npm run test:unit
 
-# Run integration tests (uses MSW for mocking Ollama)
+# Execute integration-level verifications (utilizes MSW to simulate AI interactions)
 npm run test:integration
 ```
 
 ---
 
-## Project Structure
+## System Architecture (Project Structure)
 
-- src/ai/: Ollama client and advanced RAG orchestration.
-- src/scraper/: Playwright-based extraction logic and worker pool.
-- src/search/: Vector store (Vectra) and ripgrep search.
-- src/repl/: Interactive CLI components.
-- src/utils/: Shared utilities like chunking and logging.
+- **src/ai/**: Ollama interaction and advanced RAG orchestration layers.
+- **src/scraper/**: Playwright-based extraction logic and parallel worker pool management.
+- **src/search/**: Vector storage (Vectra) and ripgrep search implementation.
+- **src/repl/**: Interactive CLI components for human-system feedback.
+- **src/utils/**: Shared utility functions for data chunking and logging.
