@@ -6,9 +6,6 @@ import { config } from './config.js'
 
 const ollama = new OllamaClient()
 
-/**
- * Advanced Cloudflare Bypass using Vision (ministral-3) and Behavioral Modeling
- */
 export async function handleCloudflare(page: Page): Promise<boolean> {
   const isBlocked = await page.evaluate(() => {
     const title = document.title.toLowerCase()
@@ -28,71 +25,53 @@ export async function handleCloudflare(page: Page): Promise<boolean> {
   await page.setViewportSize({ width: 1920, height: 1080 })
   await HumanNavigator.simulateBrowsing(page)
 
-  try {
-    const screenshot = await page.screenshot({ type: 'png' })
-    const base64Image = screenshot.toString('base64')
+  const screenshot = await page.screenshot({ type: 'png' })
+  const base64Image = screenshot.toString('base64')
 
-    const prompt = `Identify the exact pixel coordinates (x, y) of the "Verify you are human" checkbox or the Cloudflare/Turnstile interaction area.
-    The image is 1920x1080. Provide the 3 most likely (x, y) pairs in order of confidence.
-    Format your response as a JSON array of objects: [{"x": 100, "y": 200}, {"x": 110, "y": 210}, {"x": 90, "y": 190}]`
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    const temperature = 0.5 - (attempt * 0.15) // 0.35, 0.2, 0.05
+    const pressure = attempt === 1 ? "" : attempt === 2 ? "IMPORTANT: You must return ONLY valid JSON." : "CRITICAL: Return ONLY the JSON array. NO TEXT, NO COMMENTS."
 
-    const response = await ollama.generateWithVision(prompt, base64Image)
-    const coordinatesMatch = response.match(/\[.*\]/s)
+    const prompt = `Identify the exact pixel coordinates (x, y) of the "Verify you are human" checkbox.
+    The image is 1920x1080.
+    ${pressure}
+    Return ONLY a JSON array of objects:
+    [{"x": 123, "y": 456}, {"x": 125, "y": 458}, {"x": 120, "y": 450}]`
 
-    if (coordinatesMatch) {
-      const coordinates = JSON.parse(coordinatesMatch[0]) as Array<{ x: number, y: number }>
-
-      for (const coord of coordinates.slice(0, 3)) {
-        logger.info(`Attempting click at (${coord.x}, ${coord.y}) using Vision coordinates...`)
-        await HumanNavigator.moveMouseCurved(page, coord.x, coord.y)
-        await page.waitForTimeout(500 + Math.random() * 500)
-        await page.mouse.click(coord.x, coord.y, { delay: 150 + Math.random() * 100 })
-        await page.waitForTimeout(5000)
-
-        const stillBlocked = await page.evaluate(() => {
-          const title = document.title.toLowerCase()
-          return title.includes('cloudflare') || title.includes('just a moment')
-        })
-
-        if (!stillBlocked) {
-          logger.success('Vision-based bypass successful!')
-          return false
-        }
-      }
-    }
-  } catch (e) {
-    logger.error(`Vision bypass failed: ${e instanceof Error ? e.message : String(e)}`)
-  }
-
-  logger.info('Vision attempt inconclusive. Falling back to frame-level interaction...')
-  return await standardFrameBypass(page)
-}
-
-async function standardFrameBypass(page: Page): Promise<boolean> {
-  for (let attempt = 1; attempt <= 2; attempt++) {
     try {
-      const frames = page.frames()
-      const challengeFrame = frames.find(f => f.url().includes('cloudflare') || f.name().includes('cf-'))
+      const response = await ollama.generateWithVision(prompt, base64Image, { temperature: Math.max(0, temperature) })
+      // Strip anything that isn't part of the JSON array
+      const jsonMatch = response.match(/\[\s*\{.*\}\s*\]/s)
 
-      if (challengeFrame) {
-        const checkbox = challengeFrame.locator('input[type="checkbox"], #challenge-stage, .mark').first()
-        if (await checkbox.isVisible({ timeout: 2000 })) {
-          const box = await checkbox.boundingBox()
-          if (box) {
-            await HumanNavigator.moveMouseCurved(page, box.x + box.width / 2, box.y + box.height / 2)
-            await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2, { delay: 200 })
-            await page.waitForTimeout(6000)
+      if (jsonMatch) {
+        // Remove JS-style comments just in case
+        const cleanedJson = jsonMatch[0].replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '')
+        const coordinates = JSON.parse(cleanedJson) as Array<{ x: number, y: number }>
+
+        for (const coord of coordinates.slice(0, 3)) {
+          logger.info(`Attempt ${attempt}: Clicking Vision target (${coord.x}, ${coord.y})...`)
+          await HumanNavigator.moveMouseCurved(page, coord.x, coord.y)
+          await page.waitForTimeout(500)
+          await page.mouse.click(coord.x, coord.y, { delay: 150 })
+          await page.waitForTimeout(5000)
+
+          const stillBlocked = await page.evaluate(() => {
+            const title = document.title.toLowerCase()
+            return title.includes('cloudflare') || title.includes('just a moment')
+          })
+
+          if (!stillBlocked) {
+            logger.success('Vision-based bypass successful!')
+            return false
           }
         }
+      } else {
+        logger.warn(`Attempt ${attempt}: LLM did not return a valid JSON array.`)
       }
-
-      const stillBlocked = await page.evaluate(() => {
-        const title = document.title.toLowerCase()
-        return title.includes('cloudflare') || title.includes('just a moment')
-      })
-
-      if (!stillBlocked) return false
-    } catch { /* ignore */ }
+    } catch (e) {
+      logger.error(`Attempt ${attempt} error: ${e instanceof Error ? e.message : String(e)}`)
+    }
   }
-  return true
+
+  throw new Error('Cloudflare bypass exhausted all retries. Failing fast to prevent hanging/blacklisting.')
 }

@@ -34,19 +34,29 @@ export class OllamaClient {
     return this.parseEmbeddingsFromResponse(responseData)
   }
 
-  async generate(prompt: string, modelOverride?: string): Promise<string> {
-    const requestBody = { model: modelOverride ?? config.ollamaModel, prompt, stream: false }
+  async generate(prompt: string, options: { model?: string; temperature?: number } = {}): Promise<string> {
+    const requestBody = {
+      model: options.model ?? config.ollamaModel,
+      prompt,
+      stream: false,
+      options: {
+        temperature: options.temperature ?? 0.7,
+      }
+    }
     const responseData = await this.performOllamaHttpRequest('/api/generate', requestBody)
     const validatedData = generationResponseSchema.parse(responseData)
     return validatedData.response
   }
 
-  async generateWithVision(prompt: string, base64Image: string, modelOverride?: string): Promise<string> {
+  async generateWithVision(prompt: string, base64Image: string, options: { model?: string; temperature?: number } = {}): Promise<string> {
     const requestBody = {
-      model: modelOverride ?? config.ollamaVisionModel,
+      model: options.model ?? config.ollamaVisionModel,
       prompt,
       images: [base64Image],
       stream: false,
+      options: {
+        temperature: options.temperature ?? 0.7,
+      }
     }
     const responseData = await this.performOllamaHttpRequest('/api/generate', requestBody)
     const validatedData = generationResponseSchema.parse(responseData)
@@ -73,7 +83,6 @@ export class OllamaClient {
 
       const required = [config.ollamaModel, config.ollamaVisionModel, config.ollamaEmbedModel]
       for (const model of required) {
-        // Handle models that might have tags in config (e.g. cogito:8b)
         const baseName = model.split(':')[0]!
         if (!installedModels.some(m => m === baseName || m === model)) {
           logger.warn(`Model ${model} is missing. Triggering automatic pull...`)
@@ -90,28 +99,20 @@ export class OllamaClient {
   private async pullModel(model: string): Promise<void> {
     logger.info(`Pulling ${model}... This may take a few minutes.`)
     const url = `${config.ollamaUrl}/api/pull`
-
     try {
       const response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: model }),
       })
-
-      if (!response.ok) {
-        throw new Error(`Failed to pull model: ${response.status}`)
-      }
-
+      if (!response.ok) throw new Error(`Failed to pull model: ${response.status}`)
       const reader = response.body?.getReader()
       if (!reader) throw new Error('Failed to get response body reader')
-
       const decoder = new TextDecoder()
       while (true) {
         const { done, value } = await reader.read()
         if (done) break
-
         const chunk = decoder.decode(value, { stream: true })
-        // We don't strictly need to parse every progress chunk, just wait for it to finish
         if (chunk.includes('"status":"success"')) {
            logger.success(`Successfully pulled ${model}`)
            return
@@ -130,7 +131,6 @@ export class OllamaClient {
         headers: { 'Content-Type': 'application/json' },
       }
       if (method === 'POST') options.body = JSON.stringify(body)
-
       const response = await fetch(url, options)
       if (!response.ok) {
         const errorBody = await response.text().catch(() => '')
