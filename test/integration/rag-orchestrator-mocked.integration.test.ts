@@ -24,9 +24,11 @@ const mswServer = setupServer(
 
     let responseText = ''
     if (body.prompt.includes('Analyze:')) {
-      responseText = '{"strategy": "precise", "queries": ["What is in my history?"], "hardKeywords": ["mocked"], "filters": {}}'
+      responseText =
+        '{"strategy": "precise", "queries": ["What is in my history?"], "hardKeywords": ["mocked"], "filters": {}}'
     } else if (body.prompt.includes('You are the Researcher.')) {
-      responseText = '[{"fact": "Based on your history, there is a Mocked Title.", "node_id": 0, "thread": "Mocked Title"}]'
+      responseText =
+        '[{"fact": "Based on your history, there is a Mocked Title.", "node_id": 0, "thread": "Mocked Title"}]'
     } else if (body.prompt.includes('You are the Narrator.')) {
       responseText = 'Based on your history, there is a Mocked Title.'
     } else if (body.prompt.includes('Verify the answer.')) {

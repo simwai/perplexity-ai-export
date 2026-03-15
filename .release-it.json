@@ -1,0 +1,22 @@
+{
+  "github": {
+    "release": true,
+    "assets": ["dist/perplexity-history-export.exe", "dist/perplexity-history-export", "README.md", "LICENSE"]
+  },
+  "git": {
+    "commitMessage": "chore: release v${version}",
+    "tagName": "v${version}"
+  },
+  "npm": {
+    "publish": false
+  },
+  "plugins": {
+    "@release-it/conventional-changelog": {
+      "preset": "angular",
+      "infile": "CHANGELOG.md"
+    }
+  },
+  "hooks": {
+    "before:init": ["npm test", "npm run build:exe"]
+  }
+}

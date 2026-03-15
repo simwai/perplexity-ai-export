@@ -1,0 +1,45 @@
+name: '🐛 Bug Report'
+description: 'File a report to help us improve the emergent quality of the system.'
+labels: ['bug']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before submitting, please ensure you've searched existing issues to avoid redundant cognitive load.
+  - type: textarea
+    id: description
+    attributes:
+      label: 'A Clear and Concise Description'
+      description: 'Describe the unexpected behavior or the discrepancy between current and expected states.'
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: 'Reproduction Steps'
+      description: 'Detail the causal sequence that leads to the observed phenomenon.'
+      placeholder: |
+        1. Run 'npm run dev'
+        2. Select 'Start scraper'
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 'Expected Behavior'
+      description: 'What should the system be manifesting in this context?'
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: 'Environmental Context'
+      description: 'OS, Node version, Ollama model, and any other relevant substrate details.'
+    validations:
+      required: true
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: 'Visual Evidence (Screenshots/Logs)'
+      description: 'Provide any additional data points to help us triangulate the issue.'
