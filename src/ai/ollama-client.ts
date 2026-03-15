@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { config } from '../utils/config.js'
 import { logger } from '../utils/logger.js'
+import { execSync } from 'node:child_process'
 
 const embeddingItemSchema = z.object({ embedding: z.array(z.number()) })
 const openAiFormatSchema = z.object({ data: z.array(embeddingItemSchema) })
@@ -79,47 +80,38 @@ export class OllamaClient {
     try {
       const response = await this.performOllamaHttpRequest('/api/tags', {}, 'GET')
       const { models } = tagsResponseSchema.parse(response)
-      const installedModels = models.map(m => m.name.split(':')[0])
+
+      // Ollama model names can be 'model:latest', 'model:tag', or just 'model'
+      const installedModels = models.map(m => m.name)
+      const installedBaseNames = models.map(m => m.name.split(':')[0])
 
       const required = [config.ollamaModel, config.ollamaVisionModel, config.ollamaEmbedModel]
       for (const model of required) {
-        const baseName = model.split(':')[0]!
-        if (!installedModels.some(m => m === baseName || m === model)) {
-          logger.warn(`Model ${model} is missing. Triggering automatic pull...`)
-          await this.pullModel(model)
+        const isInstalled = installedModels.includes(model) ||
+                          installedModels.includes(`${model}:latest`) ||
+                          installedBaseNames.includes(model)
+
+        if (!isInstalled) {
+          logger.warn(`Model ${model} is missing. Triggering "ollama pull" for maximum reliability...`)
+          this.pullModel(model)
         }
       }
-      logger.success('All required models are ready.')
+      logger.success('All required models are verified.')
     } catch (e) {
-      logger.warn(`Unable to verify models automatically: ${e instanceof Error ? e.message : String(e)}`)
-      logger.info('Please ensure Ollama is running and models are installed.')
+      logger.warn(`Automated model verification via API failed: ${e instanceof Error ? e.message : String(e)}`)
+      logger.info('Falling back to manual check. If the models are missing, the system will error later.')
     }
   }
 
-  private async pullModel(model: string): Promise<void> {
-    logger.info(`Pulling ${model}... This may take a few minutes.`)
-    const url = `${config.ollamaUrl}/api/pull`
+  private pullModel(model: string): void {
+    logger.info(`Pulling ${model}... This will show progress in your terminal.`)
     try {
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: model }),
-      })
-      if (!response.ok) throw new Error(`Failed to pull model: ${response.status}`)
-      const reader = response.body?.getReader()
-      if (!reader) throw new Error('Failed to get response body reader')
-      const decoder = new TextDecoder()
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-        const chunk = decoder.decode(value, { stream: true })
-        if (chunk.includes('"status":"success"')) {
-           logger.success(`Successfully pulled ${model}`)
-           return
-        }
-      }
+      // Use the system command to pull models as requested for better robustness and UX
+      execSync(`ollama pull ${model}`, { stdio: 'inherit' })
+      logger.success(`Successfully installed ${model}`)
     } catch (e) {
-      throw new OllamaClient.OllamaError(`Failed to pull model ${model}: ${e instanceof Error ? e.message : String(e)}`)
+      logger.error(`Failed to pull model ${model} via command line.`)
+      throw new OllamaClient.OllamaError(`Please run "ollama pull ${model}" manually.`)
     }
   }
 
@@ -131,6 +123,7 @@ export class OllamaClient {
         headers: { 'Content-Type': 'application/json' },
       }
       if (method === 'POST') options.body = JSON.stringify(body)
+
       const response = await fetch(url, options)
       if (!response.ok) {
         const errorBody = await response.text().catch(() => '')
