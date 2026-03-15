@@ -64,7 +64,7 @@ The scraper is engineered to bypass sophisticated bot detection (e.g., Cloudflar
 - **Patchright Integration**: Uses a hardened browser fork that eliminates common automation fingerprints at the CDP and driver levels.
 - **Strategy Fallback System**: If a high-speed strategy is blocked, the system automatically pivots to more natural, human-like behaviors (e.g., falling back from API calls to natural scrolling or DOM scraping).
 - **Behavioral Jitter**: Implements randomized delays and human-like interaction patterns to remain undetected during long-running exports.
-- **Cloudflare Auto-Bypass**: Actively detects and attempts to solve "Verify you are human" challenges using automated interaction.
+- **Vision-Based Bypass**: Detects Cloudflare challenges using visual analysis (1920x1080 screenshots) and leverages local AI to identify exact interaction coordinates, circumventing iframe-based honeypots.
 
 ## Environment Setup Guide
 

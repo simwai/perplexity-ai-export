@@ -45,6 +45,22 @@ export class OllamaClient {
     return validatedData.response
   }
 
+  /**
+   * Generate a response based on an image and a prompt.
+   */
+  async generateWithVision(prompt: string, base64Image: string, modelOverride?: string): Promise<string> {
+    const requestBody = {
+      model: modelOverride ?? config.ollamaModel,
+      prompt,
+      images: [base64Image],
+      stream: false,
+    }
+
+    const responseData = await this.performOllamaHttpRequest('/api/generate', requestBody)
+    const validatedData = generationResponseSchema.parse(responseData)
+    return validatedData.response
+  }
+
   async validate(): Promise<void> {
     logger.info('Validating Ollama configuration...')
     try {
