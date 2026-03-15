@@ -18,5 +18,5 @@
   "endOfLine": "lf",
   "printWidth": 100,
   "experimentalSortPackageJson": false,
-  "ignorePatterns": []
+  "ignorePatterns": ["README.md"]
 }

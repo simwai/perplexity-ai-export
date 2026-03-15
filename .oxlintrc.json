@@ -1,6 +1,5 @@
 {
   "rules": {
     "no-unused-vars": "off"
-  },
-  "ignorePatterns": ["README.md"]
+  }
 }
