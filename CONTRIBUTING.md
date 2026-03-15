@@ -1,89 +1,71 @@
-# Contributing to the Evolution of Perplexity History Export
+# Contributing to Perplexity History Export
 
-Welcome, seeker of organized intelligence. We are delighted that you've chosen to contribute your cognitive energy to this system. By refining this tool, we collectively enhance our ability to synthesize knowledge from our digital interactions.
+We welcome contributions! To ensure a smooth development process and maintain high code quality, please follow these guidelines.
 
-This project is a manifestation of structured data extraction and semantic synthesis. To maintain the integrity of its cognitive architecture, we follow a specific workflow.
+## Development Environment Setup
 
----
+1. **Install Node.js**: Ensure you have Node.js 20+ installed.
+2. **Install Ollama**:
+  - Download and install [Ollama](https://ollama.ai/).
+  - \`ollama pull nomic-embed-text\` (for semantic vectors)
+  - \`ollama pull cogito\` (for generative synthesis)
+  - \`ollama pull ministral-3\` (for vision-based bypass)
+3. **Install Dependencies**:
+  \`\`\`bash
+  npm install
+  \`\`\`
+4. **Prepare Environment Variables**:
+  \`\`\`bash
+  cp .env.example .env
+  \`\`\`
+5. **Install Playwright Browsers**:
+  \`\`\`bash
+  npx playwright install chromium
+  \`\`\`
 
-## Prerequisites for Co-Creation
+## Development Workflow
 
-To effectively interact with the codebase, your local environment must support the following substrates:
+- **Start in Dev Mode**:
+  \`\`\`bash
+  npm run dev
+  \`\`\`
+- **Type Checking**:
+  \`\`\`bash
+  npm run type-check
+  \`\`\`
+- **Formatting & Linting**:
+  \`\`\`bash
+  npm run format
+  \`\`\`
 
-- **Node.js 20+**: The fundamental runtime for our operations.
-- **Ollama**: Essential for local embedding generation and RAG-based reasoning.
-  - `ollama pull nomic-embed-text` (for semantic vectors)
-  - `ollama pull deepseek-r1` (for generative synthesis)
-- **Playwright**: Our interface for navigating the complexities of the web.
+## Commit Guidelines
 
----
+We use [Conventional Commits](https://www.conventionalcommits.org/).
 
-## The Developmental Lifecycle
+- \`feat:\` for new features.
+- \`fix:\` for bug fixes.
+- \`docs:\` for documentation changes.
+- \`chore:\` for maintenance tasks.
 
-### 1. Initialization
+## Testing Strategy
 
-Clone the repository and instantiate the dependencies:
+- **Unit Tests**: Place in \`test/unit/\`.
+- **Integration Tests**: Place in \`test/integration/\`.
+- **Run all tests**:
+  \`\`\`bash
+  npm test
+  \`\`\`
 
-```bash
-npm install
-npx playwright install chromium
-```
+## Pull Request Process
 
-### 2. Environment Configuration
+1. Create a feature branch.
+2. Ensure all tests pass.
+3. Submit the PR with a clear description of the changes.
 
-Establish your local parameters:
+## Build Single Executable (SEA)
 
-```bash
-cp .env.example .env
-# Refine the variables to align with your local Ollama setup.
-```
+To build the standalone executable for your platform:
 
-### 3. Iterative Development
-
-Launch the interactive environment to observe the system in action:
-
-```bash
-npm run dev
-```
-
-### 4. Integrity Verification (Testing)
-
-We adhere to a "Testing Trophy" philosophy, prioritizing integration tests that verify the emergent behavior of system components.
-
-- **Unit Tests**: `npm run test:unit`
-- **Integration Tests**: `npm run test:integration` (Uses MSW to simulate Ollama interactions)
-- **End-to-End**: `npm run test:e2e`
-
-Always ensure the full suite passes before proposing a merger:
-
-```bash
-npm run test
-```
-
-### 5. Syntactic Harmony (Formatting)
-
-We utilize `oxlint` and `oxfmt` for rapid, high-performance code analysis and formatting. Maintain the aesthetic and structural consistency of the codebase:
-
-```bash
-npm run format
-```
-
----
-
-## Proposing Cognitive Enhancements (PR Process)
-
-1. **Fork and Branch**: Create a branch with a descriptive prefix:
-   - `feat/` for novel capabilities.
-   - `fix/` for rectifying systemic discrepancies (bugs).
-   - `docs/` for enhancing the conceptual clarity of our documentation.
-2. **Commit with Intent**: Write clear, descriptive commit messages.
-3. **Synergize**: Open a Pull Request. Provide a concise summary of the changes and how they contribute to the system's overall utility.
-
----
-
-## Ethical and Intellectual Standards
-
-- **Clarity over Complexity**: While our goals are ambitious, our code should remain a model of lucidity.
-- **Robustness**: Build for resilience against the unpredictable nature of web interfaces and AI model outputs.
-
-Together, we are building a more coherent interface between human inquiry and machine intelligence.
+\`\`\`bash
+npm run build:exe
+\`\`\`

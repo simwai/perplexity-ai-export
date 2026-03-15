@@ -73,7 +73,9 @@ export class OllamaClient {
 
       const required = [config.ollamaModel, config.ollamaVisionModel, config.ollamaEmbedModel]
       for (const model of required) {
-        if (!installedModels.includes(model)) {
+        // Handle models that might have tags in config (e.g. cogito:8b)
+        const baseName = model.split(':')[0]!
+        if (!installedModels.some(m => m === baseName || m === model)) {
           logger.warn(`Model ${model} is missing. Triggering automatic pull...`)
           await this.pullModel(model)
         }
@@ -87,8 +89,37 @@ export class OllamaClient {
 
   private async pullModel(model: string): Promise<void> {
     logger.info(`Pulling ${model}... This may take a few minutes.`)
-    await this.performOllamaHttpRequest('/api/pull', { name: model })
-    logger.success(`Successfully pulled ${model}`)
+    const url = `${config.ollamaUrl}/api/pull`
+
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: model }),
+      })
+
+      if (!response.ok) {
+        throw new Error(`Failed to pull model: ${response.status}`)
+      }
+
+      const reader = response.body?.getReader()
+      if (!reader) throw new Error('Failed to get response body reader')
+
+      const decoder = new TextDecoder()
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        const chunk = decoder.decode(value, { stream: true })
+        // We don't strictly need to parse every progress chunk, just wait for it to finish
+        if (chunk.includes('"status":"success"')) {
+           logger.success(`Successfully pulled ${model}`)
+           return
+        }
+      }
+    } catch (e) {
+      throw new OllamaClient.OllamaError(`Failed to pull model ${model}: ${e instanceof Error ? e.message : String(e)}`)
+    }
   }
 
   private async performOllamaHttpRequest(endpoint: string, body: object, method: 'POST' | 'GET' = 'POST'): Promise<unknown> {
