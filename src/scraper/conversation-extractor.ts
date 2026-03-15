@@ -6,7 +6,7 @@ import {
   NativeExportExtractionStrategy,
   AiScrapeExtractionStrategy,
   type ExtractionStrategy,
-  type ExtractedConversation
+  type ExtractedConversation,
 } from './extraction-strategy.js'
 
 export { type ExtractedConversation }
@@ -16,10 +16,17 @@ export class ConversationExtractor {
 
   constructor(private context: BrowserContext) {
     switch (config.extractionMode) {
-      case 'dom': this.strategy = new DomScrapeExtractionStrategy(); break
-      case 'native': this.strategy = new NativeExportExtractionStrategy(); break
-      case 'ai': this.strategy = new AiScrapeExtractionStrategy(); break
-      default: this.strategy = new ApiExtractionStrategy()
+      case 'dom':
+        this.strategy = new DomScrapeExtractionStrategy()
+        break
+      case 'native':
+        this.strategy = new NativeExportExtractionStrategy()
+        break
+      case 'ai':
+        this.strategy = new AiScrapeExtractionStrategy()
+        break
+      default:
+        this.strategy = new ApiExtractionStrategy()
     }
   }
 

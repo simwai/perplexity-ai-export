@@ -9,11 +9,13 @@ import { logger } from './logger.js'
 export async function handleCloudflare(page: Page): Promise<boolean> {
   const isCloudflare = await page.evaluate(() => {
     const title = document.title.toLowerCase()
-    return title.includes('cloudflare') ||
-           title.includes('just a moment') ||
-           !!document.querySelector('#cloudflare-challenge') ||
-           !!document.querySelector('.cf-browser-verification') ||
-           !!document.querySelector('iframe[src*="cloudflare"]')
+    return (
+      title.includes('cloudflare') ||
+      title.includes('just a moment') ||
+      !!document.querySelector('#cloudflare-challenge') ||
+      !!document.querySelector('.cf-browser-verification') ||
+      !!document.querySelector('iframe[src*="cloudflare"]')
+    )
   })
 
   if (!isCloudflare) return false
@@ -23,7 +25,9 @@ export async function handleCloudflare(page: Page): Promise<boolean> {
   try {
     // Look for the Turnstile/Challenge iframe
     const frames = page.frames()
-    const challengeFrame = frames.find(f => f.url().includes('cloudflare') || f.name().includes('cf-'))
+    const challengeFrame = frames.find(
+      (f) => f.url().includes('cloudflare') || f.name().includes('cf-')
+    )
 
     if (challengeFrame) {
       const checkbox = challengeFrame.locator('input[type="checkbox"], #challenge-stage')
@@ -35,7 +39,10 @@ export async function handleCloudflare(page: Page): Promise<boolean> {
       }
     } else {
       // Direct locator attempt as fallback
-      const checkbox = page.locator('iframe[title*="Cloudflare security challenge"]').contentFrame().locator('#challenge-stage')
+      const checkbox = page
+        .locator('iframe[title*="Cloudflare security challenge"]')
+        .contentFrame()
+        .locator('#challenge-stage')
       if (await checkbox.isVisible({ timeout: 2000 })) {
         await checkbox.click()
         await page.waitForTimeout(4000)

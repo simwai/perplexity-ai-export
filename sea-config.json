@@ -1,5 +1,5 @@
 {
-  "main": "dist/bundle.cjs",
-  "output": "dist/sea-prep.blob",
+  "main": "dist\\bundle.cjs",
+  "output": "dist\\sea-prep.blob",
   "disableSentinel": false
 }
