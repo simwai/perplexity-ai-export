@@ -50,6 +50,12 @@ function parseEnvConfig(): Config {
     headlessValue = 'new'
   }
 
+  const llmSource: 'ollama' | 'openrouter' = (process.env['LLM_SOURCE'] as any) ?? 'ollama'
+
+  // Default models change based on source if not explicitly provided
+  const defaultRagModel = llmSource === 'openrouter' ? 'stepfun/step-3.5-flash:free' : 'cogito'
+  const defaultVisionModel = llmSource === 'openrouter' ? 'stepfun/step-3.5-flash:free' : 'ministral-3'
+
   const rawConfig = {
     authStoragePath: process.env['AUTH_STORAGE_PATH'] ?? join('.storage', 'auth.json'),
     waitMode: process.env['WAIT_MODE'] ?? 'dynamic',
@@ -66,9 +72,9 @@ function parseEnvConfig(): Config {
     vectorIndexPath: process.env['VECTOR_INDEX_PATH'] ?? join('.storage', 'vector-index'),
 
     // AI
-    llmSource: (process.env['LLM_SOURCE'] as any) ?? 'ollama',
-    llmRagModel: process.env['LLM_RAG_MODEL'] ?? 'cogito',
-    llmVisionModel: process.env['LLM_VISION_MODEL'] ?? 'ministral-3',
+    llmSource,
+    llmRagModel: process.env['LLM_RAG_MODEL'] ?? defaultRagModel,
+    llmVisionModel: process.env['LLM_VISION_MODEL'] ?? defaultVisionModel,
     llmEmbedModel: process.env['LLM_EMBED_MODEL'] ?? 'nomic-embed-text',
     ollamaUrl: process.env['OLLAMA_URL'] ?? defaultOllamaUrl,
     openrouterApiKey: process.env['OPENROUTER_API_KEY'],

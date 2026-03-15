@@ -20,16 +20,19 @@ export class OpenRouterClient {
         json: {
           model: options.model ?? config.llmRagModel,
           messages: [{ role: 'user', content: prompt }],
-          temperature: options.temperature ?? 0.7,
+          temperature: options.temperature ?? 0.2,
         },
         responseType: 'json',
       })
 
       const data: any = response.body
+      if (!data?.choices?.[0]?.message?.content) {
+        throw new Error(`Invalid response structure from OpenRouter: ${JSON.stringify(data)}`)
+      }
       return data.choices[0].message.content
     } catch (e) {
       logger.error('OpenRouter request failed:', e)
-      throw new Error('Failed to generate text via OpenRouter')
+      throw new Error(`Failed to generate text via OpenRouter: ${e instanceof Error ? e.message : String(e)}`)
     }
   }
 
@@ -56,16 +59,19 @@ export class OpenRouterClient {
               ]
             }
           ],
-          temperature: options.temperature ?? 0.7,
+          temperature: options.temperature ?? 0.1,
         },
         responseType: 'json',
       })
 
       const data: any = response.body
+      if (!data?.choices?.[0]?.message?.content) {
+        throw new Error(`Invalid vision response structure from OpenRouter: ${JSON.stringify(data)}`)
+      }
       return data.choices[0].message.content
     } catch (e) {
       logger.error('OpenRouter vision request failed:', e)
-      throw new Error('Failed to generate vision response via OpenRouter')
+      throw new Error(`Failed to generate vision response via OpenRouter: ${e instanceof Error ? e.message : String(e)}`)
     }
   }
 }

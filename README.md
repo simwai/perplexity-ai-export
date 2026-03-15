@@ -18,11 +18,12 @@
 - [Stealth & Behavioral Resilience](#stealth--behavioral-resilience)
 - [Key Features](#key-features)
 - [Environment Setup Guide](#environment-setup-guide)
-  * [1. Install Node.js (The Engine)](#1-install-nodejs-the-engine)
-  * [2. Install Ollama (The AI Intelligence)](#2-install-ollama-the-ai-intelligence)
-  * [3. Download and Prepare the Project](#3-download-and-prepare-the-project)
+  * [1. Install Node.js](#1-install-nodejs)
+  * [2. Setup AI Provider](#2-setup-ai-provider)
+    + [Option A: Ollama (Local - Recommended)](#option-a-ollama-local---recommended)
+    + [Option B: OpenRouter (Cloud)](#option-b-openrouter-cloud)
+  * [3. Prepare the Project](#3-prepare-the-project)
 - [Configuration](#configuration)
-  * [Key Environment Variables](#key-environment-variables)
 - [Usage Guide](#usage-guide)
 - [Architecture & Deep Dive](#architecture--deep-dive)
 - [Testing](#testing)
@@ -33,81 +34,76 @@
 
 ## Introduction
 
-This tool is designed to externalize your Perplexity.ai conversation history into organized, semantically searchable Markdown files. It facilitates the emergence of a personal knowledge base powered by local AI, bridging the gap between ephemeral inquiry and structured knowledge.
+This tool is designed to externalize your Perplexity.ai conversation history into organized, semantically searchable Markdown files. It facilitates the emergence of a personal knowledge base powered by local or cloud AI.
 
 ## Stealth & Behavioral Resilience
 
-The scraper employs advanced behavioral modeling to achieve 1:1 parity with natural browsing, effectively bypassing Cloudflare and other anti-bot measures:
+The scraper employs advanced behavioral modeling to bypass Cloudflare and Turnstile challenges:
 
-- **Vision-Based Bypass**: Detects Cloudflare challenges using visual analysis (1920x1080 screenshots) and leverages local AI (**ministral-3**) to identify exact interaction coordinates, circumventing iframe-based honeypots.
-- **Human-Like Navigation**: Simulates organic mouse movement using Bézier curves and implements sinusoidal scrolling (acceleration/deceleration).
-- **Session Warming**: Automatically "warms up" new browser sessions by visiting the home page and performing human-like browsing activity before accessing sensitive endpoints.
-- **Navigator Spoofing**: Injects a robust initialization script to mask headless indicators, spoofing hardware properties (`deviceMemory`, `hardwareConcurrency`), and cleaning the `webdriver` property.
-- **Strategic Fallback**: Automatically pivots between API interception, DOM scraping, and browser-native interactions (e.g., triggering the official Perplexity export UI) if detection is suspected.
+- **Vision-Based Bypass**: Captures 1920x1080 screenshots and leverages AI reasoning to identify exact interaction coordinates, circumventing iframe-based honeypots.
+- **Human-Like Navigation**: Simulates organic mouse movement using Bézier curves and implements sinusoidal scrolling.
+- **Session Warming**: Establishes browser reputation by visiting the home page and simulating browsing before accessing sensitive data.
+- **Navigator Spoofing**: Injects scripts to purge `navigator.webdriver` and spoof high-end hardware profiles.
 
 ## Key Features
 
-- **Parallelized Extraction**: Leverages worker pools to extract multiple conversation threads simultaneously for high-velocity data retrieval.
-- **Architectural Resilience**: Automatically restores browser contexts and retries operations, ensuring continuity amidst environmental instability.
-- **Advanced RAG (Retrieval-Augmented Generation)**: Engage in a cognitive dialogue with your history. The system employs intent analysis to synthesize broad summaries or pinpoint specific technical insights (**cogito** model).
-- **Semantic Vector Search**: Move beyond keyword matching. Locate information based on conceptual depth and semantic relevance.
-- **Persistent State Tracking**: Frequent checkpoints allow the system to resume progress after any interruption.
-- **Interactive Synthesis (REPL)**: A streamlined command-line interface for human-system synergy.
+- **Parallelized Extraction**: Leverages worker pools for high-velocity data retrieval.
+- **Advanced RAG**: Engage in a cognitive dialogue with your history using local or cloud LLMs.
+- **Multi-Strategy Scraping**: 8 distinct strategies for discovery and extraction with intelligent auto-fallback.
 
 ## Environment Setup Guide
 
-If you are new to development or don't have the necessary tools installed, follow these steps to set up your environment.
+### 1. Install Node.js
 
-### 1. Install Node.js (The Engine)
+Ensure you have Node.js 20+ installed. We recommend [nvm](https://github.com/nvm-sh/nvm).
 
-We recommend using a version manager to install Node.js. This allows you to easily switch versions and avoids permission issues.
+### 2. Setup AI Provider
 
-- **Windows**: Download and run the latest installer from [nvm-windows](https://github.com/coreybutler/nvm-windows/releases).
-- **macOS / Linux**: Install `nvm` by following the instructions at [nvm.sh](https://github.com/nvm-sh/nvm).
-
-### 2. Install Ollama (The AI Intelligence)
-
-1. Download and install Ollama from [ollama.ai](https://ollama.ai).
-2. The system will automatically pull the required models on first run, but you can also do it manually:
+#### Option A: Ollama (Local - Recommended)
+1. Install [Ollama](https://ollama.ai).
+2. The system will auto-pull models, but you can do it manually:
    ```bash
    ollama pull nomic-embed-text
    ollama pull cogito
    ollama pull ministral-3
    ```
 
-### 3. Download and Prepare the Project
+#### Option B: OpenRouter (Cloud)
+1. Get an API key from [OpenRouter](https://openrouter.ai).
+2. Set `LLM_SOURCE=openrouter` and your key in `.env`.
 
-1. Extract the project ZIP or clone the repository.
-2. Open your terminal in the project folder and run:
-   ```bash
-   npm install
-   npx playwright install chromium
-   ```
+### 3. Prepare the Project
 
-## Configuration
-
-Establish your environment by duplicating the template:
 ```bash
+# 1. Install dependencies
+npm install
+
+# 2. Install browser
+npx playwright install chromium
+
+# 3. Setup environment
 cp .env.example .env
 ```
 
-### Key Environment Variables
+## Configuration
 
-- **DISCOVERY_MODE**: Set the method for finding threads (`api`, `scroll`, `interaction`, `ai`). Defaults to `api`.
-- **EXTRACTION_MODE**: Set the method for scraping thread content (`api`, `dom`, `native`, `ai`). Defaults to `api`.
-- **OLLAMA_MODEL**: Text reasoning model (default: `cogito`).
-- **OLLAMA_VISION_MODEL**: Vision reasoning model (default: `ministral-3`).
-- **HEADLESS**: Set to `true`, `false`, or `new`.
+Edit your `.env` file to customize behavior:
+
+- **LLM_SOURCE**: `ollama` or `openrouter`.
+- **LLM_RAG_MODEL**: Text reasoning model (default: `cogito` or `stepfun/step-3.5-flash:free`).
+- **LLM_VISION_MODEL**: Vision model (default: `ministral-3` or `stepfun/step-3.5-flash:free`).
+- **DISCOVERY_MODE**: `api`, `scroll`, `interaction`, `ai`.
+- **EXTRACTION_MODE**: `api`, `dom`, `native`, `ai`.
 
 ## Usage Guide
 
 Launch the system:
 ```bash
-# Start the system command
+# Start system
 npm run dev
 ```
 
-**Note**: The system requires at least **10GB of free disk space** to operate safely with local AI models. The application will check this requirement on startup.
+**Note**: Local AI requires at least **10GB of free disk space**.
 
 ## Architecture & Deep Dive
 
@@ -116,9 +112,9 @@ npm run dev
 ## Testing
 
 ```bash
-# Execute unit verifications
+# Run unit tests
 npm run test:unit
 
-# Execute integration verifications
+# Run integration tests
 npm run test:integration
 ```

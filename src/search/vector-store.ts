@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { config } from '../utils/config.js'
 import { logger } from '../utils/logger.js'
-import { getAiProvider, type AiProvider } from '../ai/ai-provider.js'
+import { OllamaClient } from '../ai/ollama-client.js'
 import { chunkMarkdown } from '../utils/chunking.js'
 
 export type VectorDocMeta = Record<string, string>
@@ -43,18 +43,17 @@ export class VectorStore {
   }
 
   private vectorIndex: LocalIndex
-  private ai: AiProvider
+  // Always use Ollama for embeddings as requested
+  private ollama: OllamaClient
 
   constructor() {
     this.vectorIndex = new LocalIndex(config.vectorIndexPath)
-    this.ai = getAiProvider()
+    this.ollama = new OllamaClient()
   }
 
   async validate(): Promise<void> {
     try {
-      if (this.ai.validate) {
-        await this.ai.validate()
-      }
+      await this.ollama.validate()
     } catch (_error) {
       throw new VectorStore.VectorStoreError(
         `Vector store validation failed: ${_error instanceof Error ? _error.message : String(_error)}`
@@ -199,8 +198,7 @@ export class VectorStore {
     metas: VectorDocMeta[]
   ): Promise<void> {
     try {
-      if (!this.ai.embed) throw new Error('AI Provider does not support embeddings')
-      const embeddingVectors = await this.ai.embed(texts)
+      const embeddingVectors = await this.ollama.embed(texts)
       for (let k = 0; k < embeddingVectors.length; k++) {
         const vector = embeddingVectors[k]
         if (!vector) continue
@@ -215,8 +213,7 @@ export class VectorStore {
   }
 
   private async generateQueryEmbedding(query: string): Promise<number[]> {
-    if (!this.ai.embed) throw new Error('AI Provider does not support embeddings')
-    const [queryEmbedding] = await this.ai.embed([query])
+    const [queryEmbedding] = await this.ollama.embed([query])
     if (!queryEmbedding) {
       throw new VectorStore.EmbeddingError('Failed to generate embedding for query')
     }
