@@ -1,4 +1,5 @@
-import type { Page } from '@playwright/test'
+import type { Page } from 'patchright'
+import { config } from '../utils/config.js'
 import { logger } from '../utils/logger.js'
 import type { ConversationMetadata } from './checkpoint-manager.js'
 
@@ -91,6 +92,8 @@ export class LibraryDiscovery {
 
       logger.info(`Fetched ${threadBatch.length} threads (offset ${currentOffset})`)
       currentOffset += batchPageSize
+      const jitter = Math.floor(config.rateLimitMs * 0.5 * Math.random())
+      await page.waitForTimeout(config.rateLimitMs + jitter)
     }
 
     return allDiscoveredConversations

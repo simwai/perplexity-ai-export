@@ -9,6 +9,8 @@ loadEnv()
 const configSchema = z.object({
   authStoragePath: z.string().min(1),
   waitMode: z.enum(['dynamic', 'static']),
+  discoveryMode: z.enum(['api', 'scroll', 'interaction', 'ai']),
+  extractionMode: z.enum(['api', 'dom', 'native', 'ai']),
   rateLimitMs: z.number().int().positive(),
   parallelWorkers: z.number().int().min(1).max(20),
   checkpointSaveInterval: z.number().int().positive(),
@@ -45,6 +47,8 @@ function parseEnvConfig(): Config {
   const rawConfig = {
     authStoragePath: process.env['AUTH_STORAGE_PATH'] ?? join('.storage', 'auth.json'),
     waitMode: process.env['WAIT_MODE'] ?? 'dynamic',
+    discoveryMode: process.env['DISCOVERY_MODE'] ?? 'api',
+    extractionMode: process.env['EXTRACTION_MODE'] ?? 'api',
     rateLimitMs: parseInt(process.env['RATE_LIMIT_MS'] ?? defaultRateLimitMs, 10),
     parallelWorkers: parseInt(process.env['PARALLEL_WORKERS'] ?? defaultParallelWorkers, 10),
     checkpointSaveInterval: parseInt(

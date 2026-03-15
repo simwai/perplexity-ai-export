@@ -1,4 +1,4 @@
-import { chromium, type Browser, type BrowserContext, type Page } from '@playwright/test'
+import { chromium, type Browser, type BrowserContext, type Page } from 'patchright'
 import { readFileSync, writeFileSync, existsSync, statSync } from 'node:fs'
 import { config } from '../utils/config.js'
 import { logger } from '../utils/logger.js'
@@ -94,7 +94,6 @@ export class BrowserManager {
     try {
       this.browserInstance = await chromium.launch({
         headless: headless === 'new' ? true : headless,
-        args: ['--disable-blink-features=AutomationControlled'],
       })
     } catch (_error) {
       throw new BrowserManager.BrowserLaunchError(
