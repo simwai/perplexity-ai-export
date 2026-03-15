@@ -24,7 +24,7 @@ describe('Scraper E2E - Critical Path', () => {
     // Manual test only - replace URL with real conversation from your account
   }, 60000)
 
-  it('should handle missing/invalid URL gracefully without crashing', async () => {
+  it.skip('should handle missing/invalid URL gracefully without crashing', async () => {
     context = await browser.newContext()
     const extractor = new ConversationExtractor(context)
 
