@@ -15,6 +15,7 @@
 <!-- toc -->
 
 - [Introduction](#introduction)
+- [Stealth & Behavioral Resilience](#stealth--behavioral-resilience)
 - [Key Features](#key-features)
 - [Stealth & Resilience](#stealth--resilience)
 - [Environment Setup Guide](#environment-setup-guide)
@@ -35,6 +36,17 @@
 ## Introduction
 
 This tool is designed to externalize your Perplexity.ai conversation history into organized, semantically searchable Markdown files. It facilitates the emergence of a personal knowledge base powered by local AI, bridging the gap between ephemeral inquiry and structured knowledge.
+
+
+## Stealth & Behavioral Resilience
+
+The scraper employs advanced behavioral modeling to achieve 1:1 parity with natural browsing, effectively bypassing Cloudflare and other anti-bot measures:
+
+- **Human-Like Navigation**: Simulates organic mouse movement using Bézier curves and implements sinusoidal scrolling (acceleration/deceleration).
+- **Session Warming**: Automatically "warms up" new browser sessions by visiting the home page and performing human-like browsing activity before accessing sensitive endpoints.
+- **Navigator Spoofing**: Injects a robust initialization script to mask headless indicators, spoofing hardware properties (`deviceMemory`, `hardwareConcurrency`), and cleaning the `webdriver` property.
+- **Strategic Fallback**: Automatically pivots between API interception, DOM scraping, and browser-native interactions (e.g., triggering the official Perplexity export UI) if detection is suspected.
+- **Behavioral Jitter**: Injects randomized "reading" pauses and movement jitter to avoid signature-based detection.
 
 ## Key Features
 

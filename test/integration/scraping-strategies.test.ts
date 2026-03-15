@@ -11,6 +11,12 @@ describe('Scraping Strategies Integration', () => {
       on: vi.fn(),
       evaluate: vi.fn(),
       waitForTimeout: vi.fn().mockResolvedValue(undefined),
+      mouse: {
+        move: vi.fn().mockResolvedValue(undefined),
+        click: vi.fn().mockResolvedValue(undefined),
+        wheel: vi.fn().mockResolvedValue(undefined),
+      },
+      viewportSize: vi.fn().mockReturnValue({ width: 1280, height: 720 }),
     }
   })
 
@@ -24,10 +30,8 @@ describe('Scraping Strategies Integration', () => {
       }]
     }
 
-    // Mock the capture logic
     const capturePromise = (strategy as any).captureConversationApiResponse(mockPage)
 
-    // Simulate the 'response' event
     const responseHandler = mockPage.on.mock.calls.find((call: any) => call[0] === 'response')[1]
     await responseHandler({
       url: () => 'https://www.perplexity.ai/rest/thread/test-slug',

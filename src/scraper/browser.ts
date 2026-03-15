@@ -3,6 +3,8 @@ import { readFileSync, writeFileSync, existsSync, statSync } from 'node:fs'
 import { config } from '../utils/config.js'
 import { logger } from '../utils/logger.js'
 import { confirm } from '@inquirer/prompts'
+import { HumanNavigator } from '../utils/human-navigator.js'
+import { handleCloudflare } from '../utils/cloudflare.js'
 
 export class BrowserManager {
   static readonly BrowserLaunchError = class extends Error {
@@ -42,9 +44,17 @@ export class BrowserManager {
       const isSavedAuthValid = this.checkIfSavedAuthenticationIsFresh(config.authStoragePath)
 
       if (isSavedAuthValid) {
-        // Try starting in requested headless mode directly
         await this.launchBrowser(config.headless)
         await this.initializeBrowserContext()
+
+        // --- Session Warming ---
+        const page = this.getActivePage()
+        logger.info('Warming up browser session to bypass detection...')
+        await page.goto('https://www.perplexity.ai/', { waitUntil: 'domcontentloaded' })
+        await handleCloudflare(page)
+        await HumanNavigator.simulateBrowsing(page)
+        // -----------------------
+
         await this.navigateToSettingsPage()
         const isLoggedIn = await this.verifyLoginStatus(this.getActivePage())
 
@@ -53,24 +63,28 @@ export class BrowserManager {
           return this.getActivePage()
         }
 
-        logger.warn(
-          'Saved authentication expired or invalid. Restarting in headful mode for login...'
-        )
+        logger.warn('Saved authentication expired or invalid. Restarting in headful mode for login...')
         await this.close()
       }
 
-      // Need login: launch headful
       await this.launchBrowser(false)
       await this.initializeBrowserContext()
       await this.navigateToSettingsPage()
       await this.ensureUserIsAuthenticated()
 
-      // If user wants headless, restart now that we are logged in
       if (config.headless !== false) {
-        logger.info('Authentication successful. Restarting in headless mode...')
+        logger.info('Authentication successful. Restarting in headless mode with session warming...')
         await this.close()
         await this.launchBrowser(config.headless)
         await this.initializeBrowserContext()
+
+        // --- Session Warming ---
+        const page = this.getActivePage()
+        await page.goto('https://www.perplexity.ai/', { waitUntil: 'domcontentloaded' })
+        await handleCloudflare(page)
+        await HumanNavigator.simulateBrowsing(page)
+        // -----------------------
+
         await this.navigateToSettingsPage()
       }
 
@@ -94,8 +108,6 @@ export class BrowserManager {
     try {
       this.browserInstance = await chromium.launch({
         headless: headless === 'new' ? true : headless,
-        // Added standard viewport and user agent to help bypass Cloudflare in headless
-        viewport: { width: 1920, height: 1080 },
       })
     } catch (_error) {
       throw new BrowserManager.BrowserLaunchError(
@@ -110,6 +122,8 @@ export class BrowserManager {
     const isSavedAuthValid = this.checkIfSavedAuthenticationIsFresh(config.authStoragePath)
     const contextOptions = {
       userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+      viewport: { width: 1920, height: 1080 },
+      deviceScaleFactor: 1,
     }
 
     if (isSavedAuthValid) {
@@ -125,11 +139,24 @@ export class BrowserManager {
         this.activeContext = await this.browserInstance.newContext(contextOptions)
       }
     } else {
-      if (existsSync(config.authStoragePath)) {
-        logger.info('Saved authentication is older than 1 day, discarding.')
-      }
       this.activeContext = await this.browserInstance.newContext(contextOptions)
     }
+
+    // Advanced masking script
+    await this.activeContext.addInitScript(() => {
+      // Overwrite the 'webdriver' property
+      Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+
+      // Mock hardware properties
+      Object.defineProperty(navigator, 'deviceMemory', { get: () => 8 });
+      Object.defineProperty(navigator, 'hardwareConcurrency', { get: () => 8 });
+
+      // Mock plugins
+      Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
+
+      // Mock languages
+      Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
+    });
   }
 
   private checkIfSavedAuthenticationIsFresh(path: string): boolean {
@@ -148,11 +175,15 @@ export class BrowserManager {
     if (!this.activeContext) {
       throw new BrowserManager.NavigationError('No browser context available')
     }
-    this.activePage = await this.activeContext.newPage()
+
+    if (!this.activePage || this.activePage.isClosed()) {
+      this.activePage = await this.activeContext.newPage()
+    }
+
     const perplexitySettingsUrl = 'https://www.perplexity.ai/settings'
     try {
       await this.activePage.goto(perplexitySettingsUrl, {
-        timeout: 10000, // Increased timeout for Cloudflare delays
+        timeout: 15000,
         waitUntil: 'domcontentloaded'
       })
     } catch (_error) {

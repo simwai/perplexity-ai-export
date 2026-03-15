@@ -1,10 +1,7 @@
 import type { Page } from 'patchright'
 import { logger } from './logger.js'
+import { HumanNavigator } from './human-navigator.js'
 
-/**
- * Detects and attempts to bypass Cloudflare challenges.
- * Returns true if the page is STILL blocked after attempts.
- */
 export async function handleCloudflare(page: Page): Promise<boolean> {
   const isBlocked = await page.evaluate(() => {
     const title = document.title.toLowerCase()
@@ -19,20 +16,21 @@ export async function handleCloudflare(page: Page): Promise<boolean> {
 
   if (!isBlocked) return false
 
-  logger.warn('Cloudflare challenge detected! Initiating bypass protocol...')
+  logger.warn('Cloudflare challenge detected! Engaging behavioral bypass...')
+
+  // 1. Warm up the page with some random browsing activity
+  await HumanNavigator.simulateBrowsing(page)
 
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
-      // 1. Wait for the challenge frame to be available
-      await page.waitForTimeout(2000)
+      await page.waitForTimeout(2000 + Math.random() * 2000)
 
       const frames = page.frames()
       const challengeFrame = frames.find(f => f.url().includes('cloudflare') || f.name().includes('cf-'))
 
       if (challengeFrame) {
-        logger.info(`Attempt ${attempt}: Found challenge frame. Seeking checkbox...`)
+        logger.info(`Attempt ${attempt}: Interacting with challenge frame...`)
 
-        // Try various selectors for the "checkbox" area
         const selectors = [
           'input[type="checkbox"]',
           '#challenge-stage',
@@ -43,43 +41,46 @@ export async function handleCloudflare(page: Page): Promise<boolean> {
 
         for (const selector of selectors) {
           const locator = challengeFrame.locator(selector)
-          if (await locator.isVisible({ timeout: 1000 })) {
-            logger.info(`Clicking Cloudflare element: ${selector}`)
-
-            // Humanized click: Move mouse first, then click
+          if (await locator.isVisible({ timeout: 2000 })) {
             const box = await locator.boundingBox()
             if (box) {
-              await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2, { steps: 10 })
-              await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2, { delay: 150 })
+              // Hover for a bit before clicking
+              await HumanNavigator.moveMouseCurved(page, box.x + box.width / 2, box.y + box.height / 2)
+              await page.waitForTimeout(400 + Math.random() * 600)
+
+              // Human-like click
+              await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2, { delay: 150 + Math.random() * 100 })
+              logger.success(`Interacted with ${selector}`)
             } else {
-              await locator.click({ force: true })
+              await locator.click({ force: true, delay: 200 })
             }
 
-            await page.waitForTimeout(5000)
+            await page.waitForTimeout(6000 + Math.random() * 2000)
             break
           }
         }
       } else {
-        logger.info(`Attempt ${attempt}: No explicit frame found, waiting or reloading...`)
+        // If no frame, maybe try moving mouse to a common center position
+        const view = page.viewportSize() || { width: 1280, height: 720 }
+        await HumanNavigator.moveMouseCurved(page, view.width / 2, view.height / 2)
         await page.waitForTimeout(3000)
         if (attempt === 3) await page.reload({ waitUntil: 'networkidle' })
       }
 
-      // Check if we passed
       const stillBlocked = await page.evaluate(() => {
         const title = document.title.toLowerCase()
         return title.includes('cloudflare') || title.includes('just a moment') || title.includes('checking your browser')
       })
 
       if (!stillBlocked) {
-        logger.success('Cloudflare bypass successful!')
+        logger.success('Cloudflare behavioral bypass successful!')
         return false
       }
     } catch (e) {
-      logger.debug(`Bypass attempt ${attempt} failed: ${e}`)
+      logger.debug(`Attempt ${attempt} failed: ${e}`)
     }
   }
 
-  logger.error('Exhausted all Cloudflare bypass attempts.')
+  logger.error('Behavioral bypass failed. Cloudflare still active.')
   return true
 }

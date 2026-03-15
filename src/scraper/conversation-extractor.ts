@@ -1,4 +1,4 @@
-import type { BrowserContext, Page } from 'patchright'
+import type { BrowserContext } from 'patchright'
 import { config } from '../utils/config.js'
 import { logger } from '../utils/logger.js'
 import {

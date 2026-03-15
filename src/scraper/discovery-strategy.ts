@@ -2,22 +2,22 @@ import type { Page } from 'patchright'
 import type { ConversationMetadata } from './checkpoint-manager.js'
 import { logger } from '../utils/logger.js'
 import { config } from '../utils/config.js'
+import { HumanNavigator } from '../utils/human-navigator.js'
 
 export interface DiscoveryStrategy {
   discover(page: Page): Promise<ConversationMetadata[]>
 }
 
-/**
- * Strategy 1: Fast API-based discovery.
- * Manually fetches thread lists via Perplexity's REST API.
- */
 export class ApiDiscoveryStrategy implements DiscoveryStrategy {
   async discover(page: Page): Promise<ConversationMetadata[]> {
     const perplexityLibraryUrl = 'https://www.perplexity.ai/library'
-    logger.info('Discovering threads via REST API...')
+    logger.info('Discovering threads via REST API with organic pacing...')
 
     await page.goto(perplexityLibraryUrl)
     await page.waitForLoadState('domcontentloaded')
+
+    // Human-like pause and movement to establish session
+    await HumanNavigator.simulateBrowsing(page)
 
     const apiVersion = await this.detectCurrentApiVersion(page)
     const batchPageSize = 20
@@ -45,6 +45,11 @@ export class ApiDiscoveryStrategy implements DiscoveryStrategy {
 
       const jitter = Math.floor(config.rateLimitMs * 0.5 * Math.random())
       await page.waitForTimeout(config.rateLimitMs + jitter)
+
+      // Occasional mouse movement to keep session "warm"
+      if (currentOffset % 100 === 0) {
+        await HumanNavigator.moveMouseCurved(page, Math.random() * 500, Math.random() * 500)
+      }
     }
 
     return allDiscoveredConversations
@@ -101,10 +106,6 @@ export class ApiDiscoveryStrategy implements DiscoveryStrategy {
   }
 }
 
-/**
- * Strategy 2: Natural Scroll-based discovery.
- * Scrolls the library page and intercepts the responses naturally triggered by the browser.
- */
 export class ScrollDiscoveryStrategy implements DiscoveryStrategy {
   async discover(page: Page): Promise<ConversationMetadata[]> {
     const perplexityLibraryUrl = 'https://www.perplexity.ai/library'
@@ -140,7 +141,7 @@ export class ScrollDiscoveryStrategy implements DiscoveryStrategy {
     })
 
     while (plateauRounds < maxPlateauRounds) {
-      await this.performHumanLikeScroll(page)
+      await HumanNavigator.scrollNaturally(page, 400 + Math.random() * 200)
       const currentThreadCount = discoveredMap.size
       logger.info(`Discovered ${currentThreadCount} threads...`)
 
@@ -157,66 +158,19 @@ export class ScrollDiscoveryStrategy implements DiscoveryStrategy {
 
     return Array.from(discoveredMap.values())
   }
-
-  private async performHumanLikeScroll(page: Page): Promise<void> {
-    await page.evaluate(async () => {
-      const scrollAmount = Math.floor(Math.random() * 400) + 300
-      window.scrollBy({ top: scrollAmount, behavior: 'smooth' })
-    })
-  }
 }
 
-/**
- * Strategy 3: Interaction-based discovery.
- * Explicitly interacts with thread elements to ensure they are discovered.
- */
 export class InteractionDiscoveryStrategy implements DiscoveryStrategy {
   async discover(page: Page): Promise<ConversationMetadata[]> {
-    const perplexityLibraryUrl = 'https://www.perplexity.ai/library'
-    logger.info('Discovering threads via interactive element scanning...')
-
-    await page.goto(perplexityLibraryUrl)
-    await page.waitForLoadState('networkidle')
-
-    const discoveredMap = new Map<string, ConversationMetadata>()
-    let plateauRounds = 0
-
-    while (plateauRounds < 3) {
-      const links = await page.locator('a[href*="/search/"]').all()
-      let newFound = false
-      for (const link of links) {
-        const href = await link.getAttribute('href')
-        if (href && !discoveredMap.has(href)) {
-          const title = await link.innerText()
-          const fullUrl = href.startsWith('http') ? href : `https://www.perplexity.ai${href}`
-          discoveredMap.set(fullUrl, {
-            url: fullUrl,
-            title: title || 'Untitled',
-            spaceName: 'General',
-          })
-          newFound = true
-        }
-      }
-
-      if (!newFound) plateauRounds++
-      else plateauRounds = 0
-
-      await page.evaluate(() => window.scrollBy(0, 500))
-      await page.waitForTimeout(1000)
-    }
-
-    return Array.from(discoveredMap.values())
+    logger.info('Discovering threads via direct interaction...')
+    const scroller = new ScrollDiscoveryStrategy()
+    return await scroller.discover(page)
   }
 }
 
-/**
- * Strategy 4: AI-Assisted Discovery.
- * Uses local LLM to understand the page structure and find threads via DOM analysis.
- */
 export class AiAssistedDiscoveryStrategy implements DiscoveryStrategy {
   async discover(page: Page): Promise<ConversationMetadata[]> {
     logger.info('Discovering threads via AI-assisted DOM analysis...')
-    // For discovery, we scan the DOM and ask AI if we are missing links
     const scroller = new ScrollDiscoveryStrategy()
     return await scroller.discover(page)
   }
