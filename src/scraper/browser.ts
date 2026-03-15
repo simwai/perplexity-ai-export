@@ -47,6 +47,9 @@ export class BrowserManager {
         await this.launchBrowser(config.headless)
         await this.initializeBrowserContext()
 
+        // Ensure page is created for session warming
+        await this.ensurePageIsInitialized()
+
         // --- Session Warming ---
         const page = this.getActivePage()
         logger.info('Warming up browser session to bypass detection...')
@@ -77,6 +80,8 @@ export class BrowserManager {
         await this.close()
         await this.launchBrowser(config.headless)
         await this.initializeBrowserContext()
+
+        await this.ensurePageIsInitialized()
 
         // --- Session Warming ---
         const page = this.getActivePage()
@@ -122,8 +127,8 @@ export class BrowserManager {
     const isSavedAuthValid = this.checkIfSavedAuthenticationIsFresh(config.authStoragePath)
     const contextOptions = {
       userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-      viewport: { width: 1920, height: 1080 },
       deviceScaleFactor: 1,
+      viewport: { width: 1920, height: 1080 }
     }
 
     if (isSavedAuthValid) {
@@ -142,21 +147,20 @@ export class BrowserManager {
       this.activeContext = await this.browserInstance.newContext(contextOptions)
     }
 
-    // Advanced masking script
     await this.activeContext.addInitScript(() => {
-      // Overwrite the 'webdriver' property
       Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
-
-      // Mock hardware properties
       Object.defineProperty(navigator, 'deviceMemory', { get: () => 8 });
       Object.defineProperty(navigator, 'hardwareConcurrency', { get: () => 8 });
-
-      // Mock plugins
       Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
-
-      // Mock languages
       Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
     });
+  }
+
+  private async ensurePageIsInitialized(): Promise<void> {
+    if (!this.activeContext) throw new BrowserManager.ContextError('Context not initialized')
+    if (!this.activePage || this.activePage.isClosed()) {
+      this.activePage = await this.activeContext.newPage()
+    }
   }
 
   private checkIfSavedAuthenticationIsFresh(path: string): boolean {
@@ -172,17 +176,10 @@ export class BrowserManager {
   }
 
   private async navigateToSettingsPage(): Promise<void> {
-    if (!this.activeContext) {
-      throw new BrowserManager.NavigationError('No browser context available')
-    }
-
-    if (!this.activePage || this.activePage.isClosed()) {
-      this.activePage = await this.activeContext.newPage()
-    }
-
+    await this.ensurePageIsInitialized()
     const perplexitySettingsUrl = 'https://www.perplexity.ai/settings'
     try {
-      await this.activePage.goto(perplexitySettingsUrl, {
+      await this.activePage!.goto(perplexitySettingsUrl, {
         timeout: 15000,
         waitUntil: 'domcontentloaded'
       })
