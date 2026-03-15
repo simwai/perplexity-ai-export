@@ -94,6 +94,8 @@ export class BrowserManager {
     try {
       this.browserInstance = await chromium.launch({
         headless: headless === 'new' ? true : headless,
+        // Added standard viewport and user agent to help bypass Cloudflare in headless
+        viewport: { width: 1920, height: 1080 },
       })
     } catch (_error) {
       throw new BrowserManager.BrowserLaunchError(
@@ -106,23 +108,27 @@ export class BrowserManager {
     if (!this.browserInstance) throw new BrowserManager.ContextError('Browser not initialized')
 
     const isSavedAuthValid = this.checkIfSavedAuthenticationIsFresh(config.authStoragePath)
+    const contextOptions = {
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+    }
 
     if (isSavedAuthValid) {
       logger.info('Loading saved authentication state...')
       try {
         const storageStateData = JSON.parse(readFileSync(config.authStoragePath, 'utf-8'))
         this.activeContext = await this.browserInstance.newContext({
+          ...contextOptions,
           storageState: storageStateData,
         })
       } catch (_error) {
         logger.warn('Failed to load saved auth state, starting fresh.', _error)
-        this.activeContext = await this.browserInstance.newContext()
+        this.activeContext = await this.browserInstance.newContext(contextOptions)
       }
     } else {
       if (existsSync(config.authStoragePath)) {
         logger.info('Saved authentication is older than 1 day, discarding.')
       }
-      this.activeContext = await this.browserInstance.newContext()
+      this.activeContext = await this.browserInstance.newContext(contextOptions)
     }
   }
 
@@ -146,7 +152,8 @@ export class BrowserManager {
     const perplexitySettingsUrl = 'https://www.perplexity.ai/settings'
     try {
       await this.activePage.goto(perplexitySettingsUrl, {
-        timeout: 3000,
+        timeout: 10000, // Increased timeout for Cloudflare delays
+        waitUntil: 'domcontentloaded'
       })
     } catch (_error) {
       throw new BrowserManager.NavigationError(

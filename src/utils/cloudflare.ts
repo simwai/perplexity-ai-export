@@ -2,60 +2,84 @@ import type { Page } from 'patchright'
 import { logger } from './logger.js'
 
 /**
- * Detects if a page is currently showing a Cloudflare challenge.
- * Attempts to solve it by clicking the checkbox if possible.
- * Returns true if the page is still blocked after the attempt.
+ * Detects and attempts to bypass Cloudflare challenges.
+ * Returns true if the page is STILL blocked after attempts.
  */
 export async function handleCloudflare(page: Page): Promise<boolean> {
-  const isCloudflare = await page.evaluate(() => {
+  const isBlocked = await page.evaluate(() => {
     const title = document.title.toLowerCase()
+    const body = document.body.innerText.toLowerCase()
     return title.includes('cloudflare') ||
            title.includes('just a moment') ||
+           title.includes('checking your browser') ||
+           body.includes('verify you are human') ||
            !!document.querySelector('#cloudflare-challenge') ||
-           !!document.querySelector('.cf-browser-verification') ||
-           !!document.querySelector('iframe[src*="cloudflare"]')
+           !!document.querySelector('.cf-browser-verification')
   })
 
-  if (!isCloudflare) return false
+  if (!isBlocked) return false
 
-  logger.warn('Cloudflare challenge detected! Attempting automatic bypass...')
+  logger.warn('Cloudflare challenge detected! Initiating bypass protocol...')
 
-  try {
-    // Look for the Turnstile/Challenge iframe
-    const frames = page.frames()
-    const challengeFrame = frames.find(f => f.url().includes('cloudflare') || f.name().includes('cf-'))
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      // 1. Wait for the challenge frame to be available
+      await page.waitForTimeout(2000)
 
-    if (challengeFrame) {
-      const checkbox = challengeFrame.locator('input[type="checkbox"], #challenge-stage')
-      if (await checkbox.isVisible({ timeout: 5000 })) {
-        logger.info('Cloudflare checkbox found, clicking...')
-        await checkbox.click()
-        // Wait for potential navigation/refresh after click
-        await page.waitForTimeout(4000)
+      const frames = page.frames()
+      const challengeFrame = frames.find(f => f.url().includes('cloudflare') || f.name().includes('cf-'))
+
+      if (challengeFrame) {
+        logger.info(`Attempt ${attempt}: Found challenge frame. Seeking checkbox...`)
+
+        // Try various selectors for the "checkbox" area
+        const selectors = [
+          'input[type="checkbox"]',
+          '#challenge-stage',
+          '.mark',
+          '#checkbox',
+          'span.cb-i'
+        ]
+
+        for (const selector of selectors) {
+          const locator = challengeFrame.locator(selector)
+          if (await locator.isVisible({ timeout: 1000 })) {
+            logger.info(`Clicking Cloudflare element: ${selector}`)
+
+            // Humanized click: Move mouse first, then click
+            const box = await locator.boundingBox()
+            if (box) {
+              await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2, { steps: 10 })
+              await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2, { delay: 150 })
+            } else {
+              await locator.click({ force: true })
+            }
+
+            await page.waitForTimeout(5000)
+            break
+          }
+        }
+      } else {
+        logger.info(`Attempt ${attempt}: No explicit frame found, waiting or reloading...`)
+        await page.waitForTimeout(3000)
+        if (attempt === 3) await page.reload({ waitUntil: 'networkidle' })
       }
-    } else {
-      // Direct locator attempt as fallback
-      const checkbox = page.locator('iframe[title*="Cloudflare security challenge"]').contentFrame().locator('#challenge-stage')
-      if (await checkbox.isVisible({ timeout: 2000 })) {
-        await checkbox.click()
-        await page.waitForTimeout(4000)
+
+      // Check if we passed
+      const stillBlocked = await page.evaluate(() => {
+        const title = document.title.toLowerCase()
+        return title.includes('cloudflare') || title.includes('just a moment') || title.includes('checking your browser')
+      })
+
+      if (!stillBlocked) {
+        logger.success('Cloudflare bypass successful!')
+        return false
       }
+    } catch (e) {
+      logger.debug(`Bypass attempt ${attempt} failed: ${e}`)
     }
-  } catch (_error) {
-    logger.debug('Cloudflare interaction failed or timed out.')
   }
 
-  // Final verification
-  const stillBlocked = await page.evaluate(() => {
-    const title = document.title.toLowerCase()
-    return title.includes('cloudflare') || title.includes('just a moment')
-  })
-
-  if (stillBlocked) {
-    logger.error('Still blocked by Cloudflare after bypass attempt.')
-  } else {
-    logger.success('Cloudflare bypass seems successful!')
-  }
-
-  return stillBlocked
+  logger.error('Exhausted all Cloudflare bypass attempts.')
+  return true
 }
