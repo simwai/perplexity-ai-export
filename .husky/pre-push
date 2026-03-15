@@ -1,0 +1,10 @@
+#!/usr/bin/env sh
+. "$(dirname -- "$0")/_/husky.sh"
+
+npm run toc
+git add README.md ARCH.md
+# We don't commit here to avoid loops if pre-push is triggered by something else,
+# but usually pre-push is the last gate. Actually, pre-commit is better for auto-updates.
+# However, the requirement was "before release" and "pre-push" was agreed.
+# If changes are made, the push might fail if not committed.
+# Let's just run it to ensure the user has the latest TOC locally before they push.
