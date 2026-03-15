@@ -1,4 +1,4 @@
-import type { BrowserContext, Page, Response } from '@playwright/test'
+import type { BrowserContext, Page, Response } from 'patchright'
 import { waitStrategy } from '../utils/wait-strategy.js'
 import { logger } from '../utils/logger.js'
 import { z } from 'zod'

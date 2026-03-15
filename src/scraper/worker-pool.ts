@@ -1,4 +1,4 @@
-import type { Browser, BrowserContext } from '@playwright/test'
+import type { Browser, BrowserContext } from 'patchright'
 import { existsSync, readFileSync, statSync } from 'node:fs'
 import { logger } from '../utils/logger.js'
 import { config } from '../utils/config.js'

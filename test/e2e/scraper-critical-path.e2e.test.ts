@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
-import { chromium, type Browser, type BrowserContext } from '@playwright/test'
+import { chromium, type Browser, type BrowserContext } from 'patchright'
 import { ConversationExtractor } from '../../src/scraper/conversation-extractor.js'
 import { existsSync, rmSync } from 'node:fs'
 
