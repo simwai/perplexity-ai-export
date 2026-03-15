@@ -41,7 +41,7 @@ export class OllamaClient {
       prompt,
       stream: false,
       options: {
-        temperature: options.temperature ?? 0.7,
+        temperature: options.temperature ?? 0.2,
       }
     }
     const responseData = await this.performOllamaHttpRequest('/api/generate', requestBody)
@@ -56,7 +56,7 @@ export class OllamaClient {
       images: [base64Image],
       stream: false,
       options: {
-        temperature: options.temperature ?? 0.7,
+        temperature: options.temperature ?? 0.1,
       }
     }
     const responseData = await this.performOllamaHttpRequest('/api/generate', requestBody)
@@ -80,7 +80,6 @@ export class OllamaClient {
     try {
       const response = await this.performOllamaHttpRequest('/api/tags', {}, 'GET')
       const { models } = tagsResponseSchema.parse(response)
-
       const installedModels = models.map(m => m.name)
       const installedBaseNames = models.map(m => m.name.split(':')[0])
 
@@ -91,14 +90,13 @@ export class OllamaClient {
                           installedBaseNames.includes(model)
 
         if (!isInstalled) {
-          logger.warn(`Model ${model} is missing. Triggering "ollama pull" for maximum reliability...`)
+          logger.warn(`Model ${model} is missing. Triggering "ollama pull"...`)
           this.pullModel(model)
         }
       }
       logger.success('All required models are verified.')
     } catch (e) {
       logger.warn(`Automated model verification via API failed: ${e instanceof Error ? e.message : String(e)}`)
-      logger.info('Falling back to manual check. If the models are missing, the system will error later.')
     }
   }
 
