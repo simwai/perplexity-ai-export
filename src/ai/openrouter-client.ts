@@ -1,7 +1,7 @@
-import { OpenRouterError } from '../utils/errors.js'
 import { gotScraping } from 'got-scraping'
 import { config } from '../utils/config.js'
 import { logger } from '../utils/logger.js'
+import { OpenRouterError } from '../utils/errors.js'
 
 export class OpenRouterClient {
   private readonly baseUrl = 'https://openrouter.ai/api/v1'
@@ -42,37 +42,71 @@ export class OpenRouterClient {
       throw new OpenRouterError('OPENROUTER_API_KEY is not configured')
     }
 
+    // Try primary vision-capable request first
     try {
-      const response = await gotScraping.post(`${this.baseUrl}/chat/completions`, {
-        headers: {
-          'Authorization': `Bearer ${config.openrouterApiKey}`,
-          'HTTP-Referer': 'https://github.com/simon/perplexity-history-export',
-          'X-Title': 'Perplexity History Export',
-        },
-        json: {
-          model: options.model ?? config.llmVisionModel,
-          messages: [
-            {
-              role: 'user',
-              content: [
-                { type: 'text', text: prompt },
-                { type: 'image_url', image_url: { url: `data:image/png;base64,${base64Image}` } }
-              ]
-            }
-          ],
-          temperature: options.temperature ?? 0.1,
-        },
-        responseType: 'json',
-      })
-
-      const data: any = response.body
-      if (!data?.choices?.[0]?.message?.content) {
-        throw new OpenRouterError(`Invalid vision response structure from OpenRouter: ${JSON.stringify(data)}`)
-      }
-      return data.choices[0].message.content
+      return await this.requestWithNativeVision(prompt, base64Image, options)
     } catch (e) {
-      logger.error('OpenRouter vision request failed:', e)
-      throw new OpenRouterError(`Failed to generate vision response via OpenRouter: ${e instanceof Error ? e.message : String(e)}`)
+      logger.warn('Native OpenRouter vision request failed or not supported by model. Falling back to inline encoding...')
+      try {
+        return await this.requestWithInlineVision(prompt, base64Image, options)
+      } catch (innerError) {
+        logger.error('OpenRouter inline vision fallback also failed:', innerError)
+        throw new OpenRouterError(`Failed to generate vision response via OpenRouter (Primary and Fallback failed)`)
+      }
     }
+  }
+
+  private async requestWithNativeVision(prompt: string, base64Image: string, options: { model?: string; temperature?: number }): Promise<string> {
+    const response = await gotScraping.post(`${this.baseUrl}/chat/completions`, {
+      headers: {
+        'Authorization': `Bearer ${config.openrouterApiKey}`,
+        'HTTP-Referer': 'https://github.com/simon/perplexity-history-export',
+        'X-Title': 'Perplexity History Export',
+      },
+      json: {
+        model: options.model ?? config.llmVisionModel,
+        messages: [
+          {
+            role: 'user',
+            content: [
+              { type: 'text', text: prompt },
+              { type: 'image_url', image_url: { url: `data:image/png;base64,${base64Image}` } }
+            ]
+          }
+        ],
+        temperature: options.temperature ?? 0.1,
+      },
+      responseType: 'json',
+    })
+
+    const data: any = response.body
+    if (!data?.choices?.[0]?.message?.content) {
+      throw new Error('Invalid native vision response')
+    }
+    return data.choices[0].message.content
+  }
+
+  private async requestWithInlineVision(prompt: string, base64Image: string, options: { model?: string; temperature?: number }): Promise<string> {
+    const inlinePrompt = `${prompt}\n\n[Base64 Encoded Screenshot (1920x1080)]:\n${base64Image}`
+
+    const response = await gotScraping.post(`${this.baseUrl}/chat/completions`, {
+      headers: {
+        'Authorization': `Bearer ${config.openrouterApiKey}`,
+        'HTTP-Referer': 'https://github.com/simon/perplexity-history-export',
+        'X-Title': 'Perplexity History Export',
+      },
+      json: {
+        model: options.model ?? config.llmVisionModel,
+        messages: [{ role: 'user', content: inlinePrompt }],
+        temperature: options.temperature ?? 0.1,
+      },
+      responseType: 'json',
+    })
+
+    const data: any = response.body
+    if (!data?.choices?.[0]?.message?.content) {
+      throw new Error('Invalid inline vision response')
+    }
+    return data.choices[0].message.content
   }
 }
