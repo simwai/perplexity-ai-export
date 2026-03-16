@@ -24,18 +24,15 @@ export class OpenRouterClient {
           temperature: options.temperature ?? 0.2,
         },
         responseType: 'json',
-        timeout: { request: 60000 }
+        timeout: { request: 60000 },
+        // Use standard headers for cloud API to avoid bot-detection interference
+        context: { useHeaderGenerator: false },
+        http2: false
       })
 
       const data: any = response.body
-
-      if (data?.error) {
-        throw new Error(`OpenRouter API Error: ${data.error.message || JSON.stringify(data.error)}`)
-      }
-
-      if (!data?.choices?.[0]?.message?.content) {
-        throw new Error(`Unexpected response structure: ${JSON.stringify(data)}`)
-      }
+      if (data?.error) throw new Error(`OpenRouter API Error: ${data.error.message || JSON.stringify(data.error)}`)
+      if (!data?.choices?.[0]?.message?.content) throw new Error(`Unexpected response structure: ${JSON.stringify(data)}`)
 
       return data.choices[0].message.content
     } catch (e) {
@@ -67,7 +64,7 @@ export class OpenRouterClient {
                 {
                   type: 'image_url',
                   image_url: {
-                    url: `data:image/png;base64,${base64Image}`
+                    url: `data:image/jpeg;base64,${base64Image}`
                   }
                 }
               ]
@@ -76,7 +73,9 @@ export class OpenRouterClient {
           temperature: options.temperature ?? 0.1,
         },
         responseType: 'json',
-        timeout: { request: 120000 } // Long timeout for image processing
+        timeout: { request: 120000 },
+        context: { useHeaderGenerator: false },
+        http2: false
       })
 
       const data: any = response.body
@@ -88,7 +87,7 @@ export class OpenRouterClient {
       logger.warn(`Primary vision request failed: ${e instanceof Error ? e.message : String(e)}. Retrying with inline fallback...`)
 
       // Attempt 2: Text-only model fallback (inline base64)
-      const inlinePrompt = `${prompt}\n\n[Screenshot Data (Base64)]:\ndata:image/png;base64,${base64Image}`
+      const inlinePrompt = `${prompt}\n\n[IMAGE_DATA_BASE64_JPEG]:\ndata:image/jpeg;base64,${base64Image}`
 
       try {
         const response = await gotScraping.post(`${this.baseUrl}/chat/completions`, {
@@ -101,7 +100,9 @@ export class OpenRouterClient {
             temperature: options.temperature ?? 0.1,
           },
           responseType: 'json',
-          timeout: { request: 120000 }
+          timeout: { request: 120000 },
+          context: { useHeaderGenerator: false },
+          http2: false
         })
 
         const data: any = response.body

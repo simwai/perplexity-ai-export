@@ -9,9 +9,6 @@ export interface TurnstileStrategy {
   solve(page: Page): Promise<boolean>
 }
 
-/**
- * Strategy 1: Multi-point structural interaction
- */
 export class StructuralTurnstileStrategy implements TurnstileStrategy {
   async solve(page: Page): Promise<boolean> {
     const cursor = createCursor(page)
@@ -22,11 +19,10 @@ export class StructuralTurnstileStrategy implements TurnstileStrategy {
     const box = await widget.boundingBox()
     if (!box) return false
 
-    // Turnstile hitboxes are typically on the left side of the widget
     const points = [
-      { x: box.x + 30, y: box.y + box.height / 2 }, // Left side (common checkbox pos)
-      { x: box.x + box.width / 2, y: box.y + box.height / 2 }, // Center
-      { x: box.x + 10, y: box.y + 10 } // Top left
+      { x: box.x + 30, y: box.y + box.height / 2 },
+      { x: box.x + box.width / 2, y: box.y + box.height / 2 },
+      { x: box.x + 10, y: box.y + 10 }
     ]
 
     for (const [idx, point] of points.entries()) {
@@ -54,19 +50,17 @@ export class StructuralTurnstileStrategy implements TurnstileStrategy {
   }
 }
 
-/**
- * Strategy 2: Improved Vision interaction
- */
 export class VisionTurnstileStrategy implements TurnstileStrategy {
   async solve(page: Page): Promise<boolean> {
     const cursor = createCursor(page)
-    const screenshot = await page.screenshot({ type: 'png' })
+    // Reduce payload size by using JPEG with medium quality
+    const screenshot = await page.screenshot({ type: 'jpeg', quality: 70 })
     const base64Image = screenshot.toString('base64')
 
     for (let attempt = 1; attempt <= 3; attempt++) {
-      const temperature = 0.1 // Extremely low for precision
+      const temperature = 0.1
       const prompt = `CRITICAL: You are a coordinate extraction engine.
-      Identify the EXACT pixel coordinates (x, y) of the "Verify you are human" checkbox in this 1920x1080 image.
+      Identify the EXACT center pixel coordinates (x, y) of the "Verify you are human" checkbox in this 1920x1080 image.
 
       RULES:
       1. Return ONLY a JSON array.
@@ -78,14 +72,13 @@ export class VisionTurnstileStrategy implements TurnstileStrategy {
 
       try {
         const response = await ai.generateWithVision(prompt, base64Image, { temperature })
-        // Enhanced cleaning: remove anything that's not the JSON array
         const jsonMatch = response.match(/\[\s*\{.*\}\s*\]/s)
 
         if (jsonMatch) {
           const cleanedJson = jsonMatch[0]
             .replace(/\/\/.*$/gm, '')
             .replace(/\/\*[\s\S]*?\*\//g, '')
-            .replace(/<.*?>/g, '0') // Replace any remaining placeholders with 0 to prevent parse error
+            .replace(/<.*?>/g, '0')
 
           const coordinates = JSON.parse(cleanedJson) as Array<{ x: number, y: number }>
 
