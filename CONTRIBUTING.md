@@ -7,54 +7,55 @@ We welcome contributions! To ensure a smooth development process and maintain hi
 1. **Install Node.js**: Ensure you have Node.js 20+ installed.
 2. **Install Ollama**:
   - Download and install [Ollama](https://ollama.ai/).
-  - \`ollama pull nomic-embed-text\` (for semantic vectors)
-  - \`ollama pull cogito\` (for generative synthesis)
-  - \`ollama pull ministral-3\` (for vision-based bypass)
+  - `ollama pull nomic-embed-text` (for semantic vectors)
+  - `ollama pull deepseek-r1:7b` (for generative synthesis)
+  - `ollama pull qwen3.5:4b` (for vision-based bypass)
 3. **Install Dependencies**:
-  \`\`\`bash
+  ```bash
   npm install
-  \`\`\`
+  ```
 4. **Prepare Environment Variables**:
-  \`\`\`bash
+  ```bash
   cp .env.example .env
-  \`\`\`
+  ```
 5. **Install Playwright Browsers**:
-  \`\`\`bash
+  ```bash
   npx playwright install chromium
-  \`\`\`
+  ```
 
 ## Development Workflow
 
 - **Start in Dev Mode**:
-  \`\`\`bash
+  ```bash
+  # start dev command
   npm run dev
-  \`\`\`
+  ```
 - **Type Checking**:
-  \`\`\`bash
+  ```bash
   npm run type-check
-  \`\`\`
+  ```
 - **Formatting & Linting**:
-  \`\`\`bash
+  ```bash
   npm run format
-  \`\`\`
+  ```
 
 ## Commit Guidelines
 
 We use [Conventional Commits](https://www.conventionalcommits.org/).
 
-- \`feat:\` for new features.
-- \`fix:\` for bug fixes.
-- \`docs:\` for documentation changes.
-- \`chore:\` for maintenance tasks.
+- `feat:` for new features.
+- `fix:` for bug fixes.
+- `docs:` for documentation changes.
+- `chore:` for maintenance tasks.
 
 ## Testing Strategy
 
-- **Unit Tests**: Place in \`test/unit/\`.
-- **Integration Tests**: Place in \`test/integration/\`.
+- **Unit Tests**: Place in `test/unit/`.
+- **Integration Tests**: Place in `test/integration/`.
 - **Run all tests**:
-  \`\`\`bash
+  ```bash
   npm test
-  \`\`\`
+  ```
 
 ## Pull Request Process
 
@@ -66,6 +67,6 @@ We use [Conventional Commits](https://www.conventionalcommits.org/).
 
 To build the standalone executable for your platform:
 
-\`\`\`bash
+```bash
 npm run build:exe
-\`\`\`
+```
