@@ -83,8 +83,7 @@ function parseEnvConfig(): Config {
   const result = configSchema.safeParse(rawConfig)
   if (!result.success) {
     logger.error('Invalid configuration detected:')
-    result.error.issues.forEach((issue) => {
-      const path = issue.path.join('.')
+    result.error.issues.forEach((_issue) => {
       logger.error(`  \${path.toUpperCase()}: \${issue.message}`)
     })
     process.exit(1)

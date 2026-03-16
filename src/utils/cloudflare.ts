@@ -32,6 +32,7 @@ export async function handleCloudflare(page: Page): Promise<boolean> {
 
   await page.setViewportSize({ width: 1920, height: 1080 })
   await HumanNavigator.simulateBrowsing(page)
+  await page.waitForTimeout(2000)
 
   for (const strategy of strategies) {
     const strategyName = strategy.constructor.name
