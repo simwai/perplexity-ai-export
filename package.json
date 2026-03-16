@@ -28,6 +28,7 @@
     "ghost-cursor-patchright-core": "^1.3.42",
     "got-scraping": "^4.2.1",
     "inquirer": "^13.2.2",
+    "jimp": "^1.6.0",
     "patchright": "^1.58.2",
     "sanitize-filename": "^1.6.3",
     "vectra": "^0.12.3",
