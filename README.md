@@ -40,7 +40,8 @@ This tool is designed to externalize your Perplexity.ai conversation history int
 
 The scraper employs advanced behavioral modeling to bypass Cloudflare and Turnstile challenges:
 
-- **Vision-Based Bypass**: Captures 1920x1080 screenshots and leverages AI reasoning to identify exact interaction coordinates, circumventing iframe-based honeypots.
+- **Structural Interaction**: Targets the internal Turnstile widget structure directly, monitoring response tokens to ensure bypass integrity.
+- **Vision-Based Fallback**: Captures 1920x1080 screenshots and leverages AI reasoning to identify exact interaction coordinates if structural methods fail.
 - **Human-Like Navigation**: Simulates organic mouse movement using Bézier curves and implements sinusoidal scrolling.
 - **Session Warming**: Establishes browser reputation by visiting the home page and simulating browsing before accessing sensitive data.
 - **Navigator Spoofing**: Injects scripts to purge `navigator.webdriver` and spoof high-end hardware profiles.
@@ -55,18 +56,18 @@ The scraper employs advanced behavioral modeling to bypass Cloudflare and Turnst
 
 ### 1. Install Node.js
 
-Ensure you have Node.js 20+ installed. We recommend [nvm](https://github.com/nvm-sh/nvm).
+Ensure you have **Node.js 20+** installed. We recommend [nvm](https://github.com/nvm-sh/nvm).
 
 ### 2. Setup AI Provider
 
 #### Option A: Ollama (Local - Recommended)
 1. Install [Ollama](https://ollama.ai).
 2. The system will auto-pull models, but you can do it manually:
-   ```bash
-   ollama pull nomic-embed-text
-   ollama pull cogito
-   ollama pull ministral-3
-   ```
+```bash
+ollama pull nomic-embed-text
+ollama pull cogito
+ollama pull ministral-3
+```
 
 #### Option B: OpenRouter (Cloud)
 1. Get an API key from [OpenRouter](https://openrouter.ai).
@@ -89,21 +90,23 @@ cp .env.example .env
 
 Edit your `.env` file to customize behavior:
 
-- **LLM_SOURCE**: `ollama` or `openrouter`.
-- **LLM_RAG_MODEL**: Text reasoning model (default: `cogito` or `stepfun/step-3.5-flash:free`).
-- **LLM_VISION_MODEL**: Vision model (default: `ministral-3` or `stepfun/step-3.5-flash:free`).
-- **DISCOVERY_MODE**: `api`, `scroll`, `interaction`, `ai`.
-- **EXTRACTION_MODE**: `api`, `dom`, `native`, `ai`.
+| Variable | Description |
+|----------|-------------|
+| **LLM_SOURCE** | `ollama` or `openrouter` |
+| **LLM_RAG_MODEL** | Text reasoning model (default: `cogito`) |
+| **LLM_VISION_MODEL** | Vision model (default: `ministral-3`) |
+| **DISCOVERY_MODE** | `api`, `scroll`, `interaction`, `ai` |
+| **EXTRACTION_MODE** | `api`, `dom`, `native`, `ai` |
 
 ## Usage Guide
 
 Launch the system:
 ```bash
-# Start system
+# Start system command
 npm run dev
 ```
 
-**Note**: Local AI requires at least **10GB of free disk space**.
+> **Note**: Local AI requires at least **10GB of free disk space**. The application will verify this on startup.
 
 ## Architecture & Deep Dive
 
