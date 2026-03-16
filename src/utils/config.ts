@@ -52,9 +52,8 @@ function parseEnvConfig(): Config {
 
   const llmSource: 'ollama' | 'openrouter' = (process.env['LLM_SOURCE'] as any) ?? 'ollama'
 
-  // Default models change based on source if not explicitly provided
-  const defaultRagModel = llmSource === 'openrouter' ? 'stepfun/step-3.5-flash:free' : 'cogito'
-  const defaultVisionModel = llmSource === 'openrouter' ? 'stepfun/step-3.5-flash:free' : 'ministral-3'
+  const defaultRagModel = llmSource === 'openrouter' ? 'stepfun/step-3.5-flash:free' : 'deepseek-r1:7b'
+  const defaultVisionModel = llmSource === 'openrouter' ? 'stepfun/step-3.5-flash:free' : 'qwen3.5:4b'
 
   const rawConfig = {
     authStoragePath: process.env['AUTH_STORAGE_PATH'] ?? join('.storage', 'auth.json'),
@@ -96,6 +95,10 @@ function parseEnvConfig(): Config {
   }
 
   return result.data
+}
+
+function camelToSnakeCase(str: string): string {
+  return str.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)
 }
 
 function ensureDirectory(path: string): void {

@@ -65,8 +65,8 @@ Ensure you have **Node.js 20+** installed. We recommend [nvm](https://github.com
 2. The system will auto-pull models, but you can do it manually:
 ```bash
 ollama pull nomic-embed-text
-ollama pull cogito
-ollama pull ministral-3
+ollama pull deepseek-r1:7b
+ollama pull qwen3.5:4b
 ```
 
 #### Option B: OpenRouter (Cloud)
