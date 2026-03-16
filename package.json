@@ -25,6 +25,7 @@
     "chalk": "^5.6.2",
     "chromium-bidi": "^15.0.0",
     "dotenv": "^17.2.4",
+    "ghost-cursor-patchright-core": "^1.3.42",
     "got-scraping": "^4.2.1",
     "inquirer": "^13.2.2",
     "patchright": "^1.58.2",

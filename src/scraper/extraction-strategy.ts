@@ -4,6 +4,7 @@ import { waitStrategy } from '../utils/wait-strategy.js'
 import { z } from 'zod'
 import { getAiProvider } from '../ai/ai-provider.js'
 import { HumanNavigator } from '../utils/human-navigator.js'
+import { createCursor } from 'ghost-cursor-patchright-core'
 
 export interface ExtractedConversation {
   id: string
@@ -30,15 +31,8 @@ const EntrySchema = z.object({
 export class ApiExtractionStrategy implements ExtractionStrategy {
   async extract(page: Page, url: string): Promise<ExtractedConversation | null> {
     const apiDataPromise = this.captureConversationApiResponse(page)
-
-    // Orgagnic navigation
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 })
-
-    // Add a bit of human activity to make the page load feel "real"
-    if (Math.random() > 0.5) {
-      await HumanNavigator.scrollNaturally(page, 200 + Math.random() * 300)
-    }
-
+    if (Math.random() > 0.5) await HumanNavigator.scrollNaturally(page, 200 + Math.random() * 300)
     await waitStrategy.afterScroll(page)
     const apiData = await apiDataPromise
     return apiData ? this.parseConversationData(apiData, url) : null
@@ -88,8 +82,6 @@ export class DomScrapeExtractionStrategy implements ExtractionStrategy {
   async extract(page: Page, url: string): Promise<ExtractedConversation | null> {
     logger.info(`Scraping DOM for ${url}`)
     await page.goto(url, { waitUntil: 'networkidle', timeout: 30000 })
-
-    // Human-like pause to "read" the content
     await page.waitForTimeout(1000 + Math.random() * 2000)
     await HumanNavigator.scrollNaturally(page, 500)
 
@@ -113,19 +105,18 @@ export class NativeExportExtractionStrategy implements ExtractionStrategy {
     await page.goto(url, { waitUntil: 'networkidle', timeout: 30000 })
 
     try {
+      const cursor = createCursor(page)
       await HumanNavigator.simulateBrowsing(page)
 
       const menuButton = page.locator('[data-testid="thread-actions-menu-button"]').or(page.locator('button:has-text("...")')).first()
       const box = await menuButton.boundingBox()
       if (box) {
-          await HumanNavigator.moveMouseCurved(page, box.x + box.width / 2, box.y + box.height / 2)
-          await page.waitForTimeout(300)
-          await menuButton.click()
+          await cursor.click({ x: box.x + box.width / 2, y: box.y + box.height / 2 } as any)
       } else {
           await menuButton.click()
       }
 
-      await page.waitForTimeout(500)
+      await page.waitForTimeout(1000)
       const exportButton = page.locator('text=Export').or(page.locator('text=Markdown').or(page.locator('text=Download'))).first()
 
       const [ download ] = await Promise.all([

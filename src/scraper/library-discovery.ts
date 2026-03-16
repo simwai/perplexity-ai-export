@@ -9,6 +9,7 @@ import {
   AiAssistedDiscoveryStrategy,
   type DiscoveryStrategy
 } from './discovery-strategy.js'
+import { DiscoveryError } from '../utils/errors.js'
 import { handleCloudflare } from '../utils/cloudflare.js'
 
 export class LibraryDiscovery {
@@ -58,6 +59,6 @@ export class LibraryDiscovery {
       }
     }
 
-    throw new Error('All discovery strategies failed or were blocked by Cloudflare.')
+    throw new DiscoveryError('All discovery strategies failed or were blocked by Cloudflare.')
   }
 }

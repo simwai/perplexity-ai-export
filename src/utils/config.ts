@@ -51,7 +51,6 @@ function parseEnvConfig(): Config {
   }
 
   const llmSource: 'ollama' | 'openrouter' = (process.env['LLM_SOURCE'] as any) ?? 'ollama'
-
   const defaultRagModel = llmSource === 'openrouter' ? 'stepfun/step-3.5-flash:free' : 'deepseek-r1:7b'
   const defaultVisionModel = llmSource === 'openrouter' ? 'stepfun/step-3.5-flash:free' : 'qwen3.5:4b'
 
@@ -70,7 +69,6 @@ function parseEnvConfig(): Config {
     checkpointPath: process.env['CHECKPOINT_PATH'] ?? join('.storage', 'checkpoint.json'),
     vectorIndexPath: process.env['VECTOR_INDEX_PATH'] ?? join('.storage', 'vector-index'),
 
-    // AI
     llmSource,
     llmRagModel: process.env['LLM_RAG_MODEL'] ?? defaultRagModel,
     llmVisionModel: process.env['LLM_VISION_MODEL'] ?? defaultVisionModel,
@@ -83,22 +81,15 @@ function parseEnvConfig(): Config {
   }
 
   const result = configSchema.safeParse(rawConfig)
-
   if (!result.success) {
     logger.error('Invalid configuration detected:')
     result.error.issues.forEach((issue) => {
       const path = issue.path.join('.')
-      logger.error(`  ${path.toUpperCase()}: ${issue.message}`)
+      logger.error(`  \${path.toUpperCase()}: \${issue.message}`)
     })
-    logger.error('\nPlease check your .env file and fix the above errors.')
     process.exit(1)
   }
-
   return result.data
-}
-
-function camelToSnakeCase(str: string): string {
-  return str.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)
 }
 
 function ensureDirectory(path: string): void {

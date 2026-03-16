@@ -1,3 +1,4 @@
+import { OpenRouterError } from '../utils/errors.js'
 import { gotScraping } from 'got-scraping'
 import { config } from '../utils/config.js'
 import { logger } from '../utils/logger.js'
@@ -7,7 +8,7 @@ export class OpenRouterClient {
 
   async generate(prompt: string, options: { model?: string; temperature?: number } = {}): Promise<string> {
     if (!config.openrouterApiKey) {
-      throw new Error('OPENROUTER_API_KEY is not configured')
+      throw new OpenRouterError('OPENROUTER_API_KEY is not configured')
     }
 
     try {
@@ -27,18 +28,18 @@ export class OpenRouterClient {
 
       const data: any = response.body
       if (!data?.choices?.[0]?.message?.content) {
-        throw new Error(`Invalid response structure from OpenRouter: ${JSON.stringify(data)}`)
+        throw new OpenRouterError(`Invalid response structure from OpenRouter: ${JSON.stringify(data)}`)
       }
       return data.choices[0].message.content
     } catch (e) {
       logger.error('OpenRouter request failed:', e)
-      throw new Error(`Failed to generate text via OpenRouter: ${e instanceof Error ? e.message : String(e)}`)
+      throw new OpenRouterError(`Failed to generate text via OpenRouter: ${e instanceof Error ? e.message : String(e)}`)
     }
   }
 
   async generateWithVision(prompt: string, base64Image: string, options: { model?: string; temperature?: number } = {}): Promise<string> {
     if (!config.openrouterApiKey) {
-      throw new Error('OPENROUTER_API_KEY is not configured')
+      throw new OpenRouterError('OPENROUTER_API_KEY is not configured')
     }
 
     try {
@@ -66,12 +67,12 @@ export class OpenRouterClient {
 
       const data: any = response.body
       if (!data?.choices?.[0]?.message?.content) {
-        throw new Error(`Invalid vision response structure from OpenRouter: ${JSON.stringify(data)}`)
+        throw new OpenRouterError(`Invalid vision response structure from OpenRouter: ${JSON.stringify(data)}`)
       }
       return data.choices[0].message.content
     } catch (e) {
       logger.error('OpenRouter vision request failed:', e)
-      throw new Error(`Failed to generate vision response via OpenRouter: ${e instanceof Error ? e.message : String(e)}`)
+      throw new OpenRouterError(`Failed to generate vision response via OpenRouter: ${e instanceof Error ? e.message : String(e)}`)
     }
   }
 }

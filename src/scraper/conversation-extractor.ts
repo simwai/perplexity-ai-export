@@ -10,6 +10,7 @@ import {
   type ExtractedConversation
 } from './extraction-strategy.js'
 import { handleCloudflare } from '../utils/cloudflare.js'
+import { ExtractionError } from '../utils/errors.js'
 
 export { type ExtractedConversation }
 
@@ -57,7 +58,7 @@ export class ConversationExtractor {
           logger.error(`Non-Cloudflare error in ${strategyName}: ${e instanceof Error ? e.message : String(e)}`)
         }
       }
-      throw new Error(`All extraction strategies failed for ${url}`)
+      throw new ExtractionError(`All extraction strategies failed for ${url}`)
     } finally {
       await page.close().catch(() => {})
     }
