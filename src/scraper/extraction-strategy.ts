@@ -150,10 +150,18 @@ export class AiScrapeExtractionStrategy implements ExtractionStrategy {
     })
 
     try {
-      const prompt = `Extract the main CSS selectors for a Perplexity thread from this HTML.
-      I need selectors for: 1. The thread title, 2. The question blocks, 3. The answer/prose blocks.
-      Return JSON format: {"title": "...", "questions": "...", "answers": "..."}
-      HTML Snippet: ${bodyHtml}`
+      const prompt = `
+You are a Web Scraping Expert. Identify the CSS selectors for a Perplexity.ai thread from the provided HTML.
+We need to capture:
+1. Thread Title (usually an h1 or high-level heading)
+2. Question Blocks (user queries)
+3. Answer/Prose Blocks (AI responses, often with 'prose' class)
+
+Return ONLY valid JSON:
+{"title": "...", "questions": "...", "answers": "..."}
+
+HTML Snippet:
+${bodyHtml}`
 
       const response = await this.ai.generate(prompt)
       const selectors = JSON.parse(response.match(/\{.*\}/s)?.[0] || '{}')

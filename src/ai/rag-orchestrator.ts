@@ -27,12 +27,12 @@ export class RagOrchestrator {
       logger.info(`Plan: ${chalk.bold.yellow(researchPlan.strategy.toUpperCase())}`)
       if (exhaustiveMode) {
         logger.warn(
-          `Exhaustive mode enabled. This may take a while as I'll be doing a deep dive into your history.`
+          `Exhaustive mode enabled. Deep dive initiated into your history.`
         )
       }
 
       if (researchPlan.hardKeywords?.length) {
-        logger.info(`Hard Keywords detected: ${chalk.gray(researchPlan.hardKeywords.join(', '))}`)
+        logger.info(`Hard Keywords: ${chalk.gray(researchPlan.hardKeywords.join(', '))}`)
       }
 
       const searchResults = await this.executeAdaptiveHybridSearch(researchPlan)
@@ -71,11 +71,16 @@ export class RagOrchestrator {
     filters: any
   }> {
     const plannerPrompt = `
-Analyze: "${originalQuestion}"
-1. Strategy: "precise" (specific facts) or "exhaustive" (broad summary/entity history).
-2. Variations: 3 semantic search phrases.
-3. Hard Keywords: Identify any names, IDs, or unique technical terms for exact matching.
-Return JSON: {"strategy": "...", "queries": [], "hardKeywords": [], "filters": {}}
+You are the Lead Researcher. Analyze the following user query:
+<query>${originalQuestion}</query>
+
+Determine the best research strategy:
+1. Strategy: "precise" (specific facts/details) or "exhaustive" (broad summaries or entity history).
+2. Semantic Queries: Generate 3 diverse search phrases to capture all context.
+3. Hard Keywords: List specific proper nouns, technical IDs, or unique terms for exact matching.
+
+Return ONLY a valid JSON object in this format:
+{"strategy": "...", "queries": ["...", "...", "..."], "hardKeywords": [], "filters": {}}
 `
     try {
       const response = await this.ai.generate(plannerPrompt)
@@ -120,15 +125,10 @@ Return JSON: {"strategy": "...", "queries": [], "hardKeywords": [], "filters": {
           score: 1.0,
         }))
         keywordPool.push(...converted)
-      } catch (_err) {
-        /* oxlint-disable-next-line no-empty */
-      }
+      } catch (_err) { /* ignore */ }
     }
 
-    if (keywordPool.length > 0) {
-      searchPools.push(keywordPool)
-    }
-
+    if (keywordPool.length > 0) searchPools.push(keywordPool)
     return this.mergeAndFusionRank(searchPools)
   }
 
@@ -136,9 +136,7 @@ Return JSON: {"strategy": "...", "queries": [], "hardKeywords": [], "filters": {
     const scores = new Map<string, { res: VectorSearchResult; score: number }>()
     pools.forEach((pool) => {
       pool.forEach((res, rank) => {
-        const path = res.meta['path'] || 'unknown'
-        const snippet = res.meta['snippet'] || ''
-        const id = res.meta['id'] || `${path}:${snippet}`
+        const id = res.meta['id'] || `${res.meta['path']}:${res.meta['snippet']}`
         const s = 1 / (60 + rank)
         if (scores.has(id)) {
           scores.get(id)!.score += s
@@ -163,19 +161,20 @@ Return JSON: {"strategy": "...", "queries": [], "hardKeywords": [], "filters": {
 
     const findings: any[] = []
     const batchSize = 10
-    const totalBatches = Math.ceil(pool.length / batchSize)
 
-    for (let i = 0, batchIdx = 0; i < pool.length; i += batchSize, batchIdx++) {
+    for (let i = 0; i < pool.length; i += batchSize) {
       const batch = pool.slice(i, i + batchSize)
-      logger.info(`Analyzing history snippets... batch ${batchIdx + 1} of ${totalBatches}`)
-
       const researchPrompt = `
-You are the Researcher. Analyze these snippets from the user's history for the question: "${question}"
-Context:
-${batch.map((r, j) => `[Node ${i + j}] ${r.meta['title']}: ${r.meta['snippet']}`).join('\n\n')}
+You are an expert Fact Extraction Engine. Analyze the following snippets to find information relevant to the question:
+<question>${question}</question>
 
-Extract every specific fact, mention, date, or piece of code.
-Return JSON array: [{"fact": "...", "node_id": N, "thread": "..."}]
+<context>
+${batch.map((r, j) => `[Node ${i + j}] ${r.meta['title']}: ${r.meta['snippet']}`).join('\n\n')}
+</context>
+
+Extract specific facts, dates, and technical details. Use only the provided context.
+Return ONLY a JSON array of objects:
+[{"fact": "...", "node_id": N, "thread": "..."}]
 `
       try {
         const response = await this.ai.generate(researchPrompt)
@@ -189,15 +188,9 @@ Return JSON array: [{"fact": "...", "node_id": N, "thread": "..."}]
           })
         })
       } catch (_err) {
-        batch.forEach((r) => {
-          findings.push({
-            fact: r.meta['snippet'],
-            source_title: r.meta['title'],
-          })
-        })
+        batch.forEach((r) => findings.push({ fact: r.meta['snippet'], source_title: r.meta['title'] }))
       }
     }
-
     return findings
   }
 
@@ -207,18 +200,19 @@ Return JSON array: [{"fact": "...", "node_id": N, "thread": "..."}]
     strategy: string
   ): Promise<string> {
     const prompt = `
-You are the Narrator. Synthesize these research findings into a cohesive, mightiest answer for: "${question}"
-Strategy: ${strategy}
-Findings:
+You are the Narrator. Synthesize the following research findings into a definitive, mightiest answer.
+<question>${question}</question>
+<strategy>${strategy}</strategy>
+
+<findings>
 ${findings.map((f, i) => `[Find ${i}] (${f.source_title}): ${f.fact}`).join('\n')}
+</findings>
 
-INSTRUCTIONS:
-1. Provide a comprehensive, authoritative response.
-2. If "exhaustive", list ALL relevant conversations and what they contributed.
-3. Be specific with names and technical details.
-4. Cite everything with [Find N].
-
-ANSWER:
+RULES:
+1. Provide a comprehensive and authoritative response.
+2. If "exhaustive", structure the answer to reflect history over time.
+3. Every claim MUST cite its source using the format [Find N].
+4. Be technical and precise.
 `
     return this.ai.generate(prompt)
   }
@@ -237,11 +231,11 @@ ANSWER:
     _facts: any[]
   ): Promise<{ status: string; suggestion?: string }> {
     const prompt = `
-Verify the answer.
-Question: "${question}"
-Answer: "${answer.slice(0, 500)}..."
-Did I miss anything important?
-Return JSON: {"status": "ok" | "missed-info", "suggestion": "..."}
+Verify the following answer for accuracy and completeness:
+<question>${question}</question>
+<answer>${answer.slice(0, 800)}...</answer>
+
+Return ONLY valid JSON: {"status": "ok" | "improvement-needed", "suggestion": "..."}
 `
     try {
       const res = await this.ai.generate(prompt)
