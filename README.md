@@ -19,9 +19,7 @@
 - [Stealth & Behavioral Resilience](#stealth--behavioral-resilience)
 - [Environment Setup Guide](#environment-setup-guide)
   * [1. Install Node.js (The Engine)](#1-install-nodejs-the-engine)
-  * [2. Setup AI Provider (The Intelligence)](#2-setup-ai-provider-the-intelligence)
-    + [Option A: Ollama (Local - Recommended)](#option-a-ollama-local---recommended)
-    + [Option B: OpenRouter (Cloud)](#option-b-openrouter-cloud)
+  * [2. Install Ollama (The AI Intelligence)](#2-install-ollama-the-ai-intelligence)
   * [3. Download and Prepare the Project](#3-download-and-prepare-the-project)
 - [Configuration](#configuration)
   * [Key Environment Variables](#key-environment-variables)
@@ -29,6 +27,7 @@
   * [Operational Directives](#operational-directives)
 - [RAG Capabilities](#rag-capabilities)
 - [Architecture & Deep Dive](#architecture--deep-dive)
+  * [Project Structure](#project-structure)
 - [Testing](#testing)
 
 <!-- tocstop -->
@@ -37,7 +36,7 @@
 
 ## Introduction
 
-This tool is designed to externalize your Perplexity.ai conversation history into organized, semantically searchable Markdown files. It facilitates the emergence of a personal knowledge base powered by local or cloud AI, bridging the gap between ephemeral inquiry and structured knowledge.
+This tool is designed to externalize your Perplexity.ai conversation history into organized, semantically searchable Markdown files. It facilitates the emergence of a personal knowledge base powered by local AI, bridging the gap between ephemeral inquiry and structured knowledge.
 
 ## Key Features
 
@@ -50,13 +49,12 @@ This tool is designed to externalize your Perplexity.ai conversation history int
 
 ## Stealth & Behavioral Resilience
 
-The scraper employs advanced behavioral modeling to bypass Cloudflare and Turnstile challenges with 1:1 headful parity:
+The scraper employs advanced behavioral modeling to achieve 1:1 parity with natural browsing, bypassing Cloudflare and Turnstile challenges:
 
 - **Structural Interaction**: Targets the internal Turnstile widget structure directly, monitoring response tokens to ensure bypass integrity.
-- **Vision-Based Fallback**: Captures 1920x1080 screenshots and leverages AI reasoning to identify exact interaction coordinates if structural methods fail.
-- **Ghost-Cursor Integration**: Utilizes `ghost-cursor` to generate authentic, non-linear mouse paths and clicks, making detection statistically improbable.
-- **Session Warming**: Establishes browser reputation by visiting the home page and simulating browsing before accessing sensitive data.
-- **Navigator Spoofing**: Injects robust scripts to mask headless indicators and spoof high-end hardware profiles.
+- **Vision-Based Fallback**: Captures snapshots and leverages AI reasoning to identify exact interaction coordinates if structural methods fail.
+- **Ghost-Cursor Integration**: Utilizes `ghost-cursor` to generate authentic, non-linear mouse paths, making detection statistically improbable.
+- **Session Reputation**: Establishes browser trust through "Session Warming" (visiting the home page and simulating browsing) before sensitive data access.
 
 ## Environment Setup Guide
 
@@ -66,57 +64,68 @@ If you are new to development or don't have the necessary tools installed, follo
 
 We recommend using a version manager to install Node.js. This allows you to easily switch versions and avoids permission issues.
 
-- **Windows**: Download and run the latest installer from [nvm-windows](https://github.com/coreybutler/nvm-windows/releases).
-- **macOS / Linux**: Install `nvm` by following the instructions at [nvm.sh](https://github.com/nvm-sh/nvm).
+- **Windows**:
+  1. Download and run the latest installer from [nvm-windows](https://github.com/coreybutler/nvm-windows/releases).
+  2. Open a new Command Prompt or PowerShell and run:
+     ```cmd
+     nvm install 20
+     nvm use 20
+     ```
+- **macOS / Linux**:
+  1. Install `nvm` by following the instructions at [nvm.sh](https://github.com/nvm-sh/nvm).
+  2. Run:
+     ```bash
+     nvm install 20
+     nvm use 20
+     ```
 
-### 2. Setup AI Provider (The Intelligence)
+### 2. Install Ollama (The AI Intelligence)
 
-#### Option A: Ollama (Local - Recommended)
-1. Install [Ollama](https://ollama.ai).
-2. The system will automatically pull models on first run, or you can do it manually:
+1. Download and install Ollama from [ollama.ai](https://ollama.ai).
+2. The system will automatically pull the required models on first run, but you can also pull them manually:
    ```bash
    ollama pull nomic-embed-text
    ollama pull deepseek-r1:7b
    ollama pull qwen3.5:4b
    ```
 
-#### Option B: OpenRouter (Cloud)
-1. Get an API key from [OpenRouter](https://openrouter.ai).
-2. Set `LLM_SOURCE=openrouter` and your key in `.env`.
-
 ### 3. Download and Prepare the Project
 
-1. Extract the project ZIP or clone the repository.
-2. Open your terminal in the project folder and run:
-   ```bash
-   npm install
-   npx playwright install chromium
-   ```
+If you don't have the `git` command installed, you can simply download this project as a ZIP file from GitHub and extract it.
+
+Once extracted, open your terminal in the project folder and run:
+
+```bash
+npm install
+npx playwright install chromium
+```
 
 ## Configuration
 
 Establish your environment by duplicating the template:
+
 ```bash
 cp .env.example .env
 ```
 
 ### Key Environment Variables
 
-| Variable | Description |
-|----------|-------------|
-| **LLM_SOURCE** | `ollama` or `openrouter` |
-| **LLM_RAG_MODEL** | Text reasoning model (default: `deepseek-r1:7b`) |
-| **LLM_VISION_MODEL** | Vision model for bypass (default: `qwen3.5:4b`) |
-| **DISCOVERY_MODE** | `api`, `scroll`, `interaction`, `ai` |
-| **EXTRACTION_MODE** | `api`, `dom`, `native`, `ai` |
+- **LLM_SOURCE**: Set to `ollama` (local) or `openrouter` (cloud).
+- **LLM_RAG_MODEL**: Cognitive model for RAG synthesis (default: `deepseek-r1:7b`).
+- **LLM_VISION_MODEL**: Model for vision-based security bypass (default: `qwen3.5:4b`).
+- **ENABLE_VECTOR_SEARCH**: Set to `true` to activate semantic and RAG layers.
+- **DISCOVERY_MODE** & **EXTRACTION_MODE**: Choose between `api`, `scroll`, `interaction`, and `ai`.
 
 ## Usage Guide
 
 Launch the system:
+
 ```bash
 # Start system
 npm run dev
 ```
+
+**Note**: The system requires at least **10GB of free disk space** to operate safely with local AI models.
 
 ### Operational Directives
 
@@ -125,25 +134,36 @@ npm run dev
 - **Build vector index**: Processes Markdown exports into a local vector store.
 - **Reset all data**: Purges checkpoints, authentication data, and the vector index.
 
-> **Note**: The system requires at least **10GB of free disk space** to operate safely with local AI models.
-
 ## RAG Capabilities
 
 The RAG modality is engineered for various levels of cognitive inquiry:
 
 - **Broad Synthesis**: "Summarize all threads regarding distributed systems."
 - **Granular Retrieval**: "Locate the specific TypeScript pattern I used for the worker pool."
+- **Cross-Thread Integration**: "How has my conceptual understanding of React hooks shifted?"
 
 ## Architecture & Deep Dive
 
+For a detailed look at our RAG implementation, hybrid search strategy, and theoretical foundations, please refer to:
+
 👉 **[ARCH.md](./ARCH.md)**
+
+### Project Structure
+
+- **src/ai/**: Provider management and advanced RAG orchestration layers.
+- **src/scraper/**: Patchright-based extraction logic and parallel worker pool management.
+- **src/search/**: Vector storage (Vectra) and ripgrep search implementation.
+- **src/repl/**: Interactive CLI components.
+- **src/utils/**: Shared utility functions for behavioral navigation and logging.
 
 ## Testing
 
+We prioritize a "Testing Trophy" architecture, emphasizing integration tests.
+
 ```bash
-# Execute unit verifications
+# Execute unit-level verifications
 npm run test:unit
 
-# Execute integration verifications
+# Execute integration-level verifications
 npm run test:integration
 ```

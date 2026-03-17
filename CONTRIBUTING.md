@@ -2,8 +2,34 @@
 
 We welcome contributions! To ensure a smooth development process and maintain high code quality, please follow these guidelines.
 
+## Development Environment Setup
+
+1. **Install Node.js**: Ensure you have Node.js 20+ installed.
+2. **Install Ollama**:
+  - Download and install [Ollama](https://ollama.ai/).
+  - `ollama pull nomic-embed-text` (for semantic vectors)
+  - `ollama pull deepseek-r1:7b` (for generative synthesis)
+  - `ollama pull qwen3.5:4b` (for vision-based bypass)
+3. **Install Dependencies**:
+  ```bash
+  npm install
+  ```
+4. **Prepare Environment Variables**:
+  ```bash
+  cp .env.example .env
+  ```
+5. **Install Playwright Browsers**:
+  ```bash
+  npx playwright install chromium
+  ```
+
 ## Development Workflow
 
+- **Start in Dev Mode**:
+  ```bash
+  # start dev
+  npm run dev
+  ```
 - **Type Checking**:
   ```bash
   npm run type-check
