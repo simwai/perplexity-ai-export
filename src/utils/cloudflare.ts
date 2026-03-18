@@ -3,6 +3,7 @@ import { logger } from './logger.js'
 import { HumanNavigator } from './human-navigator.js'
 import { CloudflareBypassError } from './errors.js'
 import { StructuralTurnstileStrategy, VisionTurnstileStrategy, type TurnstileStrategy } from './turnstile-strategy.js'
+import { VisualLogger } from './visual-logger.js'
 import chalk from 'chalk'
 
 const strategies: TurnstileStrategy[] = [
@@ -11,7 +12,7 @@ const strategies: TurnstileStrategy[] = [
 ]
 
 /**
- * Advanced Cloudflare Bypass with Multi-Strategy Fallback
+ * Advanced Cloudflare Bypass with Multi-Strategy Fallback and Visual Logging
  */
 export async function handleCloudflare(page: Page): Promise<boolean> {
   const isBlocked = await page.evaluate(() => {
@@ -31,6 +32,8 @@ export async function handleCloudflare(page: Page): Promise<boolean> {
   logger.info(`${sequenceHeader} Cloudflare challenge detected!`)
 
   await page.setViewportSize({ width: 1920, height: 1080 })
+  await VisualLogger.captureAction(page, 'challenge_detected')
+
   await HumanNavigator.simulateBrowsing(page)
   await page.waitForTimeout(2000)
 
@@ -45,8 +48,10 @@ export async function handleCloudflare(page: Page): Promise<boolean> {
     }
 
     logger.warn(`  - ${strategyName} failed to resolve challenge. Trying next...`)
+    await VisualLogger.captureAction(page, `strategy_failed_${strategyName}`)
   }
 
   logger.error(`${chalk.bold.red('[BYPASS FAILED]')} All strategies exhausted. Failing fast.\n`)
+  await VisualLogger.captureAction(page, 'bypass_catastrophic_failure')
   throw new CloudflareBypassError('Cloudflare bypass exhausted all strategies. Failing fast.')
 }
