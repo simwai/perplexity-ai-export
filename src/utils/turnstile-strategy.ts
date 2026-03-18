@@ -11,6 +11,9 @@ export interface TurnstileStrategy {
   solve(page: Page): Promise<boolean>
 }
 
+/**
+ * Strategy 1: Multi-point structural interaction
+ */
 export class StructuralTurnstileStrategy implements TurnstileStrategy {
   async solve(page: Page): Promise<boolean> {
     const cursor = createCursor(page)
@@ -36,7 +39,9 @@ export class StructuralTurnstileStrategy implements TurnstileStrategy {
 
         logger.info(`    [Structural Attempt ${idx + 1}] Clicking ${point.name} zone at (${Math.round(point.x)}, ${Math.round(point.y)})...`)
         await cursor.click({ x: point.x, y: point.y } as any)
-        await page.waitForTimeout(6000)
+
+        // Base 5s + random jitter up to 2s
+        await page.waitForTimeout(5000 + Math.random() * 2000)
 
         const solved = await this.isSolved(page)
         if (solved) {
@@ -60,6 +65,9 @@ export class StructuralTurnstileStrategy implements TurnstileStrategy {
   }
 }
 
+/**
+ * Strategy 2: Improved Vision interaction
+ */
 export class VisionTurnstileStrategy implements TurnstileStrategy {
   async solve(page: Page): Promise<boolean> {
     const cursor = createCursor(page)
@@ -95,7 +103,9 @@ export class VisionTurnstileStrategy implements TurnstileStrategy {
 
             logger.info(`    [Vision Attempt ${attempt}] Targeting coordinates (${scaledX}, ${scaledY})...`)
             await cursor.click({ x: scaledX, y: scaledY } as any)
-            await page.waitForTimeout(6000)
+
+            // Base 5s + random jitter up to 2s
+            await page.waitForTimeout(5000 + Math.random() * 2000)
 
             const stillBlocked = await page.evaluate(() => {
               const title = document.title.toLowerCase()
