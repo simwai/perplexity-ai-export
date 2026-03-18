@@ -36,7 +36,7 @@ export class StructuralTurnstileStrategy implements TurnstileStrategy {
 
         logger.info(`    [Structural Attempt ${idx + 1}] Clicking ${point.name} zone at (${Math.round(point.x)}, ${Math.round(point.y)})...`)
         await cursor.click({ x: point.x, y: point.y } as any)
-        await page.waitForTimeout(4000)
+        await page.waitForTimeout(6000)
 
         const solved = await this.isSolved(page)
         if (solved) {
@@ -95,7 +95,7 @@ export class VisionTurnstileStrategy implements TurnstileStrategy {
 
             logger.info(`    [Vision Attempt ${attempt}] Targeting coordinates (${scaledX}, ${scaledY})...`)
             await cursor.click({ x: scaledX, y: scaledY } as any)
-            await page.waitForTimeout(5000)
+            await page.waitForTimeout(6000)
 
             const stillBlocked = await page.evaluate(() => {
               const title = document.title.toLowerCase()
