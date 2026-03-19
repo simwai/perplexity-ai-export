@@ -43,16 +43,17 @@ export class VectorStore {
   }
 
   private vectorIndex: LocalIndex
-  private ollamaClient: OllamaClient
+  // Always use Ollama for embeddings as requested
+  private ollama: OllamaClient
 
   constructor() {
     this.vectorIndex = new LocalIndex(config.vectorIndexPath)
-    this.ollamaClient = new OllamaClient()
+    this.ollama = new OllamaClient()
   }
 
   async validate(): Promise<void> {
     try {
-      await this.ollamaClient.validate()
+      await this.ollama.validate()
     } catch (_error) {
       throw new VectorStore.VectorStoreError(
         `Vector store validation failed: ${_error instanceof Error ? _error.message : String(_error)}`
@@ -197,7 +198,7 @@ export class VectorStore {
     metas: VectorDocMeta[]
   ): Promise<void> {
     try {
-      const embeddingVectors = await this.ollamaClient.embed(texts)
+      const embeddingVectors = await this.ollama.embed(texts)
       for (let k = 0; k < embeddingVectors.length; k++) {
         const vector = embeddingVectors[k]
         if (!vector) continue
@@ -212,7 +213,7 @@ export class VectorStore {
   }
 
   private async generateQueryEmbedding(query: string): Promise<number[]> {
-    const [queryEmbedding] = await this.ollamaClient.embed([query])
+    const [queryEmbedding] = await this.ollama.embed([query])
     if (!queryEmbedding) {
       throw new VectorStore.EmbeddingError('Failed to generate embedding for query')
     }

@@ -6,7 +6,7 @@
   <img src="https://img.shields.io/badge/Node.js-4c1d95?style=flat&logo=node.js&logoColor=white" alt="Node.js" />
   <img src="https://img.shields.io/badge/TypeScript-5b21b6?style=flat&logo=typescript&logoColor=white" alt="TypeScript" />
   <img src="https://img.shields.io/badge/Ollama-6d28d9?style=flat&logo=ollama&logoColor=white" alt="Ollama" />
-  <img src="https://img.shields.io/badge/Playwright-7c3aed?style=flat&logo=playwright&logoColor=white" alt="Playwright" />
+  <img src="https://img.shields.io/badge/Patchright-7c3aed?style=flat&logo=playwright&logoColor=white" alt="Patchright" />
   <img src="https://img.shields.io/badge/Vitest-8b5cf6?style=flat&logo=vitest&logoColor=white" alt="Vitest" />
 </p>
 
@@ -16,6 +16,7 @@
 
 - [Introduction](#introduction)
 - [Key Features](#key-features)
+- [Stealth & Behavioral Resilience](#stealth--behavioral-resilience)
 - [Environment Setup Guide](#environment-setup-guide)
   * [1. Install Node.js (The Engine)](#1-install-nodejs-the-engine)
   * [2. Install Ollama (The AI Intelligence)](#2-install-ollama-the-ai-intelligence)
@@ -39,12 +40,21 @@ This tool is designed to externalize your Perplexity.ai conversation history int
 
 ## Key Features
 
-- **Parallelized Extraction**: Leverages Playwright to extract multiple conversation threads simultaneously for high-velocity data retrieval.
+- **Parallelized Extraction**: Leverages worker pools to extract multiple conversation threads simultaneously for high-velocity data retrieval.
 - **Architectural Resilience**: Automatically restores browser contexts and retries operations, ensuring continuity amidst environmental instability.
 - **Advanced RAG (Retrieval-Augmented Generation)**: Engage in a cognitive dialogue with your history. The system employs intent analysis to synthesize broad summaries or pinpoint specific technical insights.
 - **Semantic Vector Search**: Move beyond keyword matching. Locate information based on conceptual depth and semantic relevance.
 - **Persistent State Tracking**: Frequent checkpoints allow the system to resume progress after any interruption.
 - **Interactive Synthesis (REPL)**: A streamlined command-line interface for human-system synergy.
+
+## Stealth & Behavioral Resilience
+
+The scraper employs advanced behavioral modeling to achieve 1:1 parity with natural browsing, bypassing Cloudflare and Turnstile challenges:
+
+- **Structural Interaction**: Targets the internal Turnstile widget structure directly, monitoring response tokens to ensure bypass integrity.
+- **Vision-Based Fallback**: Captures snapshots and leverages AI reasoning to identify exact interaction coordinates if structural methods fail.
+- **Ghost-Cursor Integration**: Utilizes `ghost-cursor` to generate authentic, non-linear mouse paths, making detection statistically improbable.
+- **Session Reputation**: Establishes browser trust through "Session Warming" (visiting the home page and simulating browsing) before sensitive data access.
 
 ## Environment Setup Guide
 
@@ -72,10 +82,11 @@ We recommend using a version manager to install Node.js. This allows you to easi
 ### 2. Install Ollama (The AI Intelligence)
 
 1. Download and install Ollama from [ollama.ai](https://ollama.ai).
-2. Open your terminal and pull the required models:
+2. The system will automatically pull the required models on first run, but you can also pull them manually:
    ```bash
    ollama pull nomic-embed-text
-   ollama pull deepseek-r1
+   ollama pull deepseek-r1:7b
+   ollama pull qwen3.5:4b
    ```
 
 ### 3. Download and Prepare the Project
@@ -99,28 +110,27 @@ cp .env.example .env
 
 ### Key Environment Variables
 
-- **OLLAMA_URL**: Access point for your local AI engine (default: http://localhost:11434).
-- **OLLAMA_MODEL**: Cognitive model for RAG synthesis (e.g., deepseek-r1).
-- **OLLAMA_EMBED_MODEL**: Model for generating vector representations (e.g., nomic-embed-text).
+- **LLM_SOURCE**: Set to `ollama` (local) or `openrouter` (cloud).
+- **LLM_RAG_MODEL**: Cognitive model for RAG synthesis (default: `deepseek-r1:7b`).
+- **LLM_VISION_MODEL**: Model for vision-based security bypass (default: `qwen3.5:4b`).
 - **ENABLE_VECTOR_SEARCH**: Set to `true` to activate semantic and RAG layers.
+- **DISCOVERY_MODE** & **EXTRACTION_MODE**: Choose between `api`, `scroll`, `interaction`, and `ai`.
 
 ## Usage Guide
 
 Launch the system:
 
 ```bash
-# Start the development environment
+# Start system
 npm run dev
 ```
+
+**Note**: The system requires at least **10GB of free disk space** to operate safely with local AI models.
 
 ### Operational Directives
 
 - **Start scraper (Library)**: Initiates extraction. Authenticate manually if required.
-- **Search conversations**: Interface with your history using various modes:
-  - **Auto**: Heuristic selection between semantic and exact search.
-  - **Semantic**: Fuzzy matching via high-dimensional vector space.
-  - **RAG**: Direct inquiry—e.g., "What did I learn about emergent intelligence?"
-  - **Exact**: Rapid string matching via ripgrep (bundled).
+- **Search conversations**: Interface with your history using various modes (Auto, Semantic, RAG, Exact).
 - **Build vector index**: Processes Markdown exports into a local vector store.
 - **Reset all data**: Purges checkpoints, authentication data, and the vector index.
 
@@ -140,11 +150,11 @@ For a detailed look at our RAG implementation, hybrid search strategy, and theor
 
 ### Project Structure
 
-- **src/ai/**: Ollama interaction and advanced RAG orchestration layers.
-- **src/scraper/**: Playwright-based extraction logic and parallel worker pool management.
+- **src/ai/**: Provider management and advanced RAG orchestration layers.
+- **src/scraper/**: Patchright-based extraction logic and parallel worker pool management.
 - **src/search/**: Vector storage (Vectra) and ripgrep search implementation.
 - **src/repl/**: Interactive CLI components.
-- **src/utils/**: Shared utility functions for data chunking and logging.
+- **src/utils/**: Shared utility functions for behavioral navigation and logging.
 
 ## Testing
 

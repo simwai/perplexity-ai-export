@@ -1,5 +1,5 @@
 import { beforeAll, afterAll } from 'vitest'
-import { chromium, type Browser } from '@playwright/test'
+import { chromium, type Browser } from 'patchright'
 
 let sharedBrowserInstance: Browser
 

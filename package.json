@@ -25,8 +25,11 @@
     "chalk": "^5.6.2",
     "chromium-bidi": "^15.0.0",
     "dotenv": "^17.2.4",
+    "ghost-cursor-patchright-core": "^1.3.42",
+    "got-scraping": "^4.2.1",
     "inquirer": "^13.2.2",
-    "playwright-core": "^1.58.2",
+    "jimp": "^1.6.0",
+    "patchright": "^1.58.2",
     "sanitize-filename": "^1.6.3",
     "vectra": "^0.12.3",
     "zod": "^4.3.6"
@@ -34,7 +37,6 @@
   "devDependencies": {
     "@commitlint/cli": "^20.4.4",
     "@commitlint/config-conventional": "^20.4.4",
-    "@playwright/test": "^1.58.2",
     "@release-it/conventional-changelog": "^10.0.6",
     "@types/inquirer": "^9.0.9",
     "@types/node": "^25.2.3",

@@ -1,8 +1,10 @@
-import { chromium, type Browser, type BrowserContext, type Page } from '@playwright/test'
+import { chromium, type Browser, type BrowserContext, type Page } from 'patchright'
 import { readFileSync, writeFileSync, existsSync, statSync } from 'node:fs'
 import { config } from '../utils/config.js'
 import { logger } from '../utils/logger.js'
 import { confirm } from '@inquirer/prompts'
+import { HumanNavigator } from '../utils/human-navigator.js'
+import { handleCloudflare } from '../utils/cloudflare.js'
 
 export class BrowserManager {
   static readonly BrowserLaunchError = class extends Error {
@@ -42,9 +44,20 @@ export class BrowserManager {
       const isSavedAuthValid = this.checkIfSavedAuthenticationIsFresh(config.authStoragePath)
 
       if (isSavedAuthValid) {
-        // Try starting in requested headless mode directly
         await this.launchBrowser(config.headless)
         await this.initializeBrowserContext()
+
+        // Ensure page is created for session warming
+        await this.ensurePageIsInitialized()
+
+        // --- Session Warming ---
+        const page = this.getActivePage()
+        logger.info('Warming up browser session to bypass detection...')
+        await page.goto('https://www.perplexity.ai/', { waitUntil: 'domcontentloaded' })
+        await handleCloudflare(page)
+        await HumanNavigator.simulateBrowsing(page)
+        // -----------------------
+
         await this.navigateToSettingsPage()
         const isLoggedIn = await this.verifyLoginStatus(this.getActivePage())
 
@@ -53,24 +66,30 @@ export class BrowserManager {
           return this.getActivePage()
         }
 
-        logger.warn(
-          'Saved authentication expired or invalid. Restarting in headful mode for login...'
-        )
+        logger.warn('Saved authentication expired or invalid. Restarting in headful mode for login...')
         await this.close()
       }
 
-      // Need login: launch headful
       await this.launchBrowser(false)
       await this.initializeBrowserContext()
       await this.navigateToSettingsPage()
       await this.ensureUserIsAuthenticated()
 
-      // If user wants headless, restart now that we are logged in
       if (config.headless !== false) {
-        logger.info('Authentication successful. Restarting in headless mode...')
+        logger.info('Authentication successful. Restarting in headless mode with session warming...')
         await this.close()
         await this.launchBrowser(config.headless)
         await this.initializeBrowserContext()
+
+        await this.ensurePageIsInitialized()
+
+        // --- Session Warming ---
+        const page = this.getActivePage()
+        await page.goto('https://www.perplexity.ai/', { waitUntil: 'domcontentloaded' })
+        await handleCloudflare(page)
+        await HumanNavigator.simulateBrowsing(page)
+        // -----------------------
+
         await this.navigateToSettingsPage()
       }
 
@@ -94,7 +113,6 @@ export class BrowserManager {
     try {
       this.browserInstance = await chromium.launch({
         headless: headless === 'new' ? true : headless,
-        args: ['--disable-blink-features=AutomationControlled'],
       })
     } catch (_error) {
       throw new BrowserManager.BrowserLaunchError(
@@ -107,23 +125,41 @@ export class BrowserManager {
     if (!this.browserInstance) throw new BrowserManager.ContextError('Browser not initialized')
 
     const isSavedAuthValid = this.checkIfSavedAuthenticationIsFresh(config.authStoragePath)
+    const contextOptions = {
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+      deviceScaleFactor: 1,
+      viewport: { width: 1920, height: 1080 }
+    }
 
     if (isSavedAuthValid) {
       logger.info('Loading saved authentication state...')
       try {
         const storageStateData = JSON.parse(readFileSync(config.authStoragePath, 'utf-8'))
         this.activeContext = await this.browserInstance.newContext({
+          ...contextOptions,
           storageState: storageStateData,
         })
       } catch (_error) {
         logger.warn('Failed to load saved auth state, starting fresh.', _error)
-        this.activeContext = await this.browserInstance.newContext()
+        this.activeContext = await this.browserInstance.newContext(contextOptions)
       }
     } else {
-      if (existsSync(config.authStoragePath)) {
-        logger.info('Saved authentication is older than 1 day, discarding.')
-      }
-      this.activeContext = await this.browserInstance.newContext()
+      this.activeContext = await this.browserInstance.newContext(contextOptions)
+    }
+
+    await this.activeContext.addInitScript(() => {
+      Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+      Object.defineProperty(navigator, 'deviceMemory', { get: () => 8 });
+      Object.defineProperty(navigator, 'hardwareConcurrency', { get: () => 8 });
+      Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
+      Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
+    });
+  }
+
+  private async ensurePageIsInitialized(): Promise<void> {
+    if (!this.activeContext) throw new BrowserManager.ContextError('Context not initialized')
+    if (!this.activePage || this.activePage.isClosed()) {
+      this.activePage = await this.activeContext.newPage()
     }
   }
 
@@ -140,14 +176,12 @@ export class BrowserManager {
   }
 
   private async navigateToSettingsPage(): Promise<void> {
-    if (!this.activeContext) {
-      throw new BrowserManager.NavigationError('No browser context available')
-    }
-    this.activePage = await this.activeContext.newPage()
+    await this.ensurePageIsInitialized()
     const perplexitySettingsUrl = 'https://www.perplexity.ai/settings'
     try {
-      await this.activePage.goto(perplexitySettingsUrl, {
-        timeout: 3000,
+      await this.activePage!.goto(perplexitySettingsUrl, {
+        timeout: 15000,
+        waitUntil: 'domcontentloaded'
       })
     } catch (_error) {
       throw new BrowserManager.NavigationError(
