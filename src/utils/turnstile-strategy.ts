@@ -41,7 +41,7 @@ export class StructuralTurnstileStrategy implements TurnstileStrategy {
         await cursor.click({ x: point.x, y: point.y } as any)
 
         // Base 5s + random jitter up to 2s
-        await page.waitForTimeout(5000 + Math.random() * 2000)
+        await page.waitForTimeout(14000 + Math.random() * 2000)
 
         const solved = await this.isSolved(page)
         if (solved) {
@@ -105,7 +105,7 @@ export class VisionTurnstileStrategy implements TurnstileStrategy {
             await cursor.click({ x: scaledX, y: scaledY } as any)
 
             // Base 5s + random jitter up to 2s
-            await page.waitForTimeout(5000 + Math.random() * 2000)
+            await page.waitForTimeout(14000 + Math.random() * 2000)
 
             const stillBlocked = await page.evaluate(() => {
               const title = document.title.toLowerCase()
