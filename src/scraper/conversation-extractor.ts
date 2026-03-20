@@ -12,7 +12,6 @@ export interface ExtractedConversation {
 }
 
 export class ConversationExtractor {
-  // ========== Zod Schemas ==========
   private static readonly BlockSchema = z.object({
     intended_usage: z.string().optional(),
     markdown_block: z
@@ -42,7 +41,6 @@ export class ConversationExtractor {
     }),
   ])
 
-  // ========== Custom Error Classes ==========
   static readonly ExtractionError = class extends Error {
     constructor(message: string) {
       super(message)
@@ -98,31 +96,22 @@ export class ConversationExtractor {
     this.context = context
   }
 
-  // ========== Public API ==========
   async extract(url: string): Promise<ExtractedConversation> {
-    // Verify the context is still usable
-    if (!this.context || this.context.pages) {
-      // A simple check: try to get the list of pages – if this throws, context is dead
-      try {
-        await this.context.pages()
-      } catch {
-        throw new ConversationExtractor.ExtractionError('Browser context is no longer available')
-      }
-    }
+    await this.ensureContextIsAlive()
 
     let page: Page | null = null
     try {
       page = await this.context.newPage()
-    } catch (error) {
+    } catch (_error) {
       throw new ConversationExtractor.ExtractionError(
-        `Failed to create new page: ${error instanceof Error ? error.message : String(error)}`
+        `Failed to create new page: ${_error instanceof Error ? _error.message : String(_error)}`
       )
     }
 
-    const apiDataPromise = this.waitForApiResponse(page)
+    const apiDataPromise = this.captureConversationApiResponse(page)
 
     try {
-      await this.navigateToPage(page, url)
+      await this.navigateToConversationUrl(page, url)
       await waitStrategy.afterScroll(page)
 
       const apiData = await apiDataPromise
@@ -136,10 +125,9 @@ export class ConversationExtractor {
       }
 
       return parsed
-    } catch (error) {
-      // Rethrow known errors; wrap unknown ones
-      if (error instanceof Error) throw error
-      throw new ConversationExtractor.ExtractionError(String(error))
+    } catch (_error) {
+      if (_error instanceof Error) throw _error
+      throw new ConversationExtractor.ExtractionError(String(_error))
     } finally {
       if (page) {
         await page.close().catch((e) => {
@@ -148,9 +136,19 @@ export class ConversationExtractor {
       }
     }
   }
-  // ========== Private Helpers ==========
 
-  private waitForApiResponse(page: Page): Promise<any> {
+  private async ensureContextIsAlive(): Promise<void> {
+    if (!this.context) {
+      throw new ConversationExtractor.ExtractionError('Browser context is missing')
+    }
+    try {
+      await this.context.pages()
+    } catch (_error) {
+      throw new ConversationExtractor.ExtractionError('Browser context is no longer available')
+    }
+  }
+
+  private captureConversationApiResponse(page: Page): Promise<any> {
     let resolved = false
 
     return new Promise((resolve) => {
@@ -169,9 +167,7 @@ export class ConversationExtractor {
         if (!url.includes('/rest/thread/') || url.includes('list_ask_threads')) return
 
         logger.info(`Found matching thread API response: ${url}`)
-        logger.debug(`Response status: ${response.status()}`)
 
-        // If the page is already closed, we cannot read the response body
         if (page.isClosed()) {
           logger.warn('Page is closed – cannot read response body')
           return
@@ -181,27 +177,23 @@ export class ConversationExtractor {
           const json = await response.json()
           if (resolved) return
 
-          logger.debug('Successfully parsed JSON response')
           const parseResult = ConversationExtractor.ApiResponseSchema.safeParse(json)
-          if (parseResult.success) {
-            logger.debug('API response validation passed')
-          } else {
+          if (!parseResult.success) {
             logger.warn(`API response validation failed: ${parseResult.error.message}`)
           }
 
           clearTimeout(timeout)
           resolved = true
           resolve(json)
-        } catch (error) {
+        } catch (_error) {
           if (resolved) return
-          // Log the error but do not resolve – let the timeout handle it
-          logger.error(`Failed to parse JSON from thread API: ${error}`)
+          logger.error(`Failed to parse JSON from thread API: ${_error}`)
         }
       })
     })
   }
 
-  private async navigateToPage(page: Page, url: string): Promise<void> {
+  private async navigateToConversationUrl(page: Page, url: string): Promise<void> {
     const response = await page.goto(url, {
       waitUntil: 'domcontentloaded',
       timeout: 30000,
@@ -232,7 +224,7 @@ export class ConversationExtractor {
 
   private parseConversationData(data: any, url: string): ExtractedConversation | null {
     try {
-      const entries = this.normalizeEntries(data)
+      const entries = this.ensureEntriesFormat(data)
 
       const parseResult = z
         .array(ConversationExtractor.EntrySchema)
@@ -245,13 +237,13 @@ export class ConversationExtractor {
       }
 
       const validEntries = parseResult.data
-      const firstEntry = validEntries[0]
+      const firstEntry = validEntries[0]!
       const id = this.extractIdFromUrl(url)
-      const title = firstEntry?.thread_title ?? data.thread_title ?? 'Untitled'
+      const title = firstEntry.thread_title ?? data.thread_title ?? 'Untitled'
       const spaceName =
-        firstEntry?.collection_info?.title ?? data.collection_info?.title ?? 'General'
+        firstEntry.collection_info?.title ?? data.collection_info?.title ?? 'General'
       const timestamp = this.extractTimestamp(firstEntry, data)
-      const content = this.formatEntries(validEntries, title)
+      const content = this.convertEntriesToMarkdown(validEntries, title)
 
       if (!content) {
         logger.warn(`Thread has empty content after formatting: ${url}`)
@@ -259,15 +251,13 @@ export class ConversationExtractor {
       }
 
       return { id, title, spaceName, timestamp, content }
-      // oxlint-disable-next-line no-unused-vars
     } catch (_error) {
-      logger.error('Failed to parse conversation data. Raw response:')
-      console.error(JSON.stringify(data, null, 2).slice(0, 1000))
+      logger.error('Failed to parse conversation data.')
       return null
     }
   }
 
-  private normalizeEntries(data: any): any[] {
+  private ensureEntriesFormat(data: any): any[] {
     if (Array.isArray(data)) {
       return data
     }
@@ -290,17 +280,16 @@ export class ConversationExtractor {
     return ts ? new Date(ts) : new Date()
   }
 
-  private formatEntries(entries: any[], threadTitle: string): string {
+  private convertEntriesToMarkdown(entries: any[], threadTitle: string): string {
     let markdown = ''
 
     for (let i = 0; i < entries.length; i++) {
       const entry = entries[i]
       let question = entry.query_str ?? ''
 
-      // Fallback for entries without a question
       if (!question) {
         if (i === 0) {
-          question = threadTitle // first turn gets the thread title
+          question = threadTitle
         } else {
           question = 'Follow‑up'
         }

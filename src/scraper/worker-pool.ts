@@ -20,26 +20,21 @@ interface ProcessingStats {
   failures: Array<{ url: string; title: string; reason: string }>
 }
 
-/**
- * Loads and validates the saved authentication state.
- * Returns the storage state object if valid, otherwise null.
- */
-function loadAuthState(): any | null {
-  const authPath = config.authStoragePath
-  if (!existsSync(authPath)) return null
+function loadPersistedAuthenticationState(): any | null {
+  const authenticationStoragePath = config.authStoragePath
+  if (!existsSync(authenticationStoragePath)) return null
   try {
-    const stats = statSync(authPath)
-    const ageMs = Date.now() - stats.mtimeMs
-    const oneDayMs = 24 * 60 * 60 * 1000
-    if (ageMs >= oneDayMs) return null
-    return JSON.parse(readFileSync(authPath, 'utf-8'))
-  } catch {
+    const fileStats = statSync(authenticationStoragePath)
+    const fileAgeInMilliseconds = Date.now() - fileStats.mtimeMs
+    const twentyFourHoursInMilliseconds = 24 * 60 * 60 * 1000
+    if (fileAgeInMilliseconds >= twentyFourHoursInMilliseconds) return null
+    return JSON.parse(readFileSync(authenticationStoragePath, 'utf-8'))
+  } catch (_error) {
     return null
   }
 }
 
 export class WorkerPool {
-  // ========== Custom Error Classes ==========
   static readonly InitializationError = class extends Error {
     constructor(message: string) {
       super(message)
@@ -68,118 +63,100 @@ export class WorkerPool {
     }
   }
 
-  private workers: Worker[] = []
-  private readonly fileWriter: FileWriter
-  private readonly checkpointManager: CheckpointManager
-  private stats: ProcessingStats
-  private sharedContext: BrowserContext | null = null
-  private contextLock: Promise<void> | null = null // simple lock for context recreation
-  private browser: Browser // store browser reference
+  private activeWorkers: Worker[] = []
+  private readonly conversationFileWriter: FileWriter
+  private readonly progressCheckpointManager: CheckpointManager
+  private processingStats: ProcessingStats
+  private sharedBrowserContext: BrowserContext | null = null
+  private contextRecreationLock: Promise<void> | null = null
+  private browserInstance: Browser
 
   constructor(checkpointManager: CheckpointManager, browser: Browser) {
-    this.fileWriter = new FileWriter()
-    this.checkpointManager = checkpointManager
-    this.stats = this.createEmptyStats()
-    this.browser = browser
+    this.conversationFileWriter = new FileWriter()
+    this.progressCheckpointManager = checkpointManager
+    this.processingStats = this.createInitialStats()
+    this.browserInstance = browser
   }
 
-  // ========== Public API ==========
   async initialize(): Promise<void> {
     logger.info(`Initializing worker pool with ${config.parallelWorkers} workers...`)
 
     try {
-      // Create a single shared context with saved auth state
-      await this.recreateSharedContext()
+      await this.recreateSharedBrowserContext()
 
-      // Create workers, each sharing the same context
       for (let i = 0; i < config.parallelWorkers; i++) {
-        const worker = await this.createWorker(i + 1)
-        this.workers.push(worker)
+        const worker = await this.createNewWorker(i + 1)
+        this.activeWorkers.push(worker)
       }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      throw new WorkerPool.InitializationError(`Failed to initialize workers: ${message}`)
+    } catch (_error) {
+      const errorMessage = _error instanceof Error ? _error.message : String(_error)
+      throw new WorkerPool.InitializationError(`Failed to initialize workers: ${errorMessage}`)
     }
 
-    logger.success(`Worker pool ready with ${this.workers.length} workers`)
+    logger.success(`Worker pool ready with ${this.activeWorkers.length} workers`)
   }
 
   async processConversations(conversations: ConversationMetadata[]): Promise<void> {
-    this.resetStats(conversations.length)
+    this.resetProcessingStats(conversations.length)
     logger.info(`Processing ${conversations.length} conversations in parallel...`)
 
-    const queue = [...conversations]
-    const activeWorkers = this.workers.map((worker) => this.runWorkerLoop(worker, queue))
+    const conversationQueue = [...conversations]
+    const workerLoops = this.activeWorkers.map((worker) => this.runWorkerTaskLoop(worker, conversationQueue))
 
-    await Promise.all(activeWorkers)
-    this.printSummary()
+    await Promise.all(workerLoops)
+    this.displayProcessingSummary()
   }
 
   async close(): Promise<void> {
-    if (this.sharedContext) {
-      await this.sharedContext.close()
+    if (this.sharedBrowserContext) {
+      await this.sharedBrowserContext.close()
     }
     logger.info('Worker pool closed')
   }
 
-  // ========== Private Methods ==========
-
-  /**
-   * Recreates the shared browser context using the stored auth state.
-   * Uses a lock to prevent multiple concurrent recreations.
-   */
-  private async recreateSharedContext(): Promise<void> {
-    // If a recreation is already in progress, wait for it
-    if (this.contextLock) {
-      await this.contextLock
+  private async recreateSharedBrowserContext(): Promise<void> {
+    if (this.contextRecreationLock) {
+      await this.contextRecreationLock
       return
     }
 
-    // Create a new lock promise
-    let resolveLock: () => void
-    this.contextLock = new Promise<void>((resolve) => {
-      resolveLock = resolve
+    let resolveContextLock: () => void
+    this.contextRecreationLock = new Promise<void>((resolve) => {
+      resolveContextLock = resolve
     })
 
     try {
-      if (this.sharedContext) {
-        await this.sharedContext.close().catch(() => {})
+      if (this.sharedBrowserContext) {
+        await this.sharedBrowserContext.close().catch(() => {})
       }
 
-      const storageState = loadAuthState()
-      this.sharedContext = storageState
-        ? await this.browser.newContext({ storageState })
-        : await this.browser.newContext()
+      const authenticationState = loadPersistedAuthenticationState()
+      this.sharedBrowserContext = authenticationState
+        ? await this.browserInstance.newContext({ storageState: authenticationState })
+        : await this.browserInstance.newContext()
 
       logger.info('Shared browser context recreated')
     } finally {
-      // Release lock
-      resolveLock!()
-      this.contextLock = null
+      resolveContextLock!()
+      this.contextRecreationLock = null
     }
   }
 
-  /**
-   * Creates a single worker that shares the global context.
-   */
-  private async createWorker(id: number): Promise<Worker> {
-    if (!this.sharedContext) {
+  private async createNewWorker(workerId: number): Promise<Worker> {
+    if (!this.sharedBrowserContext) {
       throw new WorkerPool.InitializationError('Shared context not initialized')
     }
 
-    const extractor = new ConversationExtractor(this.sharedContext)
+    const conversationExtractor = new ConversationExtractor(this.sharedBrowserContext)
 
     return {
-      id,
-      extractor,
+      id: workerId,
+      extractor: conversationExtractor,
       isBusy: false,
     }
   }
 
-  /**
-   * Creates an empty stats object.
-   */
-  private createEmptyStats(): ProcessingStats {
+  private createInitialStats(): ProcessingStats {
     return {
       total: 0,
       succeeded: 0,
@@ -189,12 +166,9 @@ export class WorkerPool {
     }
   }
 
-  /**
-   * Resets stats for a new processing run.
-   */
-  private resetStats(total: number): void {
-    this.stats = {
-      total,
+  private resetProcessingStats(totalCount: number): void {
+    this.processingStats = {
+      total: totalCount,
       succeeded: 0,
       failed: 0,
       skipped: 0,
@@ -202,59 +176,48 @@ export class WorkerPool {
     }
   }
 
-  /**
-   * Worker loop: continuously pulls tasks from the queue until empty.
-   */
-  private async runWorkerLoop(worker: Worker, queue: ConversationMetadata[]): Promise<void> {
+  private async runWorkerTaskLoop(worker: Worker, queue: ConversationMetadata[]): Promise<void> {
     while (queue.length > 0) {
       const conversation = queue.shift()
       if (!conversation) break
 
-      await this.processConversation(worker, conversation)
+      await this.processSingleConversation(worker, conversation)
     }
     logger.debug(`Worker ${worker.id} finished (queue empty)`)
   }
 
-  /**
-   * Processes a single conversation: delay, extract, validate, save, update stats/checkpoint.
-   * If a context error occurs, attempts to recreate the context and retry once.
-   */
-  private async processConversation(
+  private async processSingleConversation(
     worker: Worker,
     conversation: ConversationMetadata
   ): Promise<void> {
     worker.isBusy = true
 
     try {
-      await this.randomDelay()
-      this.logWorkerStart(worker, conversation)
+      await this.introduceRandomAntiScrapingDelay()
+      this.logConversationProcessingStart(worker, conversation)
 
-      let extracted: ExtractedConversation | null = null
-      let retried = false
+      let extractedData: ExtractedConversation | null = null
+      let hasAttemptedContextRecreation = false
 
-      // Attempt extraction (with one retry on context error)
       while (true) {
         try {
-          extracted = await worker.extractor.extract(conversation.url)
-          break // success
-        } catch (error) {
-          const isContextError = this.isContextError(error)
-          if (isContextError && !retried) {
+          extractedData = await worker.extractor.extract(conversation.url)
+          break
+        } catch (_error) {
+          const isDeadContext = this.checkIfErrorIsDueToDeadContext(_error)
+          if (isDeadContext && !hasAttemptedContextRecreation) {
             logger.warn(`Worker ${worker.id}: context error, attempting to recreate...`)
-            await this.recreateSharedContext()
-            // Update worker's extractor with the new context
-            worker.extractor = new ConversationExtractor(this.sharedContext!)
-            retried = true
-            // Continue loop to retry
+            await this.recreateSharedBrowserContext()
+            worker.extractor = new ConversationExtractor(this.sharedBrowserContext!)
+            hasAttemptedContextRecreation = true
           } else {
-            // Re-throw if not a context error or retry already attempted
-            throw error
+            throw _error
           }
         }
       }
 
-      if (!extracted) {
-        this.handleSkipped(
+      if (!extractedData) {
+        this.handleConversationSkipped(
           worker,
           conversation,
           'No extractable content (empty thread or auth issue)'
@@ -262,168 +225,139 @@ export class WorkerPool {
         return
       }
 
-      const filepath = this.fileWriter.write(extracted)
-      await this.validateExtractedFile(filepath, extracted)
+      const savedFilePath = this.conversationFileWriter.write(extractedData)
+      await this.verifySavedMarkdownFile(savedFilePath, extractedData)
 
-      this.logWorkerSuccess(worker, filepath)
-      this.stats.succeeded++
-      this.checkpointManager.markProcessed(conversation.url)
-    } catch (error) {
-      this.handleProcessingError(worker, conversation, error)
+      this.logConversationProcessingSuccess(worker, savedFilePath)
+      this.processingStats.succeeded++
+      this.progressCheckpointManager.markProcessed(conversation.url)
+    } catch (_error) {
+      this.handleConversationProcessingError(worker, conversation, _error)
     } finally {
       worker.isBusy = false
     }
   }
 
-  /**
-   * Determines if an error is caused by a dead browser context.
-   */
-  private isContextError(error: unknown): boolean {
-    const message = error instanceof Error ? error.message : String(error)
+  private checkIfErrorIsDueToDeadContext(error: unknown): boolean {
+    const errorMessage = error instanceof Error ? error.message : String(error)
     return (
-      message.includes('Target page, context or browser has been closed') ||
-      message.includes('Failed to open a new tab') ||
-      message.includes('Protocol error') ||
-      message.includes('browserContext.newPage')
+      errorMessage.includes('Target page, context or browser has been closed') ||
+      errorMessage.includes('Failed to open a new tab') ||
+      errorMessage.includes('Protocol error') ||
+      errorMessage.includes('browserContext.newPage')
     )
   }
 
-  /**
-   * Adds a random delay to avoid overwhelming the server.
-   */
-  private async randomDelay(): Promise<void> {
-    const delayMs = 1000 + Math.random() * 2000
-    await new Promise((resolve) => setTimeout(resolve, delayMs))
+  private async introduceRandomAntiScrapingDelay(): Promise<void> {
+    const baseDelayInMs = 1000
+    const randomJitterInMs = Math.random() * 2000
+    await new Promise((resolve) => setTimeout(resolve, baseDelayInMs + randomJitterInMs))
   }
 
-  /**
-   * Logs the start of a conversation processing.
-   */
-  private logWorkerStart(worker: Worker, conversation: ConversationMetadata): void {
-    const shortTitle = conversation.title.substring(0, 80)
-    logger.info(`Worker ${worker.id} → ${shortTitle} (${conversation.url})`)
+  private logConversationProcessingStart(worker: Worker, conversation: ConversationMetadata): void {
+    const truncatedTitle = conversation.title.substring(0, 80)
+    logger.info(`Worker ${worker.id} → ${truncatedTitle} (${conversation.url})`)
   }
 
-  /**
-   * Logs successful processing.
-   */
-  private logWorkerSuccess(worker: Worker, filepath: string): void {
+  private logConversationProcessingSuccess(worker: Worker, filepath: string): void {
     logger.success(`Worker ${worker.id} saved: ${filepath}`)
   }
 
-  /**
-   * Validates that the written file meets expectations.
-   * Throws FileValidationError if validation fails.
-   */
-  private async validateExtractedFile(
+  private async verifySavedMarkdownFile(
     filepath: string,
     extracted: ExtractedConversation
   ): Promise<void> {
-    const validationError = this.validateFile(filepath, extracted)
-    if (validationError) {
-      throw new WorkerPool.FileValidationError(validationError)
+    const validationErrorMessage = this.performFileIntegrityChecks(filepath, extracted)
+    if (validationErrorMessage) {
+      throw new WorkerPool.FileValidationError(validationErrorMessage)
     }
   }
 
-  /**
-   * Performs file existence, size, and content checks.
-   * Returns error message string or null if valid.
-   */
-  private validateFile(filepath: string, extracted: ExtractedConversation): string | null {
+  private performFileIntegrityChecks(filepath: string, extracted: ExtractedConversation): string | null {
     try {
       if (!existsSync(filepath)) {
         return 'File not found after write'
       }
 
-      const stats = statSync(filepath)
-      if (stats.size === 0) {
+      const fileStats = statSync(filepath)
+      if (fileStats.size === 0) {
         return 'File is empty'
       }
 
-      if (stats.size < 50) {
-        return `File too small (${stats.size} bytes)`
+      if (fileStats.size < 50) {
+        return `File too small (${fileStats.size} bytes)`
       }
 
-      const content = readFileSync(filepath, 'utf-8')
+      const fileContent = readFileSync(filepath, 'utf-8')
 
-      if (!content.includes('##')) {
+      if (!fileContent.includes('##')) {
         return 'Missing question headers (##)'
       }
 
-      if (!content.includes('---')) {
+      if (!fileContent.includes('---')) {
         return 'Missing separators (---)'
       }
 
-      if (!content.includes(`# ${extracted.title}`)) {
+      if (!fileContent.includes(`# ${extracted.title}`)) {
         return 'Title not found in file content'
       }
 
       return null
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      return `Validation exception: ${message}`
+    } catch (_error) {
+      const errorMessage = _error instanceof Error ? _error.message : String(_error)
+      return `Validation exception: ${errorMessage}`
     }
   }
 
-  /**
-   * Handles a skipped conversation (extractor returned null).
-   */
-  private handleSkipped(worker: Worker, conversation: ConversationMetadata, reason: string): void {
+  private handleConversationSkipped(worker: Worker, conversation: ConversationMetadata, reason: string): void {
     logger.warn(`Worker ${worker.id} skipped: ${conversation.title} (${reason})`)
-    this.stats.skipped++
-    this.stats.failures.push({
+    this.processingStats.skipped++
+    this.processingStats.failures.push({
       url: conversation.url,
       title: conversation.title,
       reason,
     })
   }
 
-  /**
-   * Handles errors during processing (extraction, validation, writing).
-   */
-  private handleProcessingError(
+  private handleConversationProcessingError(
     worker: Worker,
     conversation: ConversationMetadata,
     error: unknown
   ): void {
-    const message = error instanceof Error ? error.message : String(error)
+    const errorMessage = error instanceof Error ? error.message : String(error)
     logger.error(`Worker ${worker.id} failed for ${conversation.title}`)
     logger.error(`  URL: ${conversation.url}`)
-    logger.error(`  Error: ${message}`)
+    logger.error(`  Error: ${errorMessage}`)
 
-    this.stats.failed++
-    this.stats.failures.push({
+    this.processingStats.failed++
+    this.processingStats.failures.push({
       url: conversation.url,
       title: conversation.title,
-      reason: message,
+      reason: errorMessage,
     })
-    // Do not mark as processed
   }
 
-  /**
-   * Prints a detailed summary of processing results.
-   */
-  private printSummary(): void {
-    const line = '='.repeat(70)
-    logger.info(`\n${line}`)
+  private displayProcessingSummary(): void {
+    const horizontalLine = '='.repeat(70)
+    logger.info(`\n${horizontalLine}`)
     logger.info('📊 EXPORT SUMMARY')
-    logger.info(line)
+    logger.info(horizontalLine)
 
-    logger.info(`Total conversations: ${this.stats.total}`)
-    logger.success(`✓ Successfully exported: ${this.stats.succeeded}`)
+    logger.info(`Total conversations: ${this.processingStats.total}`)
+    logger.success(`✓ Successfully exported: ${this.processingStats.succeeded}`)
 
-    if (this.stats.skipped > 0) {
-      logger.warn(`⚠ Skipped (no extractable content): ${this.stats.skipped}`)
+    if (this.processingStats.skipped > 0) {
+      logger.warn(`⚠ Skipped (no extractable content): ${this.processingStats.skipped}`)
     }
 
-    if (this.stats.failed > 0) {
-      logger.error(`✗ Failed: ${this.stats.failed}`)
+    if (this.processingStats.failed > 0) {
+      logger.error(`✗ Failed: ${this.processingStats.failed}`)
     }
 
-    if (this.stats.failures.length > 0) {
+    if (this.processingStats.failures.length > 0) {
       logger.info('\n❌ Failed / Skipped Conversations:')
       logger.info('-'.repeat(70))
-      for (const failure of this.stats.failures) {
+      for (const failure of this.processingStats.failures) {
         logger.error(`\n  ${failure.title}`)
         logger.error(`    URL: ${failure.url}`)
         logger.error(`    Reason: ${failure.reason}`)
@@ -431,9 +365,9 @@ export class WorkerPool {
       logger.info()
     }
 
-    logger.info(`${line}\n`)
+    logger.info(`${horizontalLine}\n`)
 
-    if (this.stats.failed > 0 || this.stats.skipped > 0) {
+    if (this.processingStats.failed > 0 || this.processingStats.skipped > 0) {
       logger.info('💡 Failed/skipped conversations were NOT marked as processed.')
       logger.info('   You can rerun the scraper to retry them.')
     }

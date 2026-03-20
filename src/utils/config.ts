@@ -15,7 +15,6 @@ const configSchema = z.object({
   exportDir: z.string().min(1),
   checkpointPath: z.string().min(1),
   vectorIndexPath: z.string().min(1),
-  geminiApiKey: z.string().optional(),
   ollamaUrl: z.string().url(),
   ollamaModel: z.string().min(1),
   ollamaEmbedModel: z.string().min(1),
@@ -29,17 +28,21 @@ export type Config = z.infer<typeof configSchema>
 export type WaitMode = Config['waitMode']
 
 function parseEnvConfig(): Config {
+  const defaultOllamaUrl = 'http://localhost:11434'
+  const defaultRateLimitMs = '500'
+  const defaultParallelWorkers = '5'
+  const defaultCheckpointInterval = '10'
+
   const rawConfig = {
     authStoragePath: process.env['AUTH_STORAGE_PATH'] ?? '.storage/auth.json',
     waitMode: process.env['WAIT_MODE'] ?? 'dynamic',
-    rateLimitMs: parseInt(process.env['RATE_LIMIT_MS'] ?? '500', 10),
-    parallelWorkers: parseInt(process.env['PARALLEL_WORKERS'] ?? '5', 10),
-    checkpointSaveInterval: parseInt(process.env['CHECKPOINT_SAVE_INTERVAL'] ?? '10', 10),
+    rateLimitMs: parseInt(process.env['RATE_LIMIT_MS'] ?? defaultRateLimitMs, 10),
+    parallelWorkers: parseInt(process.env['PARALLEL_WORKERS'] ?? defaultParallelWorkers, 10),
+    checkpointSaveInterval: parseInt(process.env['CHECKPOINT_SAVE_INTERVAL'] ?? defaultCheckpointInterval, 10),
     exportDir: process.env['EXPORT_DIR'] ?? 'exports',
     checkpointPath: process.env['CHECKPOINT_PATH'] ?? '.storage/checkpoint.json',
     vectorIndexPath: process.env['VECTOR_INDEX_PATH'] ?? '.storage/vector-index',
-    geminiApiKey: process.env['GEMINI_API_KEY'],
-    ollamaUrl: process.env['OLLAMA_URL'] ?? 'http://localhost:11434',
+    ollamaUrl: process.env['OLLAMA_URL'] ?? defaultOllamaUrl,
     ollamaModel: process.env['OLLAMA_MODEL'] ?? 'llama3.1',
     ollamaEmbedModel: process.env['OLLAMA_EMBED_MODEL'] ?? 'nomic-embed-text',
     enableVectorSearch: process.env['ENABLE_VECTOR_SEARCH'],
@@ -54,7 +57,7 @@ function parseEnvConfig(): Config {
       const envVar = camelToSnakeCase(path).toUpperCase()
       logger.error(`  ${envVar}: ${issue.message}`)
     })
-    logger.error('\\nPlease check your .env file and fix the above errors.')
+    logger.error('\nPlease check your .env file and fix the above errors.')
     process.exit(1)
   }
 

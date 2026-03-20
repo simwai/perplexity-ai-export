@@ -5,25 +5,26 @@ export function showHelp(): void {
   logger.info(chalk.bold('\n📚 Available Actions:\n'))
 
   logger.info(chalk.cyan('  start'))
-  logger.info('    Run the scraper. If a checkpoint exists, you can resume or restart.\n')
+  logger.info('    Run the scraper to export your Perplexity history. If a checkpoint exists, you can resume or restart.\n')
 
   logger.info(chalk.cyan('  search'))
-  logger.info('    Search exported conversations (choose mode: auto / semantic / exact).\n')
+  logger.info('    Search through exported conversations using various modes: auto, semantic, RAG, or exact text.\n')
 
   logger.info(chalk.cyan('  vectorize'))
-  logger.info('    Build or rebuild the local vector index from exports using Ollama.\n')
+  logger.info('    Build or update the local vector index from your exports to enable semantic search and RAG.\n')
 
   logger.info(chalk.cyan('  reset'))
-  logger.info('    Delete all stored checkpoints, authentication data, and vector index.\n')
+  logger.info('    Remove all stored checkpoints, authentication data, and the vector index to start fresh.\n')
 
   logger.info(chalk.cyan('  help'))
-  logger.info('    Show this help message.\n')
+  logger.info('    Display this help overview.\n')
 
   logger.info(chalk.cyan('  exit'))
-  logger.info('    Exit the tool.\n')
+  logger.info('    Close the application.\n')
 
-  logger.info(chalk.bold('💡 Tips:\n'))
-  logger.info('  • Use auto mode for natural language questions.')
-  logger.info('  • Use semantic search when you want fuzzy matches.')
-  logger.info('  • Use exact search for precise string matches.\n')
+  logger.info(chalk.bold('💡 Search & RAG Tips:\n'))
+  logger.info('  • RAG: Ask history with Ollama. Combines vector retrieval with AI generation for comprehensive answers.')
+  logger.info('  • Auto Search: Intelligently switches between semantic and exact search based on query length.')
+  logger.info('  • Semantic: Best for finding conceptually similar topics even without exact keyword matches.')
+  logger.info('  • Exact: Ideal for finding specific phrases or technical terms.\n')
 }

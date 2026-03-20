@@ -1,11 +1,14 @@
 import sanitize from 'sanitize-filename'
 
 export function sanitizeFilename(filename: string): string {
+  const illegalCharacterReplacement = '_'
+  const maximumFilenameLength = 100
+
   return sanitize(filename, {
-    replacement: '_', // Replace illegal chars with underscore
+    replacement: illegalCharacterReplacement,
   })
-    .replace(/\s+/g, '_') // Replace spaces with underscores
-    .substring(0, 100) // Keep max length limit
+    .replace(/\s+/g, '_')
+    .substring(0, maximumFilenameLength)
 }
 
 export function sanitizeSpaceName(spaceName: string): string {
