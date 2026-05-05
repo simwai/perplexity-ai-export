@@ -145,7 +145,9 @@ export class ConversationExtractor {
     try {
       await this.context.pages()
     } catch (error) {
-      throw new ConversationExtractor.ExtractionError('Browser context is no longer available', { cause: error })
+      throw new ConversationExtractor.ExtractionError('Browser context is no longer available', {
+        cause: error,
+      })
     }
   }
 

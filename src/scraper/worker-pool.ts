@@ -90,7 +90,9 @@ export class WorkerPool {
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error)
-      throw new WorkerPool.InitializationError(`Failed to initialize workers: ${errorMessage}`, { cause: error })
+      throw new WorkerPool.InitializationError(`Failed to initialize workers: ${errorMessage}`, {
+        cause: error,
+      })
     }
 
     logger.success(`Worker pool ready with ${this.activeWorkers.length} workers`)

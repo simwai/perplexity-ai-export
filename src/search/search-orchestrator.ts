@@ -58,7 +58,9 @@ export class SearchOrchestrator {
       }
     } catch (error) {
       const searchFailedErrorMessage = `Search failed: ${error instanceof Error ? error.message : String(error)}`
-      throw new SearchOrchestrator.SearchOrchestratorError(searchFailedErrorMessage, { cause: error })
+      throw new SearchOrchestrator.SearchOrchestratorError(searchFailedErrorMessage, {
+        cause: error,
+      })
     }
   }
 

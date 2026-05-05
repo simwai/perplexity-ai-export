@@ -4,7 +4,7 @@ import { sep } from 'node:path'
 import { BrowserManager } from '../scraper/browser.js'
 import { CheckpointManager } from '../scraper/checkpoint-manager.js'
 import { WorkerPool } from '../scraper/worker-pool.js'
-import { SearchOrchestrator } from '../search/search-orchestrator.js'
+import { SearchOrchestrator, type SearchMode } from '../search/search-orchestrator.js'
 import { logger } from '../utils/logger.js'
 import { showHelp } from './help.js'
 import { LibraryDiscovery } from '../scraper/library-discovery.js'
@@ -227,7 +227,7 @@ export class CommandHandler {
     })
   }
 
-  private async promptForSearchMode(): Promise<string> {
+  private async promptForSearchMode(): Promise<SearchMode> {
     return select({
       message: 'Search mode:',
       choices: [

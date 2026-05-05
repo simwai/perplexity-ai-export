@@ -210,7 +210,10 @@ export class VectorStore {
         })
       }
     } catch (error) {
-      logger.error(`Batch embedding failed: ${error instanceof Error ? error.message : String(error)}`, error)
+      logger.error(
+        `Batch embedding failed: ${error instanceof Error ? error.message : String(error)}`,
+        error
+      )
     }
   }
 

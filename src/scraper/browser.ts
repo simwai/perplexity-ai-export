@@ -77,10 +77,9 @@ export class BrowserManager {
       return this.getActivePage()
     } catch (error) {
       if (error instanceof Error) throw error
-      throw new BrowserManager.BrowserLaunchError(
-        `Unexpected error: ${String(error)}`,
-        { cause: error }
-      )
+      throw new BrowserManager.BrowserLaunchError(`Unexpected error: ${String(error)}`, {
+        cause: error,
+      })
     }
   }
 

@@ -126,8 +126,9 @@ export class LibraryDiscovery {
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error)
       throw new LibraryDiscovery.PaginationError(
-        `Failed to fetch batch at offset ${offset}: ${errorMessage}`
-      , { cause: error })
+        `Failed to fetch batch at offset ${offset}: ${errorMessage}`,
+        { cause: error }
+      )
     }
   }
 
