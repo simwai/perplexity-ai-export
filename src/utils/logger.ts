@@ -11,7 +11,13 @@ export const logger = {
   },
 
   warn(...args: unknown[]): void {
-    console.log(chalk.yellow('⚠'), ...args)
+    const processedArgs = args.map((arg) => {
+      if (arg instanceof Error) {
+        return inspect(arg, { depth: null, colors: true })
+      }
+      return arg
+    })
+    console.log(chalk.yellow('⚠'), ...processedArgs)
   },
 
   error(...args: unknown[]): void {

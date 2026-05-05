@@ -103,9 +103,12 @@ export class ConversationExtractor {
     try {
       page = await this.context.newPage()
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error)
       throw new ConversationExtractor.ExtractionError(
-        `Failed to create new page: ${error instanceof Error ? error.message : String(error)}`,
-        { cause: error }
+        `Failed to create new page: ${errorMessage}`,
+        {
+          cause: error,
+        }
       )
     }
 
@@ -128,11 +131,12 @@ export class ConversationExtractor {
       return parsed
     } catch (error) {
       if (error instanceof Error) throw error
-      throw new ConversationExtractor.ExtractionError(String(error), { cause: error })
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      throw new ConversationExtractor.ExtractionError(errorMessage, { cause: error })
     } finally {
       if (page) {
         await page.close().catch((e: Error) => {
-          logger.warn(`Failed to close page: ${e}`, e)
+          logger.warn(`Failed to close page: ${e.message}`, e)
         })
       }
     }
@@ -190,7 +194,8 @@ export class ConversationExtractor {
           resolve(json)
         } catch (error) {
           if (resolved) return
-          logger.error(`Failed to parse JSON from thread API: ${error}`, error)
+          const errorMessage = error instanceof Error ? error.message : String(error)
+          logger.error(`Failed to parse JSON from thread API: ${errorMessage}`, error)
         }
       })
     })
@@ -255,7 +260,8 @@ export class ConversationExtractor {
 
       return { id, title, spaceName, timestamp, content }
     } catch (error) {
-      logger.error('Failed to parse conversation data.', error)
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      logger.error(`Failed to parse conversation data: ${errorMessage}`, error)
       return null
     }
   }

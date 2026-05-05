@@ -58,7 +58,7 @@ export class CommandHandler {
     try {
       await this.executeFullScrapingFlow()
     } catch (error) {
-      logger.error('Scraper failed:', error)
+      logger.error('Scraper failed:', error instanceof Error ? error : String(error))
     }
   }
 
@@ -96,7 +96,9 @@ export class CommandHandler {
         ripgrepSearchOptions
       )
     } catch (error) {
-      logger.error('Search failed', error)
+      if (error instanceof Error) {
+        logger.error(error.message, error)
+      }
     }
   }
 
@@ -168,9 +170,8 @@ export class CommandHandler {
 
       logger.success('\n✨ Export complete!')
     } catch (error) {
-      throw new CommandHandler.ScraperError(
-        `Scraping failed: ${error instanceof Error ? error.message : String(error)}`
-      )
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      throw new CommandHandler.ScraperError(`Scraping failed: ${errorMessage}`, { cause: error })
     } finally {
       await browserManager.close()
     }
@@ -247,14 +248,15 @@ export class CommandHandler {
       await this.conversationSearchOrchestrator.validateVectorSearch()
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error)
-      logger.error('Vector search validation failed', error)
+      logger.error(errorMessage, error)
       logger.info('Start Ollama with the embedding model, then run "vectorize".')
       throw new CommandHandler.ValidationError(errorMessage, { cause: error })
     }
   }
 
   private async handleVectorSearchValidationRetry(error: unknown): Promise<void> {
-    logger.error('Vector search validation failed', error)
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    logger.error(errorMessage)
 
     const shouldRetry = await confirm({
       message:
@@ -269,7 +271,8 @@ export class CommandHandler {
     try {
       await this.conversationSearchOrchestrator.validateVectorSearch()
     } catch (error) {
-      logger.error('Retry validation failed', error)
+      const nestedErrorMessage = error instanceof Error ? error.message : String(error)
+      logger.error(nestedErrorMessage, error)
       return
     }
 

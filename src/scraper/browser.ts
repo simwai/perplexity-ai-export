@@ -77,9 +77,7 @@ export class BrowserManager {
       return this.getActivePage()
     } catch (error) {
       if (error instanceof Error) throw error
-      throw new BrowserManager.BrowserLaunchError(`Unexpected error: ${String(error)}`, {
-        cause: error,
-      })
+      throw new BrowserManager.BrowserLaunchError(`Unexpected error: ${String(error)}`)
     }
   }
 
@@ -99,10 +97,10 @@ export class BrowserManager {
         args: ['--disable-blink-features=AutomationControlled'],
       })
     } catch (error) {
-      throw new BrowserManager.BrowserLaunchError(
-        `Failed to launch browser: ${error instanceof Error ? error.message : String(error)}`,
-        { cause: error }
-      )
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      throw new BrowserManager.BrowserLaunchError(`Failed to launch browser: ${errorMessage}`, {
+        cause: error,
+      })
     }
   }
 
@@ -153,10 +151,10 @@ export class BrowserManager {
         timeout: 3000,
       })
     } catch (error) {
-      throw new BrowserManager.NavigationError(
-        `Failed to navigate to settings: ${error instanceof Error ? error.message : String(error)}`,
-        { cause: error }
-      )
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      throw new BrowserManager.NavigationError(`Failed to navigate to settings: ${errorMessage}`, {
+        cause: error,
+      })
     }
   }
 

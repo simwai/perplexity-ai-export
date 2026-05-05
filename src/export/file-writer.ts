@@ -32,8 +32,9 @@ export class FileWriter {
       writeFileSync(destinationFilePath, markdownContent, 'utf-8')
       return destinationFilePath
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error)
       throw new FileWriter.WriteError(
-        `Failed to write conversation ${conversation.id}: ${error instanceof Error ? error.message : String(error)}`,
+        `Failed to write conversation ${conversation.id}: ${errorMessage}`,
         { cause: error }
       )
     }

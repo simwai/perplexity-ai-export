@@ -124,7 +124,7 @@ export class CheckpointManager {
       return parsedCheckpointData
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error)
-      logger.warn(`Failed to load checkpoint (${errorMessage}), starting fresh`, error)
+      logger.warn(`Failed to load checkpoint (${errorMessage}, error), starting fresh`)
       return this.createInitialCheckpoint()
     }
   }
@@ -166,10 +166,10 @@ export class CheckpointManager {
     try {
       writeFileSync(config.checkpointPath, JSON.stringify(this.currentCheckpoint, null, 2))
     } catch (error) {
-      throw new CheckpointManager.SaveError(
-        `Failed to write checkpoint: ${error instanceof Error ? error.message : String(error)}`,
-        { cause: error }
-      )
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      throw new CheckpointManager.SaveError(`Failed to write checkpoint: ${errorMessage}`, {
+        cause: error,
+      })
     }
   }
 }

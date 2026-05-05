@@ -52,7 +52,7 @@ export class OllamaClient {
       logger.success('Ollama embeddings look good.')
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
-      throw new OllamaClient.OllamaError(`Ollama validation failed: ${message}`, { cause: error })
+      throw new OllamaClient.OllamaError(`Ollama validation failed: ${message}`)
     }
   }
 
@@ -70,7 +70,7 @@ export class OllamaClient {
         let errorBody = ''
         try {
           errorBody = await response.text()
-        } catch (errorReadingResponseBody) {
+        } catch (error) {
           /* oxlint-disable-next-line no-empty */
         }
         logger.error(`Ollama HTTP ${response.status}`, { body, errorBody: errorBody.slice(0, 500) })
@@ -81,11 +81,11 @@ export class OllamaClient {
 
       return await response.json()
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error)
       if (error instanceof OllamaClient.OllamaError) throw error
-      throw new OllamaClient.OllamaError(
-        `Network error while calling Ollama: ${error instanceof Error ? error.message : String(error)}`,
-        { cause: error }
-      )
+      throw new OllamaClient.OllamaError(`Network error while calling Ollama: ${errorMessage}`, {
+        cause: error,
+      })
     }
   }
 

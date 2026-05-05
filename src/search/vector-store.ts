@@ -54,10 +54,10 @@ export class VectorStore {
     try {
       await this.ollamaClient.validate()
     } catch (error) {
-      throw new VectorStore.VectorStoreError(
-        `Vector store validation failed: ${error instanceof Error ? error.message : String(error)}`,
-        { cause: error }
-      )
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      throw new VectorStore.VectorStoreError(`Vector store validation failed: ${errorMessage}`, {
+        cause: error,
+      })
     }
   }
 
@@ -82,10 +82,10 @@ export class VectorStore {
       const rawResults = await this.queryVectorIndex(queryEmbedding, query, limit)
       return this.formatVectorSearchResults(rawResults)
     } catch (error) {
-      throw new VectorStore.SearchError(
-        `Vector search failed: ${error instanceof Error ? error.message : String(error)}`,
-        { cause: error }
-      )
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      throw new VectorStore.SearchError(`Vector search failed: ${errorMessage}`, {
+        cause: error,
+      })
     }
   }
 
@@ -104,10 +104,10 @@ export class VectorStore {
       )
       return this.formatVectorSearchResults(rawResults)
     } catch (error) {
-      throw new VectorStore.SearchError(
-        `Filtered vector search failed: ${error instanceof Error ? error.message : String(error)}`,
-        { cause: error }
-      )
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      throw new VectorStore.SearchError(`Filtered vector search failed: ${errorMessage}`, {
+        cause: error,
+      })
     }
   }
 
@@ -210,10 +210,8 @@ export class VectorStore {
         })
       }
     } catch (error) {
-      logger.error(
-        `Batch embedding failed: ${error instanceof Error ? error.message : String(error)}`,
-        error
-      )
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      logger.error(`Batch embedding failed: ${errorMessage}`, error)
     }
   }
 
