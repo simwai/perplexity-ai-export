@@ -15,8 +15,8 @@ const generationResponseSchema = z.object({
 
 export class OllamaClient {
   static readonly OllamaError = class extends Error {
-    constructor(message: string) {
-      super(message)
+    constructor(message: string, options?: ErrorOptions) {
+      super(message, options)
       this.name = 'OllamaError'
     }
   }
@@ -50,9 +50,9 @@ export class OllamaClient {
     try {
       await this.embed(['ping'])
       logger.success('Ollama embeddings look good.')
-    } catch (_error) {
-      const message = _error instanceof Error ? _error.message : String(_error)
-      throw new OllamaClient.OllamaError(`Ollama validation failed: ${message}`)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      throw new OllamaClient.OllamaError(`Ollama validation failed: ${message}`, { cause: error })
     }
   }
 
@@ -70,7 +70,7 @@ export class OllamaClient {
         let errorBody = ''
         try {
           errorBody = await response.text()
-        } catch (_errorReadingResponseBody) {
+        } catch (errorReadingResponseBody) {
           /* oxlint-disable-next-line no-empty */
         }
         logger.error(`Ollama HTTP ${response.status}`, { body, errorBody: errorBody.slice(0, 500) })
@@ -80,10 +80,11 @@ export class OllamaClient {
       }
 
       return await response.json()
-    } catch (_error) {
-      if (_error instanceof OllamaClient.OllamaError) throw _error
+    } catch (error) {
+      if (error instanceof OllamaClient.OllamaError) throw error
       throw new OllamaClient.OllamaError(
-        `Network error while calling Ollama: ${_error instanceof Error ? _error.message : String(_error)}`
+        `Network error while calling Ollama: ${error instanceof Error ? error.message : String(error)}`,
+        { cause: error }
       )
     }
   }

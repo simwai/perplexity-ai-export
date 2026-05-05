@@ -58,9 +58,9 @@ export class RagOrchestrator {
       if (feedback.status === 'improvement-needed') {
         logger.warn(`Self-Correction: ${chalk.gray(feedback.suggestion)}`)
       }
-    } catch (_error) {
-      const errorMessage = _error instanceof Error ? _error.message : String(_error)
-      logger.error(`Mightiest RAG failed: ${errorMessage}`)
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      logger.error(`Mightiest RAG failed: ${errorMessage}`, error)
     }
   }
 
@@ -86,7 +86,7 @@ Return JSON: {"strategy": "...", "queries": [], "hardKeywords": [], "filters": {
         hardKeywords: json.hardKeywords || [],
         filters: json.filters || {},
       }
-    } catch (_err) {
+    } catch (error) {
       return { strategy: 'precise', queries: [originalQuestion], hardKeywords: [], filters: {} }
     }
   }
@@ -120,7 +120,7 @@ Return JSON: {"strategy": "...", "queries": [], "hardKeywords": [], "filters": {
           score: 1.0,
         }))
         keywordPool.push(...converted)
-      } catch (_err) {
+      } catch (error) {
         /* oxlint-disable-next-line no-empty */
       }
     }
@@ -188,7 +188,7 @@ Return JSON array: [{"fact": "...", "node_id": N, "thread": "..."}]
             thread: f.thread || original?.meta['title'] || 'Unknown',
           })
         })
-      } catch (_err) {
+      } catch (error) {
         batch.forEach((r) => {
           findings.push({
             fact: r.meta['snippet'],
@@ -246,7 +246,7 @@ Return JSON: {"status": "ok" | "missed-info", "suggestion": "..."}
     try {
       const res = await this.ollamaClient.generate(prompt)
       return JSON.parse(res.match(/\{[\s\S]*\}/)?.[0] || '{"status": "ok"}')
-    } catch (_err) {
+    } catch (error) {
       return { status: 'ok' }
     }
   }

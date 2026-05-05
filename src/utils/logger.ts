@@ -1,4 +1,5 @@
 import chalk from 'chalk'
+import { inspect } from 'node:util'
 
 export const logger = {
   info(...args: unknown[]): void {
@@ -14,7 +15,13 @@ export const logger = {
   },
 
   error(...args: unknown[]): void {
-    console.error(chalk.red('✗'), ...args)
+    const processedArgs = args.map((arg) => {
+      if (arg instanceof Error) {
+        return inspect(arg, { depth: null, colors: true })
+      }
+      return arg
+    })
+    console.error(chalk.red('✗'), ...processedArgs)
   },
 
   debug(...args: unknown[]): void {

@@ -25,22 +25,22 @@ export interface Checkpoint {
 
 export class CheckpointManager {
   static readonly LoadError = class extends Error {
-    constructor(message: string) {
-      super(message)
+    constructor(message: string, options?: ErrorOptions) {
+      super(message, options)
       this.name = 'CheckpointLoadError'
     }
   }
 
   static readonly SaveError = class extends Error {
-    constructor(message: string) {
-      super(message)
+    constructor(message: string, options?: ErrorOptions) {
+      super(message, options)
       this.name = 'CheckpointSaveError'
     }
   }
 
   static readonly ValidationError = class extends Error {
-    constructor(message: string) {
-      super(message)
+    constructor(message: string, options?: ErrorOptions) {
+      super(message, options)
       this.name = 'CheckpointValidationError'
     }
   }
@@ -122,9 +122,9 @@ export class CheckpointManager {
       const parsedCheckpointData = JSON.parse(checkpointFileContent)
       this.assertValidCheckpointStructure(parsedCheckpointData)
       return parsedCheckpointData
-    } catch (_error) {
-      const errorMessage = _error instanceof Error ? _error.message : String(_error)
-      logger.warn(`Failed to load checkpoint (${errorMessage}), starting fresh`)
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      logger.warn(`Failed to load checkpoint (${errorMessage}), starting fresh`, error)
       return this.createInitialCheckpoint()
     }
   }
@@ -165,9 +165,10 @@ export class CheckpointManager {
     this.currentCheckpoint.lastUpdated = new Date().toISOString()
     try {
       writeFileSync(config.checkpointPath, JSON.stringify(this.currentCheckpoint, null, 2))
-    } catch (_error) {
+    } catch (error) {
       throw new CheckpointManager.SaveError(
-        `Failed to write checkpoint: ${_error instanceof Error ? _error.message : String(_error)}`
+        `Failed to write checkpoint: ${error instanceof Error ? error.message : String(error)}`,
+        { cause: error }
       )
     }
   }

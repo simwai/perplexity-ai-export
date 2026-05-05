@@ -6,29 +6,29 @@ import { confirm } from '@inquirer/prompts'
 
 export class BrowserManager {
   static readonly BrowserLaunchError = class extends Error {
-    constructor(message: string) {
-      super(message)
+    constructor(message: string, options?: ErrorOptions) {
+      super(message, options)
       this.name = 'BrowserLaunchError'
     }
   }
 
   static readonly AuthError = class extends Error {
-    constructor(message: string) {
-      super(message)
+    constructor(message: string, options?: ErrorOptions) {
+      super(message, options)
       this.name = 'AuthError'
     }
   }
 
   static readonly ContextError = class extends Error {
-    constructor(message: string) {
-      super(message)
+    constructor(message: string, options?: ErrorOptions) {
+      super(message, options)
       this.name = 'ContextError'
     }
   }
 
   static readonly NavigationError = class extends Error {
-    constructor(message: string) {
-      super(message)
+    constructor(message: string, options?: ErrorOptions) {
+      super(message, options)
       this.name = 'NavigationError'
     }
   }
@@ -75,9 +75,12 @@ export class BrowserManager {
       }
 
       return this.getActivePage()
-    } catch (_error) {
-      if (_error instanceof Error) throw _error
-      throw new BrowserManager.BrowserLaunchError(`Unexpected error: ${String(_error)}`)
+    } catch (error) {
+      if (error instanceof Error) throw error
+      throw new BrowserManager.BrowserLaunchError(
+        `Unexpected error: ${String(error)}`,
+        { cause: error }
+      )
     }
   }
 
@@ -96,9 +99,10 @@ export class BrowserManager {
         headless: headless === 'new' ? true : headless,
         args: ['--disable-blink-features=AutomationControlled'],
       })
-    } catch (_error) {
+    } catch (error) {
       throw new BrowserManager.BrowserLaunchError(
-        `Failed to launch browser: ${_error instanceof Error ? _error.message : String(_error)}`
+        `Failed to launch browser: ${error instanceof Error ? error.message : String(error)}`,
+        { cause: error }
       )
     }
   }
@@ -115,8 +119,8 @@ export class BrowserManager {
         this.activeContext = await this.browserInstance.newContext({
           storageState: storageStateData,
         })
-      } catch (_error) {
-        logger.warn('Failed to load saved auth state, starting fresh.', _error)
+      } catch (error) {
+        logger.warn('Failed to load saved auth state, starting fresh.', error)
         this.activeContext = await this.browserInstance.newContext()
       }
     } else {
@@ -134,7 +138,7 @@ export class BrowserManager {
       const fileAgeInMs = Date.now() - fileStats.mtimeMs
       const twentyFourHoursInMs = 24 * 60 * 60 * 1000
       return fileAgeInMs < twentyFourHoursInMs
-    } catch (_error) {
+    } catch (error) {
       return false
     }
   }
@@ -149,9 +153,10 @@ export class BrowserManager {
       await this.activePage.goto(perplexitySettingsUrl, {
         timeout: 3000,
       })
-    } catch (_error) {
+    } catch (error) {
       throw new BrowserManager.NavigationError(
-        `Failed to navigate to settings: ${_error instanceof Error ? _error.message : String(_error)}`
+        `Failed to navigate to settings: ${error instanceof Error ? error.message : String(error)}`,
+        { cause: error }
       )
     }
   }

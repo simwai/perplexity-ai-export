@@ -4,22 +4,22 @@ import type { ConversationMetadata } from './checkpoint-manager.js'
 
 export class LibraryDiscovery {
   static readonly VersionCaptureError = class extends Error {
-    constructor(message: string) {
-      super(message)
+    constructor(message: string, options?: ErrorOptions) {
+      super(message, options)
       this.name = 'VersionCaptureError'
     }
   }
 
   static readonly PaginationError = class extends Error {
-    constructor(message: string) {
-      super(message)
+    constructor(message: string, options?: ErrorOptions) {
+      super(message, options)
       this.name = 'PaginationError'
     }
   }
 
   static readonly NoDataError = class extends Error {
-    constructor(message: string) {
-      super(message)
+    constructor(message: string, options?: ErrorOptions) {
+      super(message, options)
       this.name = 'NoDataError'
     }
   }
@@ -59,7 +59,7 @@ export class LibraryDiscovery {
 
       logger.warn('Found list_ask_threads request but no version parameter, using fallback')
       return defaultFallbackVersion
-    } catch (_error) {
+    } catch (error) {
       logger.warn('No list_ask_threads request detected, using fallback version')
       return defaultFallbackVersion
     }
@@ -123,11 +123,11 @@ export class LibraryDiscovery {
         },
         { offset, limit, version: apiVersion }
       )
-    } catch (_error) {
-      const errorMessage = _error instanceof Error ? _error.message : String(_error)
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error)
       throw new LibraryDiscovery.PaginationError(
         `Failed to fetch batch at offset ${offset}: ${errorMessage}`
-      )
+      , { cause: error })
     }
   }
 

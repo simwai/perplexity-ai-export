@@ -6,8 +6,8 @@ import { sanitizeFilename, sanitizeSpaceName } from './sanitizer.js'
 
 export class FileWriter {
   static readonly WriteError = class extends Error {
-    constructor(message: string) {
-      super(message)
+    constructor(message: string, options?: ErrorOptions) {
+      super(message, options)
       this.name = 'FileWriteError'
     }
   }
@@ -33,7 +33,8 @@ export class FileWriter {
       return destinationFilePath
     } catch (error) {
       throw new FileWriter.WriteError(
-        `Failed to write conversation ${conversation.id}: ${error instanceof Error ? error.message : String(error)}`
+        `Failed to write conversation ${conversation.id}: ${error instanceof Error ? error.message : String(error)}`,
+        { cause: error }
       )
     }
   }

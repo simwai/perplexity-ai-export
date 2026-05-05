@@ -15,29 +15,29 @@ export interface VectorSearchResult {
 
 export class VectorStore {
   static readonly VectorStoreError = class extends Error {
-    constructor(message: string) {
-      super(message)
+    constructor(message: string, options?: ErrorOptions) {
+      super(message, options)
       this.name = 'VectorStoreError'
     }
   }
 
   static readonly IndexError = class extends Error {
-    constructor(message: string) {
-      super(message)
+    constructor(message: string, options?: ErrorOptions) {
+      super(message, options)
       this.name = 'VectorStoreIndexError'
     }
   }
 
   static readonly EmbeddingError = class extends Error {
-    constructor(message: string) {
-      super(message)
+    constructor(message: string, options?: ErrorOptions) {
+      super(message, options)
       this.name = 'VectorStoreEmbeddingError'
     }
   }
 
   static readonly SearchError = class extends Error {
-    constructor(message: string) {
-      super(message)
+    constructor(message: string, options?: ErrorOptions) {
+      super(message, options)
       this.name = 'VectorStoreSearchError'
     }
   }
@@ -53,9 +53,10 @@ export class VectorStore {
   async validate(): Promise<void> {
     try {
       await this.ollamaClient.validate()
-    } catch (_error) {
+    } catch (error) {
       throw new VectorStore.VectorStoreError(
-        `Vector store validation failed: ${_error instanceof Error ? _error.message : String(_error)}`
+        `Vector store validation failed: ${error instanceof Error ? error.message : String(error)}`,
+        { cause: error }
       )
     }
   }
@@ -80,9 +81,10 @@ export class VectorStore {
       const queryEmbedding = await this.generateQueryEmbedding(query)
       const rawResults = await this.queryVectorIndex(queryEmbedding, query, limit)
       return this.formatVectorSearchResults(rawResults)
-    } catch (_error) {
+    } catch (error) {
       throw new VectorStore.SearchError(
-        `Vector search failed: ${_error instanceof Error ? _error.message : String(_error)}`
+        `Vector search failed: ${error instanceof Error ? error.message : String(error)}`,
+        { cause: error }
       )
     }
   }
@@ -101,9 +103,10 @@ export class VectorStore {
         filter as any
       )
       return this.formatVectorSearchResults(rawResults)
-    } catch (_error) {
+    } catch (error) {
       throw new VectorStore.SearchError(
-        `Filtered vector search failed: ${_error instanceof Error ? _error.message : String(_error)}`
+        `Filtered vector search failed: ${error instanceof Error ? error.message : String(error)}`,
+        { cause: error }
       )
     }
   }
@@ -114,81 +117,24 @@ export class VectorStore {
     }
   }
 
-  private getMarkdownFilesRecursively(directory: string): string[] {
-    const entries = readdirSync(directory)
-    const files: string[] = []
-
-    for (const entry of entries) {
-      const fullPath = join(directory, entry)
-      const fileStatus = statSync(fullPath)
-      if (fileStatus.isDirectory()) {
-        files.push(...this.getMarkdownFilesRecursively(fullPath))
-      } else if (fileStatus.isFile() && fullPath.endsWith('.md')) {
-        files.push(fullPath)
-      }
-    }
-    return files
-  }
-
   private async processMarkdownFilesByBatches(files: string[]): Promise<void> {
-    await this.vectorIndex.beginUpdate()
-    const EMBEDDING_BATCH_SIZE = 10
-    let pendingTextsToEmbed: string[] = []
-    let pendingMetadataToInsert: VectorDocMeta[] = []
+    const batchSize = 10
+    for (let i = 0; i < files.length; i += batchSize) {
+      const batch = files.slice(i, i + batchSize)
+      const batchData = batch.map((f) => this.readAndChunkMarkdownFile(f))
 
-    for (let i = 0; i < files.length; i++) {
-      const filePath = files[i]!
-      const { contentChunks, fileMetadata } = this.extractContentAndMetadata(filePath)
+      const texts: string[] = []
+      const metas: VectorDocMeta[] = []
 
-      for (let j = 0; j < contentChunks.length; j++) {
-        const textChunk = contentChunks[j]!
-        pendingTextsToEmbed.push(textChunk)
-        pendingMetadataToInsert.push({
-          ...fileMetadata,
-          id: `${fileMetadata['id']}_part_${j}`,
-          title: `${fileMetadata['title']} (Part ${j + 1})`,
-          snippet: textChunk,
-        })
-
-        if (pendingTextsToEmbed.length >= EMBEDDING_BATCH_SIZE) {
-          await this.processAndInsertEmbeddingBatch(pendingTextsToEmbed, pendingMetadataToInsert)
-          pendingTextsToEmbed = []
-          pendingMetadataToInsert = []
+      for (const item of batchData) {
+        for (const chunk of item.contentChunks) {
+          texts.push(chunk)
+          metas.push(item.fileMetadata)
         }
       }
 
-      if ((i + 1) % 10 === 0) {
-        logger.debug(`Processed ${i + 1}/${files.length} files...`)
-      }
-    }
-
-    if (pendingTextsToEmbed.length > 0) {
-      await this.processAndInsertEmbeddingBatch(pendingTextsToEmbed, pendingMetadataToInsert)
-    }
-
-    await this.vectorIndex.endUpdate()
-  }
-
-  private extractContentAndMetadata(path: string): {
-    contentChunks: string[]
-    fileMetadata: VectorDocMeta
-  } {
-    const content = readFileSync(path, 'utf-8')
-    const titleMatch = content.match(/^# (.+)$/m)
-    const spaceMatch = content.match(/^\*\*Space:\*\* (.+?)\s{2,}$/m)
-    const idMatch = content.match(/^\*\*ID:\*\* (.+?)\s{2,}$/m)
-    const dateMatch = content.match(/^\*\*Date:\*\* (.+?)\s{2,}$/m)
-
-    const title = titleMatch?.[1] ?? 'Untitled'
-    const spaceName = spaceMatch?.[1] ?? 'General'
-    const baseId = idMatch?.[1] ?? path
-    const dateIso = dateMatch?.[1] ?? new Date().toISOString()
-
-    const contentChunks = chunkMarkdown(content, 1500, 100)
-
-    return {
-      contentChunks,
-      fileMetadata: { id: baseId, path, title, spaceName, date: dateIso },
+      await this.processAndInsertEmbeddingBatch(texts, metas)
+      logger.info(`Indexed batch ${Math.floor(i / batchSize) + 1} (${batch.length} files)`)
     }
   }
 
@@ -206,8 +152,8 @@ export class VectorStore {
           metadata: metas[k] as Record<string, any>,
         })
       }
-    } catch (_error) {
-      logger.error(`Batch embedding failed: ${(_error as Error).message}`)
+    } catch (error) {
+      logger.error(`Batch embedding failed: ${error instanceof Error ? error.message : String(error)}`, error)
     }
   }
 
@@ -220,17 +166,57 @@ export class VectorStore {
   }
 
   private async queryVectorIndex(
-    embedding: number[],
+    queryEmbedding: number[],
     query: string,
     limit: number
   ): Promise<any[]> {
-    return this.vectorIndex.queryItems(embedding, query, limit)
+    try {
+      return await this.vectorIndex.queryItems(queryEmbedding, query, limit)
+    } catch (error) {
+      throw new VectorStore.IndexError(`Vectra index query failed: ${error instanceof Error ? error.message : String(error)}`, { cause: error })
+    }
   }
 
-  private formatVectorSearchResults(results: any[]): VectorSearchResult[] {
-    return results.map((result) => ({
-      meta: result.item.metadata as VectorDocMeta,
-      score: result.score,
+  private formatVectorSearchResults(rawResults: any[]): VectorSearchResult[] {
+    return rawResults.map((res: any) => ({
+      meta: res.item.metadata,
+      score: res.score,
     }))
+  }
+
+  private getMarkdownFilesRecursively(dir: string): string[] {
+    const results: string[] = []
+    const list = readdirSync(dir)
+
+    list.forEach((file) => {
+      const filePath = join(dir, file)
+      const stat = statSync(filePath)
+      if (stat && stat.isDirectory()) {
+        results.push(...this.getMarkdownFilesRecursively(filePath))
+      } else if (file.endsWith('.md')) {
+        results.push(filePath)
+      }
+    })
+
+    return results
+  }
+
+  private readAndChunkMarkdownFile(path: string): {
+    contentChunks: string[]
+    fileMetadata: VectorDocMeta
+  } {
+    const content = readFileSync(path, 'utf-8')
+    const fileName = path.split('/').pop() || 'Untitled'
+    const baseId = fileName.match(/\(([^)]+)\)\.md$/)?.[1] || 'unknown'
+    const title = fileName.replace(/ \([^)]+\)\.md$/, '')
+    const spaceName = path.split('/').slice(-2, -1)[0] || 'Unknown'
+    const dateIso = new Date().toISOString()
+
+    const contentChunks = chunkMarkdown(content, 1500, 100)
+
+    return {
+      contentChunks,
+      fileMetadata: { id: baseId, path, title, spaceName, date: dateIso },
+    }
   }
 }

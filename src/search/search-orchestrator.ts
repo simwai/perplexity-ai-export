@@ -9,15 +9,15 @@ export type SearchMode = 'rg' | 'vector' | 'auto' | 'rag'
 
 export class SearchOrchestrator {
   static readonly SearchOrchestratorError = class extends Error {
-    constructor(message: string) {
-      super(message)
+    constructor(message: string, options?: ErrorOptions) {
+      super(message, options)
       this.name = 'SearchOrchestratorError'
     }
   }
 
   static readonly ValidationError = class extends Error {
-    constructor(message: string) {
-      super(message)
+    constructor(message: string, options?: ErrorOptions) {
+      super(message, options)
       this.name = 'SearchOrchestratorValidationError'
     }
   }
@@ -56,12 +56,9 @@ export class SearchOrchestrator {
       } else {
         await this.executeAutoSearch(query, rgOptions)
       }
-    } catch (_error) {
-      if (_error instanceof Error) {
-        const searchFailedErrorMessage = `Search failed: ${_error.message}`
-        throw new SearchOrchestrator.SearchOrchestratorError(searchFailedErrorMessage)
-      }
-      throw _error
+    } catch (error) {
+      const searchFailedErrorMessage = `Search failed: ${error instanceof Error ? error.message : String(error)}`
+      throw new SearchOrchestrator.SearchOrchestratorError(searchFailedErrorMessage, { cause: error })
     }
   }
 

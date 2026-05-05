@@ -21,15 +21,15 @@ export interface RgMatch {
 
 export class RgSearch {
   static readonly RgSearchError = class extends Error {
-    constructor(message: string) {
-      super(message)
+    constructor(message: string, options?: ErrorOptions) {
+      super(message, options)
       this.name = 'RgSearchError'
     }
   }
 
   static readonly RgNotFoundError = class extends Error {
-    constructor(message: string) {
-      super(message)
+    constructor(message: string, options?: ErrorOptions) {
+      super(message, options)
       this.name = 'RgNotFoundError'
     }
   }
@@ -80,7 +80,7 @@ export class RgSearch {
               text: parsed.data.lines.text,
             })
           }
-        } catch (_err) {
+        } catch (error) {
           /* ignore */
         }
       })
