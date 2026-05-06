@@ -166,7 +166,7 @@ export class RgSearch {
         if (error.message.includes('ENOENT')) {
           reject(new RgSearch.RgNotFoundError(this.getRipgrepInstallationInstructions()))
         } else {
-          reject(new RgSearch.RgSearchError(`Search failed: ${error.message}`))
+          reject(new RgSearch.RgSearchError(`Search failed: ${error.message}`, { cause: error }))
         }
       })
 

@@ -338,7 +338,7 @@ export class WorkerPool {
     const errorMessage = error instanceof Error ? error.message : String(error)
     logger.error(`Worker ${worker.id} failed for ${conversation.title}`)
     logger.error(`  URL: ${conversation.url}`)
-    logger.error(`  Error: ${errorMessage}`)
+    logger.error(`  Error: ${errorMessage}`, error)
 
     this.processingStats.failed++
     this.processingStats.failures.push({

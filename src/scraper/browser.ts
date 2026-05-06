@@ -1,7 +1,7 @@
 import { chromium, type Browser, type BrowserContext, type Page } from '@playwright/test'
-import { readFileSync, writeFileSync, existsSync, statSync } from 'node:fs'
 import { config } from '../utils/config.js'
 import { logger } from '../utils/logger.js'
+import { existsSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { confirm } from '@inquirer/prompts'
 
 export class BrowserManager {
@@ -33,51 +33,39 @@ export class BrowserManager {
     }
   }
 
-  public browserInstance: Browser | null = null
+  browserInstance: Browser | null = null
   private activeContext: BrowserContext | null = null
   private activePage: Page | null = null
 
   async launch(): Promise<Page> {
+    const { headless } = config
+
     try {
-      const isSavedAuthValid = this.checkIfSavedAuthenticationIsFresh(config.authStoragePath)
+      // Launch headful if no valid auth to let user login
+      const isAuthFresh = this.checkIfSavedAuthenticationIsFresh(config.authStoragePath)
 
-      if (isSavedAuthValid) {
-        // Try starting in requested headless mode directly
-        await this.launchBrowser(config.headless)
-        await this.initializeBrowserContext()
-        await this.navigateToSettingsPage()
-        const isLoggedIn = await this.verifyLoginStatus(this.getActivePage())
-
-        if (isLoggedIn) {
-          logger.success('Already logged in!')
-          return this.getActivePage()
-        }
-
-        logger.warn(
-          'Saved authentication expired or invalid. Restarting in headful mode for login...'
-        )
-        await this.close()
-      }
-
-      // Need login: launch headful
-      await this.launchBrowser(false)
+      await this.launchBrowser(isAuthFresh ? headless : false)
       await this.initializeBrowserContext()
       await this.navigateToSettingsPage()
+
       await this.ensureUserIsAuthenticated()
 
       // If user wants headless, restart now that we are logged in
-      if (config.headless !== false) {
+      if (headless !== false && isAuthFresh === false) {
         logger.info('Authentication successful. Restarting in headless mode...')
         await this.close()
-        await this.launchBrowser(config.headless)
+        await this.launchBrowser(headless)
         await this.initializeBrowserContext()
         await this.navigateToSettingsPage()
       }
 
       return this.getActivePage()
     } catch (error) {
-      if (error instanceof Error) throw error
-      throw new BrowserManager.BrowserLaunchError(`Unexpected error: ${String(error)}`)
+      if (error instanceof Error && error.name !== 'Error') throw error
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      throw new BrowserManager.BrowserLaunchError(`Unexpected error: ${errorMessage}`, {
+        cause: error,
+      })
     }
   }
 
@@ -148,7 +136,7 @@ export class BrowserManager {
     const perplexitySettingsUrl = 'https://www.perplexity.ai/settings'
     try {
       await this.activePage.goto(perplexitySettingsUrl, {
-        timeout: 3000,
+        timeout: 30000,
       })
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error)
@@ -171,8 +159,9 @@ export class BrowserManager {
     }
 
     logger.info('Please log in manually in the browser window...')
+
     await confirm({
-      message: 'Press Enter when you are logged in and on the settings page',
+      message: 'Press Enter once you have logged in and see your settings page.',
       default: true,
     })
 
@@ -198,7 +187,7 @@ export class BrowserManager {
     const currentUrl = page.url()
 
     const authenticatedUrlPaths = ['/settings', '/library', '/collections', '/account/details']
-    if (authenticatedUrlPaths.some((path) => currentUrl.includes(path))) {
+    if (authenticatedUrlPaths.some((p) => currentUrl.includes(p))) {
       return true
     }
 

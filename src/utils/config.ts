@@ -68,7 +68,7 @@ function parseEnvConfig(): Config {
     result.error.issues.forEach((issue) => {
       const path = issue.path.join('.')
       const envVar = camelToSnakeCase(path).toUpperCase()
-      logger.error(`  ${envVar}: ${issue.message}`)
+      logger.error(`  ${envVar}: ${issue.message}`, issue)
     })
     logger.error('\nPlease check your .env file and fix the above errors.')
     process.exit(1)
