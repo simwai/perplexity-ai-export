@@ -210,7 +210,7 @@ export class WorkerPool {
         } catch (error) {
           const isDeadContext = this.checkIfErrorIsDueToDeadContext(error)
           if (isDeadContext && !hasAttemptedContextRecreation) {
-            logger.warn(`Worker ${worker.id}: context error, attempting to recreate...`)
+            logger.warn(`Worker ${worker.id}: context error, attempting to recreate...`, error)
             await this.recreateSharedBrowserContext()
             worker.extractor = new ConversationExtractor(this.sharedBrowserContext!)
             hasAttemptedContextRecreation = true

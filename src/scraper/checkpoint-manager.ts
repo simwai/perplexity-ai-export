@@ -124,7 +124,7 @@ export class CheckpointManager {
       return parsedCheckpointData
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error)
-      logger.warn(`Failed to load checkpoint (${errorMessage}, error), starting fresh`)
+      logger.warn(`Failed to load checkpoint (${errorMessage}), starting fresh`, error)
       return this.createInitialCheckpoint()
     }
   }
