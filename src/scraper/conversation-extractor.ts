@@ -1,4 +1,3 @@
-import { errorBus } from '../utils/error-bus.js'
 import type { BrowserContext, Page, Response } from '@playwright/test'
 import { waitStrategy } from '../utils/wait-strategy.js'
 import { logger } from '../utils/logger.js'
@@ -103,11 +102,9 @@ export class ConversationExtractor {
     let page: Page | null = null
     try {
       page = await this.context.newPage()
-    } catch (error) {
-      throw errorBus.raise(
-        ConversationExtractor.ExtractionError,
-        'Failed to create new page',
-        error
+    } catch (_error) {
+      throw new ConversationExtractor.ExtractionError(
+        `Failed to create new page: ${_error instanceof Error ? _error.message : String(_error)}`
       )
     }
 
@@ -128,13 +125,13 @@ export class ConversationExtractor {
       }
 
       return parsed
-    } catch (error) {
-      if (error instanceof Error && error.name !== 'Error') throw error
-      throw errorBus.raise(ConversationExtractor.ExtractionError, 'Extraction failed', error)
+    } catch (_error) {
+      if (_error instanceof Error) throw _error
+      throw new ConversationExtractor.ExtractionError(String(_error))
     } finally {
       if (page) {
-        await page.close().catch((e: Error) => {
-          logger.warn(`Failed to close page: ${e.message}`)
+        await page.close().catch((e) => {
+          logger.warn(`Failed to close page: ${e}`)
         })
       }
     }
@@ -146,12 +143,8 @@ export class ConversationExtractor {
     }
     try {
       await this.context.pages()
-    } catch (error) {
-      throw errorBus.raise(
-        ConversationExtractor.ExtractionError,
-        'Browser context is no longer available',
-        error
-      )
+    } catch (_error) {
+      throw new ConversationExtractor.ExtractionError('Browser context is no longer available')
     }
   }
 
@@ -192,9 +185,9 @@ export class ConversationExtractor {
           clearTimeout(timeout)
           resolved = true
           resolve(json)
-        } catch (error) {
+        } catch (_error) {
           if (resolved) return
-          errorBus.report(error, { message: 'Failed to parse JSON from thread API' })
+          logger.error(`Failed to parse JSON from thread API: ${_error}`)
         }
       })
     })
@@ -258,8 +251,8 @@ export class ConversationExtractor {
       }
 
       return { id, title, spaceName, timestamp, content }
-    } catch (error) {
-      errorBus.report(error, { message: 'Failed to parse conversation data' })
+    } catch (_error) {
+      logger.error('Failed to parse conversation data.')
       return null
     }
   }

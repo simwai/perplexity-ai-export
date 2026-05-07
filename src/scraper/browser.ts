@@ -1,8 +1,7 @@
-import { errorBus } from '../utils/error-bus.js'
 import { chromium, type Browser, type BrowserContext, type Page } from '@playwright/test'
+import { readFileSync, writeFileSync, existsSync, statSync } from 'node:fs'
 import { config } from '../utils/config.js'
 import { logger } from '../utils/logger.js'
-import { existsSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { confirm } from '@inquirer/prompts'
 
 export class BrowserManager {
@@ -34,36 +33,51 @@ export class BrowserManager {
     }
   }
 
-  browserInstance: Browser | null = null
+  public browserInstance: Browser | null = null
   private activeContext: BrowserContext | null = null
   private activePage: Page | null = null
 
   async launch(): Promise<Page> {
-    const { headless } = config
-
     try {
-      // Launch headful if no valid auth to let user login
-      const isAuthFresh = this.checkIfSavedAuthenticationIsFresh(config.authStoragePath)
+      const isSavedAuthValid = this.checkIfSavedAuthenticationIsFresh(config.authStoragePath)
 
-      await this.launchBrowser(isAuthFresh ? headless : false)
+      if (isSavedAuthValid) {
+        // Try starting in requested headless mode directly
+        await this.launchBrowser(config.headless)
+        await this.initializeBrowserContext()
+        await this.navigateToSettingsPage()
+        const isLoggedIn = await this.verifyLoginStatus(this.getActivePage())
+
+        if (isLoggedIn) {
+          logger.success('Already logged in!')
+          return this.getActivePage()
+        }
+
+        logger.warn(
+          'Saved authentication expired or invalid. Restarting in headful mode for login...'
+        )
+        await this.close()
+      }
+
+      // Need login: launch headful
+      await this.launchBrowser(false)
       await this.initializeBrowserContext()
       await this.navigateToSettingsPage()
-
       await this.ensureUserIsAuthenticated()
 
       // If user wants headless, restart now that we are logged in
-      if (headless !== false && isAuthFresh === false) {
+      if (config.headless !== false) {
         logger.info('Authentication successful. Restarting in headless mode...')
         await this.close()
-        await this.launchBrowser(headless)
+        await this.launchBrowser(config.headless)
         await this.initializeBrowserContext()
         await this.navigateToSettingsPage()
       }
 
       return this.getActivePage()
-    } catch (error) {
-      if (error instanceof Error && error.name !== 'Error') throw error
-      throw errorBus.raise(BrowserManager.BrowserLaunchError, 'Unexpected browser error', error)
+    } catch (_error) {
+      if (_error instanceof Error) throw _error
+      throw new BrowserManager.BrowserLaunchError(`Unexpected error: ${String(_error)}`)
     }
   }
 
@@ -82,8 +96,10 @@ export class BrowserManager {
         headless: headless === 'new' ? true : headless,
         args: ['--disable-blink-features=AutomationControlled'],
       })
-    } catch (error) {
-      throw errorBus.raise(BrowserManager.BrowserLaunchError, 'Failed to launch browser', error)
+    } catch (_error) {
+      throw new BrowserManager.BrowserLaunchError(
+        `Failed to launch browser: ${_error instanceof Error ? _error.message : String(_error)}`
+      )
     }
   }
 
@@ -99,8 +115,8 @@ export class BrowserManager {
         this.activeContext = await this.browserInstance.newContext({
           storageState: storageStateData,
         })
-      } catch (error) {
-        logger.warn('Failed to load saved auth state, starting fresh.', error)
+      } catch (_error) {
+        logger.warn('Failed to load saved auth state, starting fresh.', _error)
         this.activeContext = await this.browserInstance.newContext()
       }
     } else {
@@ -118,7 +134,7 @@ export class BrowserManager {
       const fileAgeInMs = Date.now() - fileStats.mtimeMs
       const twentyFourHoursInMs = 24 * 60 * 60 * 1000
       return fileAgeInMs < twentyFourHoursInMs
-    } catch (error) {
+    } catch (_error) {
       return false
     }
   }
@@ -131,10 +147,12 @@ export class BrowserManager {
     const perplexitySettingsUrl = 'https://www.perplexity.ai/settings'
     try {
       await this.activePage.goto(perplexitySettingsUrl, {
-        timeout: 30000,
+        timeout: 3000,
       })
-    } catch (error) {
-      throw errorBus.raise(BrowserManager.NavigationError, 'Failed to navigate to settings', error)
+    } catch (_error) {
+      throw new BrowserManager.NavigationError(
+        `Failed to navigate to settings: ${_error instanceof Error ? _error.message : String(_error)}`
+      )
     }
   }
 
@@ -151,9 +169,8 @@ export class BrowserManager {
     }
 
     logger.info('Please log in manually in the browser window...')
-
     await confirm({
-      message: 'Press Enter once you have logged in and see your settings page.',
+      message: 'Press Enter when you are logged in and on the settings page',
       default: true,
     })
 
@@ -179,7 +196,7 @@ export class BrowserManager {
     const currentUrl = page.url()
 
     const authenticatedUrlPaths = ['/settings', '/library', '/collections', '/account/details']
-    if (authenticatedUrlPaths.some((p) => currentUrl.includes(p))) {
+    if (authenticatedUrlPaths.some((path) => currentUrl.includes(path))) {
       return true
     }
 

@@ -1,7 +1,6 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { config } from '../utils/config.js'
 import { logger } from '../utils/logger.js'
-import { errorBus } from '../utils/error-bus.js'
 
 export interface SpaceMetadata {
   url: string
@@ -123,8 +122,9 @@ export class CheckpointManager {
       const parsedCheckpointData = JSON.parse(checkpointFileContent)
       this.assertValidCheckpointStructure(parsedCheckpointData)
       return parsedCheckpointData
-    } catch (error) {
-      errorBus.report(error, { message: 'Failed to load checkpoint, starting fresh' })
+    } catch (_error) {
+      const errorMessage = _error instanceof Error ? _error.message : String(_error)
+      logger.warn(`Failed to load checkpoint (${errorMessage}), starting fresh`)
       return this.createInitialCheckpoint()
     }
   }
@@ -165,8 +165,10 @@ export class CheckpointManager {
     this.currentCheckpoint.lastUpdated = new Date().toISOString()
     try {
       writeFileSync(config.checkpointPath, JSON.stringify(this.currentCheckpoint, null, 2))
-    } catch (error) {
-      throw errorBus.raise(CheckpointManager.SaveError, 'Failed to write checkpoint', error)
+    } catch (_error) {
+      throw new CheckpointManager.SaveError(
+        `Failed to write checkpoint: ${_error instanceof Error ? _error.message : String(_error)}`
+      )
     }
   }
 }

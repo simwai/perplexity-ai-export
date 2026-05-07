@@ -25,7 +25,6 @@
 - [Usage Guide](#usage-guide)
   * [Operational Directives](#operational-directives)
 - [RAG Capabilities](#rag-capabilities)
-- [Error Handling & Resilience](#error-handling--resilience)
 - [Architecture & Deep Dive](#architecture--deep-dive)
   * [Project Structure](#project-structure)
 - [Testing](#testing)
@@ -132,12 +131,6 @@ The RAG modality is engineered for various levels of cognitive inquiry:
 - **Broad Synthesis**: "Summarize all threads regarding distributed systems."
 - **Granular Retrieval**: "Locate the specific TypeScript pattern I used for the worker pool."
 - **Cross-Thread Integration**: "How has my conceptual understanding of React hooks shifted?"
-
-## Error Handling & Resilience
-
-For an in-depth look at our diagnostic philosophy and resilience patterns, see:
-
-👉 **[ERROR_HANDLING.md](./ERROR_HANDLING.md)**
 
 ## Architecture & Deep Dive
 

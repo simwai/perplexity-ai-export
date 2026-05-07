@@ -1,4 +1,3 @@
-import { errorBus } from '../utils/error-bus.js'
 import type { Browser, BrowserContext } from '@playwright/test'
 import { existsSync, readFileSync, statSync } from 'node:fs'
 import { logger } from '../utils/logger.js'
@@ -7,32 +6,46 @@ import { ConversationExtractor, type ExtractedConversation } from './conversatio
 import { FileWriter } from '../export/file-writer.js'
 import type { CheckpointManager, ConversationMetadata } from './checkpoint-manager.js'
 
-export interface Worker {
+interface Worker {
   id: number
   extractor: ConversationExtractor
   isBusy: boolean
 }
 
-export interface ProcessingStats {
+interface ProcessingStats {
   total: number
   succeeded: number
   failed: number
   skipped: number
-  failures: { url: string; title: string; reason: string }[]
+  failures: Array<{ url: string; title: string; reason: string }>
+}
+
+function loadPersistedAuthenticationState(): any | null {
+  const authenticationStoragePath = config.authStoragePath
+  if (!existsSync(authenticationStoragePath)) return null
+  try {
+    const fileStats = statSync(authenticationStoragePath)
+    const fileAgeInMilliseconds = Date.now() - fileStats.mtimeMs
+    const twentyFourHoursInMilliseconds = 24 * 60 * 60 * 1000
+    if (fileAgeInMilliseconds >= twentyFourHoursInMilliseconds) return null
+    return JSON.parse(readFileSync(authenticationStoragePath, 'utf-8'))
+  } catch (_error) {
+    return null
+  }
 }
 
 export class WorkerPool {
   static readonly InitializationError = class extends Error {
     constructor(message: string) {
       super(message)
-      this.name = 'InitializationError'
+      this.name = 'WorkerInitializationError'
     }
   }
 
   static readonly ProcessingError = class extends Error {
     constructor(message: string) {
       super(message)
-      this.name = 'ProcessingError'
+      this.name = 'WorkerProcessingError'
     }
   }
 
@@ -43,9 +56,16 @@ export class WorkerPool {
     }
   }
 
+  static readonly ExtractionError = class extends Error {
+    constructor(message: string) {
+      super(message)
+      this.name = 'ExtractionError'
+    }
+  }
+
   private activeWorkers: Worker[] = []
-  private conversationFileWriter: FileWriter
-  private progressCheckpointManager: CheckpointManager
+  private readonly conversationFileWriter: FileWriter
+  private readonly progressCheckpointManager: CheckpointManager
   private processingStats: ProcessingStats
   private sharedBrowserContext: BrowserContext | null = null
   private contextRecreationLock: Promise<void> | null = null
@@ -68,8 +88,9 @@ export class WorkerPool {
         const worker = await this.createNewWorker(i + 1)
         this.activeWorkers.push(worker)
       }
-    } catch (error) {
-      throw errorBus.raise(WorkerPool.InitializationError, 'Failed to initialize workers', error)
+    } catch (_error) {
+      const errorMessage = _error instanceof Error ? _error.message : String(_error)
+      throw new WorkerPool.InitializationError(`Failed to initialize workers: ${errorMessage}`)
     }
 
     logger.success(`Worker pool ready with ${this.activeWorkers.length} workers`)
@@ -184,15 +205,15 @@ export class WorkerPool {
         try {
           extractedData = await worker.extractor.extract(conversation.url)
           break
-        } catch (error) {
-          const isDeadContext = this.checkIfErrorIsDueToDeadContext(error)
+        } catch (_error) {
+          const isDeadContext = this.checkIfErrorIsDueToDeadContext(_error)
           if (isDeadContext && !hasAttemptedContextRecreation) {
-            logger.warn(`Worker ${worker.id}: context error, attempting to recreate...`, error)
+            logger.warn(`Worker ${worker.id}: context error, attempting to recreate...`)
             await this.recreateSharedBrowserContext()
             worker.extractor = new ConversationExtractor(this.sharedBrowserContext!)
             hasAttemptedContextRecreation = true
           } else {
-            throw error
+            throw _error
           }
         }
       }
@@ -212,8 +233,8 @@ export class WorkerPool {
       this.logConversationProcessingSuccess(worker, savedFilePath)
       this.processingStats.succeeded++
       this.progressCheckpointManager.markProcessed(conversation.url)
-    } catch (error) {
-      this.handleConversationProcessingError(worker, conversation, error)
+    } catch (_error) {
+      this.handleConversationProcessingError(worker, conversation, _error)
     } finally {
       worker.isBusy = false
     }
@@ -287,8 +308,8 @@ export class WorkerPool {
       }
 
       return null
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error)
+    } catch (_error) {
+      const errorMessage = _error instanceof Error ? _error.message : String(_error)
       return `Validation exception: ${errorMessage}`
     }
   }
@@ -315,7 +336,7 @@ export class WorkerPool {
     const errorMessage = error instanceof Error ? error.message : String(error)
     logger.error(`Worker ${worker.id} failed for ${conversation.title}`)
     logger.error(`  URL: ${conversation.url}`)
-    errorBus.report(error, { message: 'Worker processing failed' })
+    logger.error(`  Error: ${errorMessage}`)
 
     this.processingStats.failed++
     this.processingStats.failures.push({
@@ -359,15 +380,5 @@ export class WorkerPool {
       logger.info('💡 Failed/skipped conversations were NOT marked as processed.')
       logger.info('   You can rerun the scraper to retry them.')
     }
-  }
-}
-
-function loadPersistedAuthenticationState(): any {
-  const path = config.authStoragePath
-  if (!existsSync(path)) return null
-  try {
-    return JSON.parse(readFileSync(path, 'utf8'))
-  } catch (error) {
-    return null
   }
 }

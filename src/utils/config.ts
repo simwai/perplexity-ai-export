@@ -3,7 +3,6 @@ import { existsSync, mkdirSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { z } from 'zod'
 import { logger } from './logger.js'
-import { errorBus } from './error-bus.js'
 
 loadEnv()
 
@@ -69,7 +68,7 @@ function parseEnvConfig(): Config {
     result.error.issues.forEach((issue) => {
       const path = issue.path.join('.')
       const envVar = camelToSnakeCase(path).toUpperCase()
-      errorBus.report(issue, { message: `Invalid config for ${envVar}: ${issue.message}` })
+      logger.error(`  ${envVar}: ${issue.message}`)
     })
     logger.error('\nPlease check your .env file and fix the above errors.')
     process.exit(1)

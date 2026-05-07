@@ -1,4 +1,3 @@
-import { errorBus } from '../utils/error-bus.js'
 import type { Page } from '@playwright/test'
 import { logger } from '../utils/logger.js'
 import type { ConversationMetadata } from './checkpoint-manager.js'
@@ -60,7 +59,7 @@ export class LibraryDiscovery {
 
       logger.warn('Found list_ask_threads request but no version parameter, using fallback')
       return defaultFallbackVersion
-    } catch (error) {
+    } catch (_error) {
       logger.warn('No list_ask_threads request detected, using fallback version')
       return defaultFallbackVersion
     }
@@ -124,11 +123,10 @@ export class LibraryDiscovery {
         },
         { offset, limit, version: apiVersion }
       )
-    } catch (error) {
-      throw errorBus.raise(
-        LibraryDiscovery.PaginationError,
-        `Failed to fetch batch at offset ${offset}`,
-        error
+    } catch (_error) {
+      const errorMessage = _error instanceof Error ? _error.message : String(_error)
+      throw new LibraryDiscovery.PaginationError(
+        `Failed to fetch batch at offset ${offset}: ${errorMessage}`
       )
     }
   }
