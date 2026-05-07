@@ -1,3 +1,4 @@
+import { errorBus } from '../utils/error-bus.js'
 import { select } from '@inquirer/prompts'
 import chalk from 'chalk'
 import { logger } from '../utils/logger.js'
@@ -34,7 +35,7 @@ export class Repl {
         if (error instanceof Error && error.name === 'ExitPromptError') {
           this.terminateRepl()
         } else {
-          throw error
+          errorBus.report(error, { message: 'REPL execution error' })
         }
       }
     }

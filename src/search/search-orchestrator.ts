@@ -1,3 +1,4 @@
+import { errorBus } from '../utils/error-bus.js'
 import { RgSearch, type RgSearchOptions } from './rg-search.js'
 import { VectorStore } from './vector-store.js'
 import { logger } from '../utils/logger.js'
@@ -34,9 +35,10 @@ export class SearchOrchestrator {
 
   async validateVectorSearch(): Promise<void> {
     if (!config.enableVectorSearch) {
-      const vectorSearchDisabledErrorMessage =
-        'Vector search is disabled (ENABLE_VECTOR_SEARCH=false).'
-      throw new SearchOrchestrator.ValidationError(vectorSearchDisabledErrorMessage)
+      throw errorBus.raise(
+        SearchOrchestrator.ValidationError,
+        'Vector search is disabled (ENABLE_VECTOR_SEARCH=false)'
+      )
     }
     await this.vectorStore.validate()
   }
@@ -56,12 +58,8 @@ export class SearchOrchestrator {
       } else {
         await this.executeAutoSearch(query, rgOptions)
       }
-    } catch (_error) {
-      if (_error instanceof Error) {
-        const searchFailedErrorMessage = `Search failed: ${_error.message}`
-        throw new SearchOrchestrator.SearchOrchestratorError(searchFailedErrorMessage)
-      }
-      throw _error
+    } catch (error) {
+      throw errorBus.raise(SearchOrchestrator.SearchOrchestratorError, 'Search failed', error)
     }
   }
 

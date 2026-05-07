@@ -1,3 +1,4 @@
+import { errorBus } from '../utils/error-bus.js'
 import { LocalIndex } from 'vectra'
 import { join } from 'node:path'
 import { readFileSync, readdirSync, statSync } from 'node:fs'
@@ -53,10 +54,8 @@ export class VectorStore {
   async validate(): Promise<void> {
     try {
       await this.ollamaClient.validate()
-    } catch (_error) {
-      throw new VectorStore.VectorStoreError(
-        `Vector store validation failed: ${_error instanceof Error ? _error.message : String(_error)}`
-      )
+    } catch (error) {
+      throw errorBus.raise(VectorStore.VectorStoreError, 'Vector store validation failed', error)
     }
   }
 
@@ -80,10 +79,8 @@ export class VectorStore {
       const queryEmbedding = await this.generateQueryEmbedding(query)
       const rawResults = await this.queryVectorIndex(queryEmbedding, query, limit)
       return this.formatVectorSearchResults(rawResults)
-    } catch (_error) {
-      throw new VectorStore.SearchError(
-        `Vector search failed: ${_error instanceof Error ? _error.message : String(_error)}`
-      )
+    } catch (error) {
+      throw errorBus.raise(VectorStore.SearchError, 'Vector search failed', error)
     }
   }
 
@@ -101,10 +98,8 @@ export class VectorStore {
         filter as any
       )
       return this.formatVectorSearchResults(rawResults)
-    } catch (_error) {
-      throw new VectorStore.SearchError(
-        `Filtered vector search failed: ${_error instanceof Error ? _error.message : String(_error)}`
-      )
+    } catch (error) {
+      throw errorBus.raise(VectorStore.SearchError, 'Filtered vector search failed', error)
     }
   }
 
@@ -206,8 +201,8 @@ export class VectorStore {
           metadata: metas[k] as Record<string, any>,
         })
       }
-    } catch (_error) {
-      logger.error(`Batch embedding failed: ${(_error as Error).message}`)
+    } catch (error) {
+      errorBus.report(error, { message: 'Batch embedding failed' })
     }
   }
 

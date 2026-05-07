@@ -1,10 +1,11 @@
+import { errorBus } from '../utils/error-bus.js'
 import { input, select, confirm } from '@inquirer/prompts'
 import { rmSync } from 'node:fs'
 import { sep } from 'node:path'
 import { BrowserManager } from '../scraper/browser.js'
 import { CheckpointManager } from '../scraper/checkpoint-manager.js'
 import { WorkerPool } from '../scraper/worker-pool.js'
-import { SearchOrchestrator } from '../search/search-orchestrator.js'
+import { SearchOrchestrator, type SearchMode } from '../search/search-orchestrator.js'
 import { logger } from '../utils/logger.js'
 import { showHelp } from './help.js'
 import { LibraryDiscovery } from '../scraper/library-discovery.js'
@@ -57,8 +58,8 @@ export class CommandHandler {
   async handleStartLibraryExport(): Promise<void> {
     try {
       await this.executeFullScrapingFlow()
-    } catch (_error) {
-      logger.error('Scraper failed:', _error instanceof Error ? _error : String(_error))
+    } catch (error) {
+      errorBus.report(error, { message: 'Scraper failed' })
     }
   }
 
@@ -95,10 +96,8 @@ export class CommandHandler {
         searchMode as 'auto' | 'vector' | 'rg' | 'rag',
         ripgrepSearchOptions
       )
-    } catch (_error) {
-      if (_error instanceof Error) {
-        logger.error(_error.message)
-      }
+    } catch (error) {
+      errorBus.report(error, { message: 'Search failed' })
     }
   }
 
@@ -115,8 +114,8 @@ export class CommandHandler {
 
     try {
       await this.conversationSearchOrchestrator.validateVectorSearch()
-    } catch (_error) {
-      await this.handleVectorSearchValidationRetry(_error)
+    } catch (error) {
+      await this.handleVectorSearchValidationRetry(error)
       return
     }
 
@@ -139,9 +138,8 @@ export class CommandHandler {
       this.wipeStorageDirectory()
       this.progressCheckpointManager.resetCheckpoint()
       logger.success('✅ Storage folder deleted. All progress has been reset.')
-    } catch (_error) {
-      const errorMessage = _error instanceof Error ? _error.message : String(_error)
-      throw new CommandHandler.ResetError(`Failed to reset: ${errorMessage}`)
+    } catch (error) {
+      throw errorBus.raise(CommandHandler.ResetError, 'Failed to reset', error)
     }
   }
 
@@ -169,10 +167,8 @@ export class CommandHandler {
       await this.runExtractionPhase(browserManager, pendingConversations)
 
       logger.success('\n✨ Export complete!')
-    } catch (_error) {
-      throw new CommandHandler.ScraperError(
-        `Scraping failed: ${_error instanceof Error ? _error.message : String(_error)}`
-      )
+    } catch (error) {
+      throw errorBus.raise(CommandHandler.ScraperError, 'Scraping failed', error)
     } finally {
       await browserManager.close()
     }
@@ -229,7 +225,7 @@ export class CommandHandler {
     })
   }
 
-  private async promptForSearchMode(): Promise<string> {
+  private async promptForSearchMode(): Promise<SearchMode> {
     return select({
       message: 'Search mode:',
       choices: [
@@ -247,17 +243,14 @@ export class CommandHandler {
 
     try {
       await this.conversationSearchOrchestrator.validateVectorSearch()
-    } catch (_error) {
-      const errorMessage = _error instanceof Error ? _error.message : String(_error)
-      logger.error(errorMessage)
+    } catch (error) {
       logger.info('Start Ollama with the embedding model, then run "vectorize".')
-      throw new CommandHandler.ValidationError(errorMessage)
+      throw errorBus.raise(CommandHandler.ValidationError, 'Vector search validation failed', error)
     }
   }
 
   private async handleVectorSearchValidationRetry(error: unknown): Promise<void> {
-    const errorMessage = error instanceof Error ? error.message : String(error)
-    logger.error(errorMessage)
+    errorBus.report(error, { message: 'Vector search validation failed' })
 
     const shouldRetry = await confirm({
       message:
@@ -271,9 +264,8 @@ export class CommandHandler {
 
     try {
       await this.conversationSearchOrchestrator.validateVectorSearch()
-    } catch (err) {
-      const nestedErrorMessage = err instanceof Error ? err.message : String(err)
-      logger.error(nestedErrorMessage)
+    } catch (error) {
+      errorBus.report(error, { message: 'Retry validation failed' })
       return
     }
 
@@ -287,9 +279,9 @@ export class CommandHandler {
     try {
       rmSync(storageRootDirectory!, { recursive: true, force: true })
       logger.debug(`Deleted storage folder: ${storageRootDirectory}`)
-    } catch (_error) {
-      if ((_error as NodeJS.ErrnoException).code !== 'ENOENT') {
-        throw _error
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+        throw error
       }
     }
   }

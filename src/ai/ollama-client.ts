@@ -1,3 +1,4 @@
+import { errorBus } from '../utils/error-bus.js'
 import { z } from 'zod'
 import { config } from '../utils/config.js'
 import { logger } from '../utils/logger.js'
@@ -50,9 +51,8 @@ export class OllamaClient {
     try {
       await this.embed(['ping'])
       logger.success('Ollama embeddings look good.')
-    } catch (_error) {
-      const message = _error instanceof Error ? _error.message : String(_error)
-      throw new OllamaClient.OllamaError(`Ollama validation failed: ${message}`)
+    } catch (error) {
+      throw errorBus.raise(OllamaClient.OllamaError, 'Ollama validation failed', error)
     }
   }
 
@@ -70,21 +70,20 @@ export class OllamaClient {
         let errorBody = ''
         try {
           errorBody = await response.text()
-        } catch (_errorReadingResponseBody) {
-          /* oxlint-disable-next-line no-empty */
+        } catch (error) {
+          /* ignore */
         }
         logger.error(`Ollama HTTP ${response.status}`, { body, errorBody: errorBody.slice(0, 500) })
-        throw new OllamaClient.OllamaError(
+        throw errorBus.raise(
+          OllamaClient.OllamaError,
           `Ollama request failed with status ${response.status} – ${errorBody.slice(0, 200)}`
         )
       }
 
       return await response.json()
-    } catch (_error) {
-      if (_error instanceof OllamaClient.OllamaError) throw _error
-      throw new OllamaClient.OllamaError(
-        `Network error while calling Ollama: ${_error instanceof Error ? _error.message : String(_error)}`
-      )
+    } catch (error) {
+      if (error instanceof OllamaClient.OllamaError) throw error
+      throw errorBus.raise(OllamaClient.OllamaError, 'Network error while calling Ollama', error)
     }
   }
 
@@ -99,6 +98,9 @@ export class OllamaClient {
       return [legacyResult.data.embedding]
     }
 
-    throw new OllamaClient.OllamaError('Unexpected response format from Ollama embeddings endpoint')
+    throw errorBus.raise(
+      OllamaClient.OllamaError,
+      'Unexpected response format from Ollama embeddings endpoint'
+    )
   }
 }
