@@ -1,3 +1,4 @@
+import { errorBus } from '../utils/error-bus.js'
 import { join } from 'node:path'
 import { writeFileSync, existsSync, mkdirSync } from 'node:fs'
 import { config } from '../utils/config.js'
@@ -32,8 +33,10 @@ export class FileWriter {
       writeFileSync(destinationFilePath, markdownContent, 'utf-8')
       return destinationFilePath
     } catch (error) {
-      throw new FileWriter.WriteError(
-        `Failed to write conversation ${conversation.id}: ${error instanceof Error ? error.message : String(error)}`
+      throw errorBus.raise(
+        FileWriter.WriteError,
+        `Failed to write conversation ${conversation.id}`,
+        error
       )
     }
   }

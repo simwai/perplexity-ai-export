@@ -36,11 +36,12 @@ We are implementing a Martin Fowler-inspired **Error Bus** (`src/utils/error-bus
 
 ### Refactor Batch 3: CLI & Utilities
 
-- [ ] `src/repl/commands.ts`
-- [ ] `src/repl/index.ts`
-- [ ] `src/export/file-writer.ts`
-- [ ] `src/index.ts`
+- [x] `src/repl/commands.ts`
+- [x] `src/repl/index.ts`
+- [x] `src/export/file-writer.ts`
+- [x] `src/index.ts`
+- [x] `src/search/rg-search.ts`
 
-## 🚀 Batch 2 Status
+## 🚀 Status
 
-**Complete**. The entire extraction engine (Playwright logic, worker pools, and state management) has been migrated to the Error Bus architecture.
+**Complete**. The entire codebase has been migrated to the Error Bus architecture.
