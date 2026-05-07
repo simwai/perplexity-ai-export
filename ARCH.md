@@ -1,6 +1,6 @@
 # System Architecture & Cognitive Foundations
 
-This document elucidates the architectural blueprints and theoretical underpinnings of the Perplexity History Export tool. It is designed for those who seek to understand the mechanics of our "Mightiest RAG" implementation.
+This document elucidates the architectural blueprints and theoretical underpinnings of the Perplexity History Export tool. It is designed for those who seek to understand the mechanics of our "Mightiest RAG" implementation and the resilience of our distributed extraction engine.
 
 ---
 
@@ -11,11 +11,12 @@ This document elucidates the architectural blueprints and theoretical underpinni
   * [Stage A: Adaptive Planning](#stage-a-adaptive-planning)
   * [Stage B: Hybrid Retrieval & Fusion](#stage-b-hybrid-retrieval--fusion)
   * [Stage C: Granular MapReduce Fact Extraction](#stage-c-granular-mapreduce-fact-extraction)
-- [3. Theoretical Foundations](#3-theoretical-foundations)
+- [3. Error Bus & Diagnostic Resilience](#3-error-bus--diagnostic-resilience)
+- [4. Theoretical Foundations](#4-theoretical-foundations)
   * [Hybrid Search & RRF](#hybrid-search--rrf)
   * [Retrieval-Augmented Generation (RAG)](#retrieval-augmented-generation-rag)
   * [MapReduce for Context Compression](#mapreduce-for-context-compression)
-- [4. Visualizing the Retrieval Loop](#4-visualizing-the-retrieval-loop)
+- [5. Visualizing the Retrieval Loop](#5-visualizing-the-retrieval-loop)
 
 <!-- tocstop -->
 
@@ -64,8 +65,17 @@ graph TD
         Narrator --> Verify[Quality Verification]
     end
 
+    subgraph "Cross-Cutting"
+        EB[Error Bus - Pub/Sub] -.-> Logger[Centralized Logger]
+    end
+
     Verify --> Final[/Mightiest AI Response/]
     Final --> User
+
+    %% Error Reporting
+    VS -.-> EB
+    P -.-> EB
+    MR -.-> EB
 ```
 
 ---
@@ -78,7 +88,7 @@ Our RAG implementation is not a simple "retrieve and stuff" pipeline. It follows
 
 Before any retrieval, the system acts as a **Research Planner**. It decomposes the user's query into:
 
-- **Strategy**: Selecting between \`precise\` (targeted facts) or \`exhaustive\` (broad historical overview).
+- **Strategy**: Selecting between `precise` (targeted facts) or `exhaustive` (broad historical overview).
 - **Semantic Variations**: Generating multiple search phrases to cover different linguistic facets of the query.
 - **Hard Keywords**: Identifying unique entities or technical IDs that require exact-match precision.
 
@@ -86,8 +96,8 @@ Before any retrieval, the system acts as a **Research Planner**. It decomposes t
 
 We employ a **Hybrid Search** strategy, combining the strengths of dense and sparse retrieval:
 
-- **Dense (Vector)**: Captures semantic intent and conceptual similarity using embeddings (\`nomic-embed-text\`).
-- **Sparse (Exact)**: Leverages \`ripgrep\` for high-velocity exact string matching, ensuring technical IDs or specific names are never missed.
+- **Dense (Vector)**: Captures semantic intent and conceptual similarity using embeddings (`nomic-embed-text`).
+- **Sparse (Exact)**: Leverages `ripgrep` for high-velocity exact string matching, ensuring technical IDs or specific names are never missed.
 
 Results are then merged using **Reciprocal Rank Fusion (RRF)**, which provides a robust ranking by combining the ordinal positions of items from different search pools without needing normalized scores.
 
@@ -100,57 +110,36 @@ To mitigate "lost in the middle" phenomena and context window saturation, we uti
 
 ---
 
-## 3. Theoretical Foundations
+## 3. Error Bus & Diagnostic Resilience
 
-Our architecture is informed by several key papers and concepts in the field of AI and Information Retrieval:
+Central to our architectural integrity is the **Error Bus** (`src/utils/error-bus.ts`). Inspired by the Martin Fowler Event Bus pattern, this component serves as a decoupled junction for system health.
 
-### Hybrid Search & RRF
+- **Pub/Sub Decoupling**: Operational logic (Scrapers, RAG) is entirely decoupled from diagnostic logic (Logger).
+- **Error Raising**: Custom exceptions are emitted to the bus before being thrown, ensuring that even if a worker crashes, its last state is preserved.
+- **Error Reporting**: Non-fatal inconsistencies are "reported" to the bus, allowing the logger to render high-fidelity context without interrupting the execution flow.
 
-- **Reciprocal Rank Fusion (RRF)**: Based on the principle that combining multiple search orderings can significantly outperform any single ordering.
-  - _Reference:_ [Cormack et al., 2009. Reciprocal Rank Fusion outperforms Condorcet and Individual Rank Classifiers.](https://arxiv.org/abs/1407.5645)
-
-### Retrieval-Augmented Generation (RAG)
-
-- **General RAG Framework**: We follow the core paradigm of grounding LLM outputs in external, verifiable data.
-  - _Reference:_ [Lewis et al., 2020. Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks.](https://arxiv.org/abs/2005.11401)
-
-### MapReduce for Context Compression
-
-- **Summarization & Synthesis**: Our fact extraction layer mirrors the "MapReduce" chain pattern, effectively handling long-context retrieval by distilling information before final generation.
-  - _Reference:_ [Wu et al., 2021. Recursively Summarizing Books with Human Feedback.](https://arxiv.org/abs/2109.10862) (Applying hierarchical summarization principles).
+For more details, see [ERROR_HANDLING.md](./ERROR_HANDLING.md).
 
 ---
 
-## 4. Visualizing the Retrieval Loop
+## 4. Theoretical Foundations
 
-```mermaid
-%%{init: {
-  'theme': 'base',
-  'themeVariables': {
-    'primaryColor': '#2d1b4d',
-    'primaryTextColor': '#e9d5ff',
-    'primaryBorderColor': '#7c3aed',
-    'lineColor': '#a78bfa',
-    'secondaryColor': '#1e1b4b',
-    'tertiaryColor': '#4c1d95',
-    'mainBkg': '#0f172a',
-    'nodeBorder': '#8b5cf6'
-  }
-}}%%
-sequenceDiagram
-    participant U as User
-    participant P as Planner
-    participant R as Retrieval (Hybrid)
-    participant MR as MapReduce (Extraction)
-    participant N as Narrator (Synthesis)
+### Hybrid Search & RRF
 
-    U->>P: Query
-    P->>R: [Semantic Queries + Hard Keywords]
-    R->>R: Fusion Ranking (RRF)
-    R->>MR: Top N Results
-    loop Fact Extraction
-        MR->>MR: Batch Processing
-    end
-    MR->>N: Verified Fact List
-    N->>U: Final Synthesized Answer
-```
+Hybrid Search addresses the limitations of pure vector-based systems, which can often hallucinate relationships between unrelated entities with similar embedding vectors. By incorporating `ripgrep`, we anchor our retrieval in literal truth.
+
+**Reference**: *Cormack, G. V., Clarke, C. L., & Buettcher, S. (2009). Reciprocal rank fusion outperforms Condorcet and individual rank learning methods.*
+
+### Retrieval-Augmented Generation (RAG)
+
+Our system facilitates a "conversational memory" by grounding LLM generation in private data. This minimizes hallucinations and allows for local-first intelligence.
+
+### MapReduce for Context Compression
+
+By "mapping" facts from individual segments before "reducing" them into a final answer, we ensure that the LLM is always working with high-entropy, high-relevance information.
+
+---
+
+## 5. Visualizing the Retrieval Loop
+
+The system iteratively refines its search based on the research plan, ensuring that the "Mightiest Response" is built on a foundation of exhaustive evidence.
