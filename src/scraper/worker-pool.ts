@@ -1,3 +1,4 @@
+import { errorBus } from '../utils/error-bus.js'
 import type { Browser, BrowserContext } from '@playwright/test'
 import { existsSync, readFileSync, statSync } from 'node:fs'
 import { logger } from '../utils/logger.js'
@@ -6,66 +7,45 @@ import { ConversationExtractor, type ExtractedConversation } from './conversatio
 import { FileWriter } from '../export/file-writer.js'
 import type { CheckpointManager, ConversationMetadata } from './checkpoint-manager.js'
 
-interface Worker {
+export interface Worker {
   id: number
   extractor: ConversationExtractor
   isBusy: boolean
 }
 
-interface ProcessingStats {
+export interface ProcessingStats {
   total: number
   succeeded: number
   failed: number
   skipped: number
-  failures: Array<{ url: string; title: string; reason: string }>
-}
-
-function loadPersistedAuthenticationState(): any | null {
-  const authenticationStoragePath = config.authStoragePath
-  if (!existsSync(authenticationStoragePath)) return null
-  try {
-    const fileStats = statSync(authenticationStoragePath)
-    const fileAgeInMilliseconds = Date.now() - fileStats.mtimeMs
-    const twentyFourHoursInMilliseconds = 24 * 60 * 60 * 1000
-    if (fileAgeInMilliseconds >= twentyFourHoursInMilliseconds) return null
-    return JSON.parse(readFileSync(authenticationStoragePath, 'utf-8'))
-  } catch (error) {
-    return null
-  }
+  failures: { url: string; title: string; reason: string }[]
 }
 
 export class WorkerPool {
   static readonly InitializationError = class extends Error {
-    constructor(message: string, options?: ErrorOptions) {
-      super(message, options)
-      this.name = 'WorkerInitializationError'
+    constructor(message: string) {
+      super(message)
+      this.name = 'InitializationError'
     }
   }
 
   static readonly ProcessingError = class extends Error {
-    constructor(message: string, options?: ErrorOptions) {
-      super(message, options)
-      this.name = 'WorkerProcessingError'
+    constructor(message: string) {
+      super(message)
+      this.name = 'ProcessingError'
     }
   }
 
   static readonly FileValidationError = class extends Error {
-    constructor(message: string, options?: ErrorOptions) {
-      super(message, options)
+    constructor(message: string) {
+      super(message)
       this.name = 'FileValidationError'
     }
   }
 
-  static readonly ExtractionError = class extends Error {
-    constructor(message: string, options?: ErrorOptions) {
-      super(message, options)
-      this.name = 'ExtractionError'
-    }
-  }
-
   private activeWorkers: Worker[] = []
-  private readonly conversationFileWriter: FileWriter
-  private readonly progressCheckpointManager: CheckpointManager
+  private conversationFileWriter: FileWriter
+  private progressCheckpointManager: CheckpointManager
   private processingStats: ProcessingStats
   private sharedBrowserContext: BrowserContext | null = null
   private contextRecreationLock: Promise<void> | null = null
@@ -89,10 +69,7 @@ export class WorkerPool {
         this.activeWorkers.push(worker)
       }
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error)
-      throw new WorkerPool.InitializationError(`Failed to initialize workers: ${errorMessage}`, {
-        cause: error,
-      })
+      throw errorBus.raise(WorkerPool.InitializationError, 'Failed to initialize workers', error)
     }
 
     logger.success(`Worker pool ready with ${this.activeWorkers.length} workers`)
@@ -338,7 +315,7 @@ export class WorkerPool {
     const errorMessage = error instanceof Error ? error.message : String(error)
     logger.error(`Worker ${worker.id} failed for ${conversation.title}`)
     logger.error(`  URL: ${conversation.url}`)
-    logger.error(`  Error: ${errorMessage}`, error)
+    errorBus.report(error, { message: 'Worker processing failed' })
 
     this.processingStats.failed++
     this.processingStats.failures.push({
@@ -382,5 +359,15 @@ export class WorkerPool {
       logger.info('💡 Failed/skipped conversations were NOT marked as processed.')
       logger.info('   You can rerun the scraper to retry them.')
     }
+  }
+}
+
+function loadPersistedAuthenticationState(): any {
+  const path = config.authStoragePath
+  if (!existsSync(path)) return null
+  try {
+    return JSON.parse(readFileSync(path, 'utf8'))
+  } catch (error) {
+    return null
   }
 }

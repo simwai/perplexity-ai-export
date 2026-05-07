@@ -1,3 +1,4 @@
+import { errorBus } from '../utils/error-bus.js'
 import { input, select, confirm } from '@inquirer/prompts'
 import { rmSync } from 'node:fs'
 import { sep } from 'node:path'
@@ -12,36 +13,36 @@ import { config } from '../utils/config.js'
 
 export class CommandHandler {
   static readonly ScraperError = class extends Error {
-    constructor(message: string, options?: ErrorOptions) {
-      super(message, options)
+    constructor(message: string) {
+      super(message)
       this.name = 'ScraperError'
     }
   }
 
   static readonly SearchError = class extends Error {
-    constructor(message: string, options?: ErrorOptions) {
-      super(message, options)
+    constructor(message: string) {
+      super(message)
       this.name = 'SearchError'
     }
   }
 
   static readonly VectorizeError = class extends Error {
-    constructor(message: string, options?: ErrorOptions) {
-      super(message, options)
+    constructor(message: string) {
+      super(message)
       this.name = 'VectorizeError'
     }
   }
 
   static readonly ValidationError = class extends Error {
-    constructor(message: string, options?: ErrorOptions) {
-      super(message, options)
+    constructor(message: string) {
+      super(message)
       this.name = 'ValidationError'
     }
   }
 
   static readonly ResetError = class extends Error {
-    constructor(message: string, options?: ErrorOptions) {
-      super(message, options)
+    constructor(message: string) {
+      super(message)
       this.name = 'ResetError'
     }
   }
@@ -58,7 +59,7 @@ export class CommandHandler {
     try {
       await this.executeFullScrapingFlow()
     } catch (error) {
-      logger.error('Scraper failed:', error instanceof Error ? error : String(error))
+      errorBus.report(error, { message: 'Scraper failed' })
     }
   }
 
@@ -96,9 +97,7 @@ export class CommandHandler {
         ripgrepSearchOptions
       )
     } catch (error) {
-      if (error instanceof Error) {
-        logger.error(error.message, error)
-      }
+      errorBus.report(error, { message: 'Search failed' })
     }
   }
 
@@ -140,8 +139,7 @@ export class CommandHandler {
       this.progressCheckpointManager.resetCheckpoint()
       logger.success('✅ Storage folder deleted. All progress has been reset.')
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error)
-      throw new CommandHandler.ResetError(`Failed to reset: ${errorMessage}`, { cause: error })
+      throw errorBus.raise(CommandHandler.ResetError, 'Failed to reset', error)
     }
   }
 
@@ -170,8 +168,7 @@ export class CommandHandler {
 
       logger.success('\n✨ Export complete!')
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error)
-      throw new CommandHandler.ScraperError(`Scraping failed: ${errorMessage}`, { cause: error })
+      throw errorBus.raise(CommandHandler.ScraperError, 'Scraping failed', error)
     } finally {
       await browserManager.close()
     }
@@ -247,16 +244,13 @@ export class CommandHandler {
     try {
       await this.conversationSearchOrchestrator.validateVectorSearch()
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error)
-      logger.error(errorMessage, error)
       logger.info('Start Ollama with the embedding model, then run "vectorize".')
-      throw new CommandHandler.ValidationError(errorMessage, { cause: error })
+      throw errorBus.raise(CommandHandler.ValidationError, 'Vector search validation failed', error)
     }
   }
 
   private async handleVectorSearchValidationRetry(error: unknown): Promise<void> {
-    const errorMessage = error instanceof Error ? error.message : String(error)
-    logger.error(errorMessage)
+    errorBus.report(error, { message: 'Vector search validation failed' })
 
     const shouldRetry = await confirm({
       message:
@@ -271,8 +265,7 @@ export class CommandHandler {
     try {
       await this.conversationSearchOrchestrator.validateVectorSearch()
     } catch (error) {
-      const nestedErrorMessage = error instanceof Error ? error.message : String(error)
-      logger.error(nestedErrorMessage, error)
+      errorBus.report(error, { message: 'Retry validation failed' })
       return
     }
 

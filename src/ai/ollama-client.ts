@@ -1,3 +1,4 @@
+import { errorBus } from '../utils/error-bus.js'
 import { z } from 'zod'
 import { config } from '../utils/config.js'
 import { logger } from '../utils/logger.js'
@@ -15,8 +16,8 @@ const generationResponseSchema = z.object({
 
 export class OllamaClient {
   static readonly OllamaError = class extends Error {
-    constructor(message: string, options?: ErrorOptions) {
-      super(message, options)
+    constructor(message: string) {
+      super(message)
       this.name = 'OllamaError'
     }
   }
@@ -51,8 +52,7 @@ export class OllamaClient {
       await this.embed(['ping'])
       logger.success('Ollama embeddings look good.')
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      throw new OllamaClient.OllamaError(`Ollama validation failed: ${message}`)
+      throw errorBus.raise(OllamaClient.OllamaError, 'Ollama validation failed', error)
     }
   }
 
@@ -71,21 +71,19 @@ export class OllamaClient {
         try {
           errorBody = await response.text()
         } catch (error) {
-          /* oxlint-disable-next-line no-empty */
+          /* ignore */
         }
         logger.error(`Ollama HTTP ${response.status}`, { body, errorBody: errorBody.slice(0, 500) })
-        throw new OllamaClient.OllamaError(
+        throw errorBus.raise(
+          OllamaClient.OllamaError,
           `Ollama request failed with status ${response.status} – ${errorBody.slice(0, 200)}`
         )
       }
 
       return await response.json()
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error)
       if (error instanceof OllamaClient.OllamaError) throw error
-      throw new OllamaClient.OllamaError(`Network error while calling Ollama: ${errorMessage}`, {
-        cause: error,
-      })
+      throw errorBus.raise(OllamaClient.OllamaError, 'Network error while calling Ollama', error)
     }
   }
 
@@ -100,6 +98,9 @@ export class OllamaClient {
       return [legacyResult.data.embedding]
     }
 
-    throw new OllamaClient.OllamaError('Unexpected response format from Ollama embeddings endpoint')
+    throw errorBus.raise(
+      OllamaClient.OllamaError,
+      'Unexpected response format from Ollama embeddings endpoint'
+    )
   }
 }

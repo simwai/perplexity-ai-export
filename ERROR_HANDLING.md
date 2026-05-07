@@ -1,62 +1,62 @@
-# Robust Error Handling & Diagnostic Resilience
+# Simplified Error Reporting & Diagnostic Resilience
 
-This document outlines the philosophical and technical approach to error management within the Perplexity History Export tool. We prioritize diagnostic clarity and context preservation to ensure that environmental instability does not lead to information entropy.
+This document outlines the architectural shift from deep error chaining to a centralized, Pub/Sub-based error reporting model within the Perplexity History Export tool. We prioritize diagnostic visibility while maintaining a lean, decoupled codebase.
 
 ---
 
 <!-- toc -->
 
-- [1. The Philosophy of Error Preservation](#1-the-philosophy-of-error-preservation)
-- [2. Error Chaining & The `cause` Property](#2-error-chaining--the-cause-property)
-- [3. High-Fidelity Diagnostics (Logging)](#3-high-fidelity-diagnostics-logging)
-- [4. Architectural Resilience Patterns](#4-architectural-resilience-patterns)
-  - [Context Restoration](#context-restoration)
-  - [Safe Template Literals](#safe-template-literals)
+- [1. The Error Bus Architecture](#1-the-error-bus-architecture)
+- [2. Reporting vs. Raising](#2-reporting-vs-raising)
+  - [Reporting (Non-Fatal)](#reporting-non-fatal)
+  - [Raising (Fatal/Custom)](#raising-fatalcustom)
+- [3. High-Fidelity Diagnostics (Logger Subscription)](#3-high-fidelity-diagnostics-logger-subscription)
+- [4. Developer Directives](#4-developer-directives)
 
 <!-- tocstop -->
 
 ---
 
-## 1. The Philosophy of Error Preservation
+## 1. The Error Bus Architecture
 
-In a system as complex as distributed browser automation and RAG synthesis, errors are not merely exceptions to be silenced; they are data points. Our system adheres to the principle of **Maximum Context Retention**: every caught exception must carry its original lineage forward.
+Our system employs a centralized **Error Bus** (`src/utils/error-bus.ts`) based on the Martin Fowler Pub/Sub pattern. Instead of tightly coupling every component to the logger or manually passing `cause` objects through multiple layers, components emit error events to the bus.
 
-## 2. Error Chaining & The `cause` Property
+This decoupling allows the core logic to remain focused on its operational directives while the diagnostic layer (the logger) handles the complexity of formatting and output.
 
-We utilize native TypeScript/JavaScript error options to implement deep error chaining. Custom error classes (e.g., `ExtractionError`, `VectorStoreError`) are designed to accept an optional `cause` in their constructors.
+## 2. Reporting vs. Raising
 
-```typescript
-try {
-  await operation()
-} catch (error) {
-  const errorMessage = error instanceof Error ? error.message : String(error)
-  throw new CustomError(`Failed to execute operation: ${errorMessage}`, { cause: error })
-}
-```
+We utilize two primary patterns for error management:
 
-This pattern ensures that the original stack trace and specific error details (like network timeouts or selector failures) remain accessible to the root diagnostic layer.
+### Reporting (Non-Fatal)
 
-## 3. High-Fidelity Diagnostics (Logging)
-
-Our `logger` is engineered to be more than a `console.log` wrapper. When an error object is passed to the logger, it utilizes `node:util.inspect` with infinite depth to render a colorized, full-context representation of the error tree.
-
-- **Success/Info**: Standard operational feedback.
-- **Warnings**: Signal non-fatal inconsistencies (e.g., API response timeouts or missing metadata).
-- **Errors**: Render the primary error message alongside the entire nested `cause` chain and stack traces.
-
-## 4. Architectural Resilience Patterns
-
-### Context Restoration
-
-The `WorkerPool` and `BrowserManager` implement organic resilience patterns. If a browser context dies (Target closed, Protocol error), the system detects this at the worker level, triggers a shared context recreation, and retries the operation without human intervention.
-
-### Safe Template Literals
-
-To maintain clean code and prevent logical fragmentation, we avoid complex type-checking logic (like `instanceof`) inside template literals. Error messages are pre-extracted into local variables to ensure that the logging strings remain declarative and readable.
+Used when an error occurs but should not halt the entire process (e.g., a non-critical metadata parsing failure).
 
 ```typescript
 } catch (error) {
-  const errorMessage = error instanceof Error ? error.message : String(error);
-  logger.error(`Operation failed: ${errorMessage}`, error);
+  errorBus.report(error, { message: 'Failed to parse metadata' });
 }
 ```
+
+### Raising (Fatal/Custom)
+
+Used when an error must be re-thrown as a specific custom type. The `raise` helper handles both the event emission and the creation of the custom error instance.
+
+```typescript
+} catch (error) {
+  throw errorBus.raise(VectorStore.SearchError, 'Vector search failed', error);
+}
+```
+
+## 3. High-Fidelity Diagnostics (Logger Subscription)
+
+The `logger` is a subscriber to the `errorBus`. When an error is reported or raised:
+
+1. The Error Bus captures the original error object and any optional metadata (like the custom error class name).
+2. The Logger receives the event and utilizes `node:util.inspect` with infinite depth.
+3. A colorized, full-context representation (including stack traces) is rendered to the console.
+
+## 4. Developer Directives
+
+- **Rename Catch Variables**: Always use `error` in catch blocks (e.g., `catch (error)`).
+- **Avoid Inline Logic**: Do not perform `instanceof` checks or manual string formatting inside template literals.
+- **Utilize the Bus**: Prefer `errorBus.raise` or `errorBus.report` over direct `logger.error` calls inside catch blocks to ensure the diagnostic layer receives the full error context.

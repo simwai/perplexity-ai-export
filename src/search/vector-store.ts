@@ -1,3 +1,4 @@
+import { errorBus } from '../utils/error-bus.js'
 import { LocalIndex } from 'vectra'
 import { join } from 'node:path'
 import { readFileSync, readdirSync, statSync } from 'node:fs'
@@ -15,29 +16,29 @@ export interface VectorSearchResult {
 
 export class VectorStore {
   static readonly VectorStoreError = class extends Error {
-    constructor(message: string, options?: ErrorOptions) {
-      super(message, options)
+    constructor(message: string) {
+      super(message)
       this.name = 'VectorStoreError'
     }
   }
 
   static readonly IndexError = class extends Error {
-    constructor(message: string, options?: ErrorOptions) {
-      super(message, options)
+    constructor(message: string) {
+      super(message)
       this.name = 'VectorStoreIndexError'
     }
   }
 
   static readonly EmbeddingError = class extends Error {
-    constructor(message: string, options?: ErrorOptions) {
-      super(message, options)
+    constructor(message: string) {
+      super(message)
       this.name = 'VectorStoreEmbeddingError'
     }
   }
 
   static readonly SearchError = class extends Error {
-    constructor(message: string, options?: ErrorOptions) {
-      super(message, options)
+    constructor(message: string) {
+      super(message)
       this.name = 'VectorStoreSearchError'
     }
   }
@@ -54,10 +55,7 @@ export class VectorStore {
     try {
       await this.ollamaClient.validate()
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error)
-      throw new VectorStore.VectorStoreError(`Vector store validation failed: ${errorMessage}`, {
-        cause: error,
-      })
+      throw errorBus.raise(VectorStore.VectorStoreError, 'Vector store validation failed', error)
     }
   }
 
@@ -82,10 +80,7 @@ export class VectorStore {
       const rawResults = await this.queryVectorIndex(queryEmbedding, query, limit)
       return this.formatVectorSearchResults(rawResults)
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error)
-      throw new VectorStore.SearchError(`Vector search failed: ${errorMessage}`, {
-        cause: error,
-      })
+      throw errorBus.raise(VectorStore.SearchError, 'Vector search failed', error)
     }
   }
 
@@ -104,10 +99,7 @@ export class VectorStore {
       )
       return this.formatVectorSearchResults(rawResults)
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error)
-      throw new VectorStore.SearchError(`Filtered vector search failed: ${errorMessage}`, {
-        cause: error,
-      })
+      throw errorBus.raise(VectorStore.SearchError, 'Filtered vector search failed', error)
     }
   }
 
@@ -210,8 +202,7 @@ export class VectorStore {
         })
       }
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error)
-      logger.error(`Batch embedding failed: ${errorMessage}`, error)
+      errorBus.report(error, { message: 'Batch embedding failed' })
     }
   }
 

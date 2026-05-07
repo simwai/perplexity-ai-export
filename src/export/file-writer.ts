@@ -1,3 +1,4 @@
+import { errorBus } from '../utils/error-bus.js'
 import { join } from 'node:path'
 import { writeFileSync, existsSync, mkdirSync } from 'node:fs'
 import { config } from '../utils/config.js'
@@ -6,8 +7,8 @@ import { sanitizeFilename, sanitizeSpaceName } from './sanitizer.js'
 
 export class FileWriter {
   static readonly WriteError = class extends Error {
-    constructor(message: string, options?: ErrorOptions) {
-      super(message, options)
+    constructor(message: string) {
+      super(message)
       this.name = 'FileWriteError'
     }
   }
@@ -32,10 +33,10 @@ export class FileWriter {
       writeFileSync(destinationFilePath, markdownContent, 'utf-8')
       return destinationFilePath
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error)
-      throw new FileWriter.WriteError(
-        `Failed to write conversation ${conversation.id}: ${errorMessage}`,
-        { cause: error }
+      throw errorBus.raise(
+        FileWriter.WriteError,
+        `Failed to write conversation ${conversation.id}`,
+        error
       )
     }
   }

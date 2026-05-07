@@ -1,3 +1,4 @@
+import { errorBus } from '../utils/error-bus.js'
 import { chromium, type Browser, type BrowserContext, type Page } from '@playwright/test'
 import { config } from '../utils/config.js'
 import { logger } from '../utils/logger.js'
@@ -6,29 +7,29 @@ import { confirm } from '@inquirer/prompts'
 
 export class BrowserManager {
   static readonly BrowserLaunchError = class extends Error {
-    constructor(message: string, options?: ErrorOptions) {
-      super(message, options)
+    constructor(message: string) {
+      super(message)
       this.name = 'BrowserLaunchError'
     }
   }
 
   static readonly AuthError = class extends Error {
-    constructor(message: string, options?: ErrorOptions) {
-      super(message, options)
+    constructor(message: string) {
+      super(message)
       this.name = 'AuthError'
     }
   }
 
   static readonly ContextError = class extends Error {
-    constructor(message: string, options?: ErrorOptions) {
-      super(message, options)
+    constructor(message: string) {
+      super(message)
       this.name = 'ContextError'
     }
   }
 
   static readonly NavigationError = class extends Error {
-    constructor(message: string, options?: ErrorOptions) {
-      super(message, options)
+    constructor(message: string) {
+      super(message)
       this.name = 'NavigationError'
     }
   }
@@ -62,10 +63,7 @@ export class BrowserManager {
       return this.getActivePage()
     } catch (error) {
       if (error instanceof Error && error.name !== 'Error') throw error
-      const errorMessage = error instanceof Error ? error.message : String(error)
-      throw new BrowserManager.BrowserLaunchError(`Unexpected error: ${errorMessage}`, {
-        cause: error,
-      })
+      throw errorBus.raise(BrowserManager.BrowserLaunchError, 'Unexpected browser error', error)
     }
   }
 
@@ -85,10 +83,7 @@ export class BrowserManager {
         args: ['--disable-blink-features=AutomationControlled'],
       })
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error)
-      throw new BrowserManager.BrowserLaunchError(`Failed to launch browser: ${errorMessage}`, {
-        cause: error,
-      })
+      throw errorBus.raise(BrowserManager.BrowserLaunchError, 'Failed to launch browser', error)
     }
   }
 
@@ -139,10 +134,7 @@ export class BrowserManager {
         timeout: 30000,
       })
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error)
-      throw new BrowserManager.NavigationError(`Failed to navigate to settings: ${errorMessage}`, {
-        cause: error,
-      })
+      throw errorBus.raise(BrowserManager.NavigationError, 'Failed to navigate to settings', error)
     }
   }
 

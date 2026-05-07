@@ -34,7 +34,7 @@ export class Repl {
         if (error instanceof Error && error.name === 'ExitPromptError') {
           this.terminateRepl()
         } else {
-          logger.error('REPL execution error', error)
+          throw error
         }
       }
     }

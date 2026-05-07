@@ -1,10 +1,9 @@
+import { errorBus } from '../utils/error-bus.js'
 import { spawn } from 'node:child_process'
-import { existsSync } from 'node:fs'
-import { createInterface } from 'node:readline'
 import { config } from '../utils/config.js'
 import { logger } from '../utils/logger.js'
-import chalk from 'chalk'
 import { rgPath } from '@vscode/ripgrep'
+import chalk from 'chalk'
 
 export interface RgSearchOptions {
   pattern: string
@@ -21,129 +20,73 @@ export interface RgMatch {
 
 export class RgSearch {
   static readonly RgSearchError = class extends Error {
-    constructor(message: string, options?: ErrorOptions) {
-      super(message, options)
+    constructor(message: string) {
+      super(message)
       this.name = 'RgSearchError'
     }
   }
 
   static readonly RgNotFoundError = class extends Error {
-    constructor(message: string, options?: ErrorOptions) {
-      super(message, options)
+    constructor(message: string) {
+      super(message)
       this.name = 'RgNotFoundError'
     }
   }
 
-  async search(options: RgSearchOptions): Promise<void> {
-    this.ensureExportDirectoryIsAccessible()
-    const ripgrepCommandArguments = this.constructRipgrepArguments(options)
-    await this.spawnRipgrepProcess(ripgrepCommandArguments)
-  }
-
   async captureSearchMatches(options: RgSearchOptions): Promise<RgMatch[]> {
-    this.ensureExportDirectoryIsAccessible()
-    const args = this.constructRipgrepArguments(options)
-    const cleanArgs = args
-      .filter((a) => a !== '--color=always')
-      .concat(['--color=never', '--json', '--max-filesize', '1M', '--no-binary'])
-
-    return new Promise((resolve, reject) => {
-      const MAX_MATCHES_PER_KEYWORD = 100
-      const TIMEOUT_MS = 30000
-      const matches: RgMatch[] = []
-      const rg = spawn(rgPath, cleanArgs, { cwd: config.exportDir })
-
-      const timeout = setTimeout(() => {
-        logger.warn(
-          `Ripgrep search for "${options.pattern}" timed out after ${TIMEOUT_MS / 1000}s. Killing process.`
-        )
-        rg.kill('SIGKILL')
-      }, TIMEOUT_MS)
-
-      const rl = createInterface({
-        input: rg.stdout,
-        terminal: false,
-      })
-
-      rl.on('line', (line) => {
-        if (matches.length >= MAX_MATCHES_PER_KEYWORD) {
-          rg.kill()
-          return
-        }
-
-        try {
-          const parsed = JSON.parse(line)
-          if (parsed.type === 'match') {
-            matches.push({
-              path: parsed.data.path.text,
-              line: parsed.data.line_number,
-              text: parsed.data.lines.text,
-            })
-          }
-        } catch (error) {
-          /* ignore */
-        }
-      })
-
-      rg.stderr.on('data', () => {})
-
-      rg.on('error', (err) => {
-        clearTimeout(timeout)
-        rl.close()
-        reject(err)
-      })
-
-      rg.on('close', (code) => {
-        clearTimeout(timeout)
-        rl.close()
-        if (code === 0 || code === 1 || code === null || rg.killed) {
-          resolve(matches)
-        } else {
-          reject(new RgSearch.RgSearchError(`ripgrep exited with code ${code}`))
-        }
-      })
-    })
-  }
-
-  private ensureExportDirectoryIsAccessible(): void {
-    if (!existsSync(config.exportDir)) {
-      throw new RgSearch.RgSearchError(
-        'No exports directory found. Please run the "start" command first to export your history.'
-      )
-    }
-  }
-
-  private constructRipgrepArguments(options: RgSearchOptions): string[] {
-    const argumentsList: string[] = [
-      '--color=always',
-      '--heading',
-      '--line-number',
-      '--no-messages',
-      '--column',
-      '--smart-case',
-    ]
-
-    if (options.caseSensitive) {
-      argumentsList.push('--case-sensitive')
-    }
-
-    if (options.wholeWord) {
-      argumentsList.push('--word-regexp')
-    }
-
+    const argumentsList = ['--json', '--max-count', '100']
+    if (!options.caseSensitive) argumentsList.push('--ignore-case')
+    if (options.wholeWord) argumentsList.push('--word-regexp')
     if (options.regex) {
       argumentsList.push('--regexp', options.pattern)
     } else {
       argumentsList.push('--fixed-strings', options.pattern)
     }
-
     argumentsList.push('--type', 'markdown')
-    return argumentsList
+
+    return new Promise((resolve, reject) => {
+      const matches: RgMatch[] = []
+      const ripgrepProcess = spawn(rgPath, argumentsList, { cwd: config.exportDir })
+
+      ripgrepProcess.stdout.on('data', (data) => {
+        const lines = data.toString().split('\n')
+        for (const line of lines) {
+          if (!line) continue
+          try {
+            const parsed = JSON.parse(line)
+            if (parsed.type === 'match') {
+              matches.push({
+                path: parsed.data.path.text,
+                line: parsed.data.line_number,
+                text: parsed.data.lines.text,
+              })
+            }
+          } catch (error) {
+            /* ignore */
+          }
+        }
+      })
+
+      ripgrepProcess.on('error', (error) => {
+        if ((error as any).code === 'ENOENT') {
+          reject(new RgSearch.RgNotFoundError('ripgrep not found'))
+        } else {
+          reject(errorBus.raise(RgSearch.RgSearchError, 'Search failed', error))
+        }
+      })
+
+      ripgrepProcess.on('close', (code) => {
+        if (code === 0 || code === 1) resolve(matches)
+        else reject(new RgSearch.RgSearchError(`ripgrep exited with code ${code}`))
+      })
+    })
   }
 
-  private spawnRipgrepProcess(args: string[]): Promise<void> {
+  async search(options: RgSearchOptions): Promise<void> {
+    const argumentsList = this.buildArgumentsList(options)
+
     return new Promise((resolve, reject) => {
-      const ripgrepProcess = spawn(rgPath, args, {
+      const ripgrepProcess = spawn(rgPath, argumentsList, {
         cwd: config.exportDir,
         stdio: ['ignore', 'pipe', 'pipe'],
       })
@@ -166,7 +109,7 @@ export class RgSearch {
         if (error.message.includes('ENOENT')) {
           reject(new RgSearch.RgNotFoundError(this.getRipgrepInstallationInstructions()))
         } else {
-          reject(new RgSearch.RgSearchError(`Search failed: ${error.message}`, { cause: error }))
+          reject(errorBus.raise(RgSearch.RgSearchError, 'Search failed', error))
         }
       })
 
@@ -181,6 +124,27 @@ export class RgSearch {
         }
       })
     })
+  }
+
+  private buildArgumentsList(options: RgSearchOptions): string[] {
+    const argumentsList = ['--heading', '--line-number', '--color', 'always']
+
+    if (!options.caseSensitive) {
+      argumentsList.push('--ignore-case')
+    }
+
+    if (options.wholeWord) {
+      argumentsList.push('--word-regexp')
+    }
+
+    if (options.regex) {
+      argumentsList.push('--regexp', options.pattern)
+    } else {
+      argumentsList.push('--fixed-strings', options.pattern)
+    }
+
+    argumentsList.push('--type', 'markdown')
+    return argumentsList
   }
 
   private getRipgrepInstallationInstructions(): string {

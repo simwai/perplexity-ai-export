@@ -1,6 +1,7 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { config } from '../utils/config.js'
 import { logger } from '../utils/logger.js'
+import { errorBus } from '../utils/error-bus.js'
 
 export interface SpaceMetadata {
   url: string
@@ -25,22 +26,22 @@ export interface Checkpoint {
 
 export class CheckpointManager {
   static readonly LoadError = class extends Error {
-    constructor(message: string, options?: ErrorOptions) {
-      super(message, options)
+    constructor(message: string) {
+      super(message)
       this.name = 'CheckpointLoadError'
     }
   }
 
   static readonly SaveError = class extends Error {
-    constructor(message: string, options?: ErrorOptions) {
-      super(message, options)
+    constructor(message: string) {
+      super(message)
       this.name = 'CheckpointSaveError'
     }
   }
 
   static readonly ValidationError = class extends Error {
-    constructor(message: string, options?: ErrorOptions) {
-      super(message, options)
+    constructor(message: string) {
+      super(message)
       this.name = 'CheckpointValidationError'
     }
   }
@@ -123,8 +124,7 @@ export class CheckpointManager {
       this.assertValidCheckpointStructure(parsedCheckpointData)
       return parsedCheckpointData
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error)
-      logger.warn(`Failed to load checkpoint (${errorMessage}), starting fresh`, error)
+      errorBus.report(error, { message: 'Failed to load checkpoint, starting fresh' })
       return this.createInitialCheckpoint()
     }
   }
@@ -166,10 +166,7 @@ export class CheckpointManager {
     try {
       writeFileSync(config.checkpointPath, JSON.stringify(this.currentCheckpoint, null, 2))
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error)
-      throw new CheckpointManager.SaveError(`Failed to write checkpoint: ${errorMessage}`, {
-        cause: error,
-      })
+      throw errorBus.raise(CheckpointManager.SaveError, 'Failed to write checkpoint', error)
     }
   }
 }

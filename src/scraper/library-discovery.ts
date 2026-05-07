@@ -1,25 +1,26 @@
+import { errorBus } from '../utils/error-bus.js'
 import type { Page } from '@playwright/test'
 import { logger } from '../utils/logger.js'
 import type { ConversationMetadata } from './checkpoint-manager.js'
 
 export class LibraryDiscovery {
   static readonly VersionCaptureError = class extends Error {
-    constructor(message: string, options?: ErrorOptions) {
-      super(message, options)
+    constructor(message: string) {
+      super(message)
       this.name = 'VersionCaptureError'
     }
   }
 
   static readonly PaginationError = class extends Error {
-    constructor(message: string, options?: ErrorOptions) {
-      super(message, options)
+    constructor(message: string) {
+      super(message)
       this.name = 'PaginationError'
     }
   }
 
   static readonly NoDataError = class extends Error {
-    constructor(message: string, options?: ErrorOptions) {
-      super(message, options)
+    constructor(message: string) {
+      super(message)
       this.name = 'NoDataError'
     }
   }
@@ -124,10 +125,10 @@ export class LibraryDiscovery {
         { offset, limit, version: apiVersion }
       )
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error)
-      throw new LibraryDiscovery.PaginationError(
-        `Failed to fetch batch at offset ${offset}: ${errorMessage}`,
-        { cause: error }
+      throw errorBus.raise(
+        LibraryDiscovery.PaginationError,
+        `Failed to fetch batch at offset ${offset}`,
+        error
       )
     }
   }

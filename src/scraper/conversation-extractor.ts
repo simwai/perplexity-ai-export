@@ -1,3 +1,4 @@
+import { errorBus } from '../utils/error-bus.js'
 import type { BrowserContext, Page, Response } from '@playwright/test'
 import { waitStrategy } from '../utils/wait-strategy.js'
 import { logger } from '../utils/logger.js'
@@ -42,50 +43,50 @@ export class ConversationExtractor {
   ])
 
   static readonly ExtractionError = class extends Error {
-    constructor(message: string, options?: ErrorOptions) {
-      super(message, options)
+    constructor(message: string) {
+      super(message)
       this.name = 'ExtractionError'
     }
   }
 
   static readonly NavigationError = class extends Error {
-    constructor(message: string, options?: ErrorOptions) {
-      super(message, options)
+    constructor(message: string) {
+      super(message)
       this.name = 'NavigationError'
     }
   }
 
   static readonly NotFoundError = class extends Error {
-    constructor(message: string, options?: ErrorOptions) {
-      super(message, options)
+    constructor(message: string) {
+      super(message)
       this.name = 'NotFoundError'
     }
   }
 
   static readonly AuthError = class extends Error {
-    constructor(message: string, options?: ErrorOptions) {
-      super(message, options)
+    constructor(message: string) {
+      super(message)
       this.name = 'AuthError'
     }
   }
 
   static readonly ServerError = class extends Error {
-    constructor(message: string, options?: ErrorOptions) {
-      super(message, options)
+    constructor(message: string) {
+      super(message)
       this.name = 'ServerError'
     }
   }
 
   static readonly NoDataError = class extends Error {
-    constructor(message: string, options?: ErrorOptions) {
-      super(message, options)
+    constructor(message: string) {
+      super(message)
       this.name = 'NoDataError'
     }
   }
 
   static readonly ParsingError = class extends Error {
-    constructor(message: string, options?: ErrorOptions) {
-      super(message, options)
+    constructor(message: string) {
+      super(message)
       this.name = 'ParsingError'
     }
   }
@@ -103,12 +104,10 @@ export class ConversationExtractor {
     try {
       page = await this.context.newPage()
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error)
-      throw new ConversationExtractor.ExtractionError(
-        `Failed to create new page: ${errorMessage}`,
-        {
-          cause: error,
-        }
+      throw errorBus.raise(
+        ConversationExtractor.ExtractionError,
+        'Failed to create new page',
+        error
       )
     }
 
@@ -130,13 +129,12 @@ export class ConversationExtractor {
 
       return parsed
     } catch (error) {
-      if (error instanceof Error) throw error
-      const errorMessage = error instanceof Error ? error.message : String(error)
-      throw new ConversationExtractor.ExtractionError(errorMessage, { cause: error })
+      if (error instanceof Error && error.name !== 'Error') throw error
+      throw errorBus.raise(ConversationExtractor.ExtractionError, 'Extraction failed', error)
     } finally {
       if (page) {
         await page.close().catch((e: Error) => {
-          logger.warn(`Failed to close page: ${e.message}`, e)
+          logger.warn(`Failed to close page: ${e.message}`)
         })
       }
     }
@@ -149,9 +147,11 @@ export class ConversationExtractor {
     try {
       await this.context.pages()
     } catch (error) {
-      throw new ConversationExtractor.ExtractionError('Browser context is no longer available', {
-        cause: error,
-      })
+      throw errorBus.raise(
+        ConversationExtractor.ExtractionError,
+        'Browser context is no longer available',
+        error
+      )
     }
   }
 
@@ -194,8 +194,7 @@ export class ConversationExtractor {
           resolve(json)
         } catch (error) {
           if (resolved) return
-          const errorMessage = error instanceof Error ? error.message : String(error)
-          logger.error(`Failed to parse JSON from thread API: ${errorMessage}`, error)
+          errorBus.report(error, { message: 'Failed to parse JSON from thread API' })
         }
       })
     })
@@ -260,8 +259,7 @@ export class ConversationExtractor {
 
       return { id, title, spaceName, timestamp, content }
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error)
-      logger.error(`Failed to parse conversation data: ${errorMessage}`, error)
+      errorBus.report(error, { message: 'Failed to parse conversation data' })
       return null
     }
   }
