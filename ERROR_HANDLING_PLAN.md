@@ -28,11 +28,11 @@ We are implementing a Martin Fowler-inspired **Error Bus** (`src/utils/error-bus
 
 ### Refactor Batch 2: Extraction Engine
 
-- [ ] `src/scraper/conversation-extractor.ts`
-- [ ] `src/scraper/worker-pool.ts`
-- [ ] `src/scraper/browser.ts`
-- [ ] `src/scraper/checkpoint-manager.ts`
-- [ ] `src/scraper/library-discovery.ts`
+- [x] `src/scraper/conversation-extractor.ts`
+- [x] `src/scraper/worker-pool.ts`
+- [x] `src/scraper/browser.ts`
+- [x] `src/scraper/checkpoint-manager.ts`
+- [x] `src/scraper/library-discovery.ts`
 
 ### Refactor Batch 3: CLI & Utilities
 
@@ -41,6 +41,6 @@ We are implementing a Martin Fowler-inspired **Error Bus** (`src/utils/error-bus
 - [ ] `src/export/file-writer.ts`
 - [ ] `src/index.ts`
 
-## 🚀 Batch 1 Status
+## 🚀 Batch 2 Status
 
-**Complete**. Core search and AI layers now utilize the Error Bus for all exception handling.
+**Complete**. The entire extraction engine (Playwright logic, worker pools, and state management) has been migrated to the Error Bus architecture.

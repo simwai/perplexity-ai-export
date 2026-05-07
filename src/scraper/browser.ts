@@ -1,3 +1,4 @@
+import { errorBus } from '../utils/error-bus.js'
 import { chromium, type Browser, type BrowserContext, type Page } from '@playwright/test'
 import { readFileSync, writeFileSync, existsSync, statSync } from 'node:fs'
 import { config } from '../utils/config.js'
@@ -49,17 +50,15 @@ export class BrowserManager {
         const isLoggedIn = await this.verifyLoginStatus(this.getActivePage())
 
         if (isLoggedIn) {
-          logger.success('Already logged in!')
+          logger.success('Authentication restored from saved state.')
           return this.getActivePage()
         }
 
-        logger.warn(
-          'Saved authentication expired or invalid. Restarting in headful mode for login...'
-        )
+        logger.warn('Saved authentication is no longer valid. Restarting for manual login.')
         await this.close()
       }
 
-      // Need login: launch headful
+      // Launch headful for manual login
       await this.launchBrowser(false)
       await this.initializeBrowserContext()
       await this.navigateToSettingsPage()
@@ -75,9 +74,9 @@ export class BrowserManager {
       }
 
       return this.getActivePage()
-    } catch (_error) {
-      if (_error instanceof Error) throw _error
-      throw new BrowserManager.BrowserLaunchError(`Unexpected error: ${String(_error)}`)
+    } catch (error) {
+      if (error instanceof Error && error.name !== 'Error') throw error
+      throw errorBus.raise(BrowserManager.BrowserLaunchError, 'Unexpected browser error', error)
     }
   }
 
@@ -96,10 +95,8 @@ export class BrowserManager {
         headless: headless === 'new' ? true : headless,
         args: ['--disable-blink-features=AutomationControlled'],
       })
-    } catch (_error) {
-      throw new BrowserManager.BrowserLaunchError(
-        `Failed to launch browser: ${_error instanceof Error ? _error.message : String(_error)}`
-      )
+    } catch (error) {
+      throw errorBus.raise(BrowserManager.BrowserLaunchError, 'Failed to launch browser', error)
     }
   }
 
@@ -115,8 +112,8 @@ export class BrowserManager {
         this.activeContext = await this.browserInstance.newContext({
           storageState: storageStateData,
         })
-      } catch (_error) {
-        logger.warn('Failed to load saved auth state, starting fresh.', _error)
+      } catch (error) {
+        logger.warn('Failed to load saved auth state, starting fresh.', error)
         this.activeContext = await this.browserInstance.newContext()
       }
     } else {
@@ -134,7 +131,7 @@ export class BrowserManager {
       const fileAgeInMs = Date.now() - fileStats.mtimeMs
       const twentyFourHoursInMs = 24 * 60 * 60 * 1000
       return fileAgeInMs < twentyFourHoursInMs
-    } catch (_error) {
+    } catch (error) {
       return false
     }
   }
@@ -147,12 +144,10 @@ export class BrowserManager {
     const perplexitySettingsUrl = 'https://www.perplexity.ai/settings'
     try {
       await this.activePage.goto(perplexitySettingsUrl, {
-        timeout: 3000,
+        timeout: 30000,
       })
-    } catch (_error) {
-      throw new BrowserManager.NavigationError(
-        `Failed to navigate to settings: ${_error instanceof Error ? _error.message : String(_error)}`
-      )
+    } catch (error) {
+      throw errorBus.raise(BrowserManager.NavigationError, 'Failed to navigate to settings', error)
     }
   }
 
@@ -169,8 +164,9 @@ export class BrowserManager {
     }
 
     logger.info('Please log in manually in the browser window...')
+
     await confirm({
-      message: 'Press Enter when you are logged in and on the settings page',
+      message: 'Press Enter once you have logged in and see your settings page.',
       default: true,
     })
 
@@ -196,7 +192,7 @@ export class BrowserManager {
     const currentUrl = page.url()
 
     const authenticatedUrlPaths = ['/settings', '/library', '/collections', '/account/details']
-    if (authenticatedUrlPaths.some((path) => currentUrl.includes(path))) {
+    if (authenticatedUrlPaths.some((p) => currentUrl.includes(p))) {
       return true
     }
 
