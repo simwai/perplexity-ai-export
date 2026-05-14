@@ -4,30 +4,30 @@ import { logger } from '../utils/logger.js'
 export function showHelp(): void {
   logger.info(chalk.bold('\n📚 Available Actions:\n'))
 
-  logger.info(chalk.cyan('  start'))
+  logger.info(chalk.cyan('  Start scraper (Library)'))
   logger.info(
     '    Run the scraper to export your Perplexity history. If a checkpoint exists, you can resume or restart.\n'
   )
 
-  logger.info(chalk.cyan('  search'))
+  logger.info(chalk.cyan('  Search conversations'))
   logger.info(
     '    Search through exported conversations using various modes: auto, semantic, RAG, or exact text.\n'
   )
 
-  logger.info(chalk.cyan('  vectorize'))
+  logger.info(chalk.cyan('  Build vector index'))
   logger.info(
     '    Build or update the local vector index from your exports to enable semantic search and RAG.\n'
   )
 
-  logger.info(chalk.cyan('  reset'))
+  logger.info(chalk.cyan('  Reset all data'))
   logger.info(
     '    Remove all stored checkpoints, authentication data, and the vector index to start fresh.\n'
   )
 
-  logger.info(chalk.cyan('  help'))
+  logger.info(chalk.cyan('  Help'))
   logger.info('    Display this help overview.\n')
 
-  logger.info(chalk.cyan('  exit'))
+  logger.info(chalk.cyan('  Exit'))
   logger.info('    Close the application.\n')
 
   logger.info(chalk.bold('💡 Search & RAG Tips:\n'))
