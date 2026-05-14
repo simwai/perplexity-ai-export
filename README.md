@@ -18,7 +18,7 @@
 - [Key Features](#key-features)
 - [Environment Setup Guide](#environment-setup-guide)
   * [1. Install Node.js (The Engine)](#1-install-nodejs-the-engine)
-  * [2. Install Ollama (The AI Intelligence)](#2-install-ollama-the-ai-intelligence)
+  * [2. Install Ollama (Optional - For AI Intelligence)](#2-install-ollama-optional---for-ai-intelligence)
   * [3. Download and Prepare the Project](#3-download-and-prepare-the-project)
 - [Configuration](#configuration)
   * [Key Environment Variables](#key-environment-variables)
@@ -62,14 +62,16 @@ We recommend using a version manager to install Node.js. This allows you to easi
      nvm use 20
      ```
 - **macOS / Linux**:
-  1. Install `nvm` by following the instructions at [nvm.sh](https://github.com/nvm-sh/nvm).
+  1. Install `nvm` by following the instructions at [nvm.sh](https://nvm.sh).
   2. Run:
      ```bash
      nvm install 20
      nvm use 20
      ```
 
-### 2. Install Ollama (The AI Intelligence)
+### 2. Install Ollama (Optional - For AI Intelligence)
+
+Ollama is **optional**. It is only required if you want to use the Semantic Search or RAG (Retrieval-Augmented Generation) features. Basic extraction and keyword search work without it.
 
 1. Download and install Ollama from [ollama.ai](https://ollama.ai).
 2. Open your terminal and pull the required models:
@@ -99,6 +101,7 @@ cp .env.example .env
 
 ### Key Environment Variables
 
+- **HEADLESS**: Set to `false` in your `.env` file. **Note:** Headless mode (`true`) is currently non-functional due to Cloudflare Turnstile protection on Perplexity.ai. Using headful mode allows you to complete any challenges manually if they appear.
 - **OLLAMA_URL**: Access point for your local AI engine (default: http://localhost:11434).
 - **OLLAMA_MODEL**: Cognitive model for RAG synthesis (e.g., deepseek-r1).
 - **OLLAMA_EMBED_MODEL**: Model for generating vector representations (e.g., nomic-embed-text).
@@ -116,6 +119,7 @@ npm run dev
 ### Operational Directives
 
 - **Start scraper (Library)**: Initiates extraction. Authenticate manually if required.
+  - **Note**: Due to the complexity of Perplexity's API and potential network fluctuations, it may be necessary to **run the scraper multiple times** to ensure all conversations are fully gathered. The system uses checkpoints to resume where it left off.
 - **Search conversations**: Interface with your history using various modes:
   - **Auto**: Heuristic selection between semantic and exact search.
   - **Semantic**: Fuzzy matching via high-dimensional vector space.
