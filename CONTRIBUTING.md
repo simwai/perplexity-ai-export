@@ -11,7 +11,7 @@ This project is a manifestation of structured data extraction and semantic synth
 To effectively interact with the codebase, your local environment must support the following substrates:
 
 - **Node.js 20+**: The fundamental runtime for our operations.
-- **Ollama**: Essential for local embedding generation and RAG-based reasoning.
+- **Ollama (Optional)**: Required for local embedding generation and RAG-based reasoning.
   - `ollama pull nomic-embed-text` (for semantic vectors)
   - `ollama pull deepseek-r1` (for generative synthesis)
 - **Playwright**: Our interface for navigating the complexities of the web.

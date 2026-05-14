@@ -74,7 +74,7 @@ export class CommandHandler {
 
   async handleSearchWizard(): Promise<void> {
     const searchQuery = await this.promptForSearchQuery()
-    const searchMode = await this.promptForSearchMode()
+    let searchMode = (await this.promptForSearchMode()) as 'auto' | 'vector' | 'rg' | 'rag'
     const ripgrepSearchOptions = {
       pattern: searchQuery,
       caseSensitive: false,
@@ -82,17 +82,28 @@ export class CommandHandler {
       regex: false,
     }
 
-    logger.info(`Searching for: "${searchQuery}" (mode: ${searchMode})\n`)
-
     try {
-      const vectorEnabledModes = ['vector', 'auto', 'rag']
-      if (vectorEnabledModes.includes(searchMode)) {
-        await this.ensureVectorSearchIsAvailable(searchMode)
+      if (searchMode === 'auto' || searchMode === 'vector' || searchMode === 'rag') {
+        try {
+          await this.conversationSearchOrchestrator.validateVectorSearch()
+        } catch (_error) {
+          if (searchMode === 'auto') {
+            logger.warn('Ollama is not available (required for semantic features). Falling back to Exact Text search (ripgrep).')
+            searchMode = 'rg'
+          } else {
+            const errorMessage = _error instanceof Error ? _error.message : String(_error)
+            logger.error(errorMessage)
+            logger.info('Start Ollama with the embedding model, then run "vectorize".')
+            return
+          }
+        }
       }
+
+      logger.info(`Searching for: "${searchQuery}" (mode: ${searchMode})\n`)
 
       await this.conversationSearchOrchestrator.search(
         searchQuery,
-        searchMode as 'auto' | 'vector' | 'rg' | 'rag',
+        searchMode,
         ripgrepSearchOptions
       )
     } catch (_error) {
@@ -240,19 +251,6 @@ export class CommandHandler {
       ],
       default: 'auto',
     })
-  }
-
-  private async ensureVectorSearchIsAvailable(mode: string): Promise<void> {
-    if (mode === 'rg') return
-
-    try {
-      await this.conversationSearchOrchestrator.validateVectorSearch()
-    } catch (_error) {
-      const errorMessage = _error instanceof Error ? _error.message : String(_error)
-      logger.error(errorMessage)
-      logger.info('Start Ollama with the embedding model, then run "vectorize".')
-      throw new CommandHandler.ValidationError(errorMessage)
-    }
   }
 
   private async handleVectorSearchValidationRetry(error: unknown): Promise<void> {
