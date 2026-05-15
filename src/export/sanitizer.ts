@@ -2,13 +2,13 @@ import sanitize from 'sanitize-filename'
 
 export function sanitizeFilename(filename: string): string {
   const illegalCharacterReplacement = '_'
-  const maximumFilenameLength = 100
+  const maximumFilenameByteLength = 80
 
-  return sanitize(filename, {
+  const sanitizedFilename = sanitize(filename, {
     replacement: illegalCharacterReplacement,
-  })
-    .replace(/\s+/g, '_')
-    .substring(0, maximumFilenameLength)
+  }).replace(/\s+/g, '_')
+
+  return truncateUtf8(sanitizedFilename, maximumFilenameByteLength)
 }
 
 export function sanitizeSpaceName(spaceName: string): string {
@@ -17,4 +17,16 @@ export function sanitizeSpaceName(spaceName: string): string {
 
 export function sanitizeMarkdownContent(raw: string): string {
   return raw || ''
+}
+
+function truncateUtf8(value: string, maximumByteLength: number): string {
+  let output = ''
+  for (const character of value) {
+    const next = output + character
+    if (Buffer.byteLength(next, 'utf-8') > maximumByteLength) {
+      break
+    }
+    output = next
+  }
+  return output
 }

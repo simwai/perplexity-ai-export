@@ -21,7 +21,14 @@ describe('sanitizeFilename', () => {
     const excessivelyLongName = 'a'.repeat(200)
     const truncatedName = sanitizeFilename(excessivelyLongName)
 
-    expect(truncatedName.length).toBeLessThanOrEqual(100)
+    expect(Buffer.byteLength(truncatedName, 'utf-8')).toBeLessThanOrEqual(80)
+  })
+
+  it('should truncate multibyte filenames by UTF-8 bytes', () => {
+    const excessivelyLongName = '─'.repeat(200)
+    const truncatedName = sanitizeFilename(excessivelyLongName)
+
+    expect(Buffer.byteLength(truncatedName, 'utf-8')).toBeLessThanOrEqual(80)
   })
 
   it('should handle problematic filenames gracefully', () => {

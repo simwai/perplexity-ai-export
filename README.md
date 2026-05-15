@@ -35,14 +35,16 @@
 
 ## Introduction
 
-This tool is designed to externalize your Perplexity.ai conversation history into organized, semantically searchable Markdown files. It facilitates the emergence of a personal knowledge base powered by local AI, bridging the gap between ephemeral inquiry and structured knowledge.
+This tool is designed to externalize your Perplexity.ai conversation history into structured JSON archives suitable for canonical SQLite archival, full-text search, vector indexing, and downstream tools such as MyChatArchive/ITIR. Markdown and vector search remain available as optional sidecars for local reading and semantic exploration.
 
 ## Key Features
 
 - **Parallelized Extraction**: Leverages Playwright to extract multiple conversation threads simultaneously for high-velocity data retrieval.
 - **Architectural Resilience**: Automatically restores browser contexts and retries operations, ensuring continuity amidst environmental instability.
-- **Advanced RAG (Retrieval-Augmented Generation)**: Engage in a cognitive dialogue with your history. The system employs intent analysis to synthesize broad summaries or pinpoint specific technical insights.
-- **Semantic Vector Search**: Move beyond keyword matching. Locate information based on conceptual depth and semantic relevance.
+- **Structured Archive Output**: Emits `itir.perplexity.thread.v1` JSON artifacts with normalized messages, stable source IDs, metadata, and captured API data for downstream SQLite/archive ingest.
+- **Optional Markdown Sidecars**: Preserve the previous human-readable Markdown export path when `EXPORT_MARKDOWN=true`.
+- **Optional RAG (Retrieval-Augmented Generation)**: Engage in a cognitive dialogue with your history when vector search is enabled.
+- **Optional Semantic Vector Search**: Move beyond keyword matching with Markdown sidecars, Ollama, and Vectra enabled.
 - **Persistent State Tracking**: Frequent checkpoints allow the system to resume progress after any interruption.
 - **Interactive Synthesis (REPL)**: A streamlined command-line interface for human-system synergy.
 
@@ -101,11 +103,14 @@ cp .env.example .env
 
 ### Key Environment Variables
 
-- **HEADLESS**: Set to `false` in your `.env` file. **Note:** Headless mode (`true`) is currently non-functional due to Cloudflare Turnstile protection on Perplexity.ai. Using headful mode allows you to complete any challenges manually if they appear.
+- **HEADLESS**: Defaults to `false`. **Note:** Headless mode (`true`) is currently non-functional due to Cloudflare Turnstile protection on Perplexity.ai. Using headful mode allows you to complete any challenges manually if they appear.
 - **OLLAMA_URL**: Access point for your local AI engine (default: http://localhost:11434).
 - **OLLAMA_MODEL**: Cognitive model for RAG synthesis (e.g., deepseek-r1).
 - **OLLAMA_EMBED_MODEL**: Model for generating vector representations (e.g., nomic-embed-text).
-- **ENABLE_VECTOR_SEARCH**: Set to `true` to activate semantic and RAG layers.
+- **EXPORT_STRUCTURED_JSON**: Defaults to `true`. Writes canonical `itir.perplexity.thread.v1` JSON artifacts for downstream archive ingest.
+- **STRUCTURED_EXPORT_DIR**: Defaults to `EXPORT_DIR`. Set this to separate canonical JSON archives from sidecar files.
+- **EXPORT_MARKDOWN**: Defaults to `false`. Set to `true` to also write the previous Markdown files.
+- **ENABLE_VECTOR_SEARCH**: Defaults to `false`. Set to `true` to activate semantic and RAG layers. Current vector indexing reads Markdown exports, so enable `EXPORT_MARKDOWN=true` before rebuilding the vector index.
 
 ## Usage Guide
 
@@ -120,6 +125,24 @@ npm run dev
 
 - **Start scraper (Library)**: Initiates extraction. Authenticate manually if required.
   - **Note**: Due to the complexity of Perplexity's API and potential network fluctuations, it may be necessary to **run the scraper multiple times** to ensure all conversations are fully gathered. The system uses checkpoints to resume where it left off.
+- **Canonical archive**: The primary export is structured JSON. Treat Markdown and vector indexes as optional sidecars that can be regenerated from canonical thread/message records.
+- **SQLite/MyChatArchive ingest**: After exporting, tools such as `chat-export-structurer` can ingest the structured JSON into a canonical SQLite archive:
+  ```bash
+  python src/ingest.py \
+    --in /path/to/perplexity-ai-export/exports \
+    --format perplexity \
+    --account perplexity \
+    --source-id perplexity_auto
+  ```
+- **Bundle downloaded Perplexity Markdown**: If Perplexity's API only returns the first page of a long thread, place the downloaded `.md` chunks in a local folder and run:
+  ```bash
+  npm run bundle:perplexity-downloads -- \
+    --input /path/to/downloaded/perplexity-markdown \
+    --title-prefix "Thread title prefix" \
+    --thread-id "<perplexity-thread-uuid>" \
+    --out exports-downloads/thread.download.itir.perplexity.json
+  ```
+  Then ingest that JSON with `chat-export-structurer --format perplexity --account perplexity` so the recovered turns attach to the same canonical Perplexity thread.
 - **Search conversations**: Interface with your history using various modes:
   - **Auto**: Heuristic selection between semantic and exact search.
   - **Semantic**: Fuzzy matching via high-dimensional vector space.

@@ -5,11 +5,11 @@ let sharedBrowserInstance: Browser
 
 beforeAll(async () => {
   try {
-    sharedBrowserInstance = await chromium.launch({ headless: true })
+    sharedBrowserInstance = await chromium.launch({ headless: true, timeout: 3000 })
   } catch (_error) {
     console.warn('Could not launch browser in setup.ts, some tests might fail if they require it.')
   }
-})
+}, 5000)
 
 afterAll(async () => {
   if (sharedBrowserInstance) {

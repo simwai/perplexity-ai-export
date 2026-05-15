@@ -7,6 +7,7 @@
     "start": "node dist/index.js",
     "build": "tsc",
     "build:exe": "node scripts/build-exe.js && npm run format",
+    "bundle:perplexity-downloads": "tsx src/download-import/cli.ts",
     "release": "release-it",
     "type-check": "tsc --noEmit",
     "toc": "node scripts/update-toc.js",

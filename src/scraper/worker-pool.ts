@@ -227,10 +227,10 @@ export class WorkerPool {
         return
       }
 
-      const savedFilePath = this.conversationFileWriter.write(extractedData)
-      await this.verifySavedMarkdownFile(savedFilePath, extractedData)
+      const savedFiles = this.conversationFileWriter.write(extractedData)
+      await this.verifySavedFiles(savedFiles, extractedData)
 
-      this.logConversationProcessingSuccess(worker, savedFilePath)
+      this.logConversationProcessingSuccess(worker, savedFiles.primaryPath)
       this.processingStats.succeeded++
       this.progressCheckpointManager.markProcessed(conversation.url)
     } catch (_error) {
@@ -265,32 +265,103 @@ export class WorkerPool {
     logger.success(`Worker ${worker.id} saved: ${filepath}`)
   }
 
-  private async verifySavedMarkdownFile(
-    filepath: string,
+  private async verifySavedFiles(
+    savedFiles: { primaryPath: string; structuredJsonPath?: string; markdownPath?: string },
     extracted: ExtractedConversation
   ): Promise<void> {
-    const validationErrorMessage = this.performFileIntegrityChecks(filepath, extracted)
+    const validationErrorMessage = this.performExportIntegrityChecks(savedFiles, extracted)
     if (validationErrorMessage) {
       throw new WorkerPool.FileValidationError(validationErrorMessage)
     }
   }
 
-  private performFileIntegrityChecks(
+  private performExportIntegrityChecks(
+    savedFiles: { primaryPath: string; structuredJsonPath?: string; markdownPath?: string },
+    extracted: ExtractedConversation
+  ): string | null {
+    try {
+      if (config.exportStructuredJson) {
+        if (!savedFiles.structuredJsonPath) {
+          return 'Structured JSON path missing after write'
+        }
+
+        const structuredJsonError = this.performStructuredJsonIntegrityChecks(
+          savedFiles.structuredJsonPath,
+          extracted
+        )
+        if (structuredJsonError) return structuredJsonError
+      }
+
+      if (config.exportMarkdown) {
+        if (!savedFiles.markdownPath) {
+          return 'Markdown path missing after write'
+        }
+
+        const markdownError = this.performMarkdownFileIntegrityChecks(
+          savedFiles.markdownPath,
+          extracted
+        )
+        if (markdownError) return markdownError
+      }
+
+      return null
+    } catch (_error) {
+      const errorMessage = _error instanceof Error ? _error.message : String(_error)
+      return `Validation exception: ${errorMessage}`
+    }
+  }
+
+  private performStructuredJsonIntegrityChecks(
+    filepath: string,
+    extracted: ExtractedConversation
+  ): string | null {
+    if (!existsSync(filepath)) {
+      return 'Structured JSON file not found after write'
+    }
+
+    const fileStats = statSync(filepath)
+    if (fileStats.size === 0) {
+      return 'Structured JSON file is empty'
+    }
+
+    const fileContent = readFileSync(filepath, 'utf-8')
+    const parsed = JSON.parse(fileContent) as Record<string, any>
+
+    if (parsed['schema'] !== 'itir.perplexity.thread.v1') {
+      return 'Structured JSON schema mismatch'
+    }
+
+    if (parsed['source_thread_id'] !== extracted.id) {
+      return 'Structured JSON source_thread_id mismatch'
+    }
+
+    if (parsed['title'] !== extracted.title) {
+      return 'Structured JSON title mismatch'
+    }
+
+    if (!Array.isArray(parsed['messages']) || parsed['messages'].length === 0) {
+      return 'Structured JSON messages missing or empty'
+    }
+
+    return null
+  }
+
+  private performMarkdownFileIntegrityChecks(
     filepath: string,
     extracted: ExtractedConversation
   ): string | null {
     try {
       if (!existsSync(filepath)) {
-        return 'File not found after write'
+        return 'Markdown file not found after write'
       }
 
       const fileStats = statSync(filepath)
       if (fileStats.size === 0) {
-        return 'File is empty'
+        return 'Markdown file is empty'
       }
 
       if (fileStats.size < 50) {
-        return `File too small (${fileStats.size} bytes)`
+        return `Markdown file too small (${fileStats.size} bytes)`
       }
 
       const fileContent = readFileSync(filepath, 'utf-8')

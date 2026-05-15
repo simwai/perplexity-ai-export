@@ -193,19 +193,29 @@ export class BrowserManager {
   private async verifyLoginStatus(page: Page): Promise<boolean> {
     await page.waitForTimeout(1000).catch(() => {})
     await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => {})
-    const currentUrl = page.url()
-
-    const authenticatedUrlPaths = ['/settings', '/library', '/collections', '/account/details']
-    if (authenticatedUrlPaths.some((path) => currentUrl.includes(path))) {
-      return true
-    }
 
     const userMenuElementCount = await page
       .locator('[data-testid="user-menu"]')
       .count()
       .catch(() => 0)
 
-    return userMenuElementCount > 0
+    if (userMenuElementCount > 0) {
+      return true
+    }
+
+    const visibleLoginControlCount = await page
+      .locator('button, a')
+      .filter({ hasText: /^(log in|login|sign in|sign up)$/i })
+      .count()
+      .catch(() => 0)
+
+    if (visibleLoginControlCount > 0) {
+      return false
+    }
+
+    const currentUrl = page.url()
+    const authenticatedUrlPaths = ['/settings', '/library', '/collections', '/account/details']
+    return authenticatedUrlPaths.some((path) => currentUrl.includes(path))
   }
 
   private async persistAuthenticationState(): Promise<void> {
