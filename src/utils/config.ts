@@ -13,6 +13,15 @@ const configSchema = z.object({
   parallelWorkers: z.number().int().min(1).max(20),
   checkpointSaveInterval: z.number().int().positive(),
   exportDir: z.string().min(1),
+  structuredExportDir: z.string().min(1),
+  exportStructuredJson: z
+    .string()
+    .optional()
+    .transform((v) => v === undefined || v === 'true'),
+  exportMarkdown: z
+    .string()
+    .optional()
+    .transform((v) => v === 'true'),
   checkpointPath: z.string().min(1),
   vectorIndexPath: z.string().min(1),
   ollamaUrl: z.string().url(),
@@ -34,8 +43,8 @@ function parseEnvConfig(): Config {
   const defaultParallelWorkers = '5'
   const defaultCheckpointInterval = '10'
 
-  const rawHeadless = process.env['HEADLESS'] ?? 'true'
-  let headlessValue: boolean | 'new' = true
+  const rawHeadless = process.env['HEADLESS'] ?? 'false'
+  let headlessValue: boolean | 'new' = false
   if (rawHeadless === 'false') {
     headlessValue = false
   } else if (rawHeadless === 'new') {
@@ -44,7 +53,7 @@ function parseEnvConfig(): Config {
 
   const rawConfig = {
     authStoragePath: process.env['AUTH_STORAGE_PATH'] ?? join('.storage', 'auth.json'),
-    waitMode: process.env['WAIT_MODE'] ?? 'dynamic',
+    waitMode: process.env['WAIT_MODE'] ?? 'static',
     rateLimitMs: parseInt(process.env['RATE_LIMIT_MS'] ?? defaultRateLimitMs, 10),
     parallelWorkers: parseInt(process.env['PARALLEL_WORKERS'] ?? defaultParallelWorkers, 10),
     checkpointSaveInterval: parseInt(
@@ -52,6 +61,10 @@ function parseEnvConfig(): Config {
       10
     ),
     exportDir: process.env['EXPORT_DIR'] ?? 'exports',
+    structuredExportDir:
+      process.env['STRUCTURED_EXPORT_DIR'] ?? process.env['EXPORT_DIR'] ?? 'exports',
+    exportStructuredJson: process.env['EXPORT_STRUCTURED_JSON'],
+    exportMarkdown: process.env['EXPORT_MARKDOWN'],
     checkpointPath: process.env['CHECKPOINT_PATH'] ?? join('.storage', 'checkpoint.json'),
     vectorIndexPath: process.env['VECTOR_INDEX_PATH'] ?? join('.storage', 'vector-index'),
     ollamaUrl: process.env['OLLAMA_URL'] ?? defaultOllamaUrl,
@@ -96,4 +109,8 @@ ensureDirectory(config.vectorIndexPath)
 
 if (!existsSync(config.exportDir)) {
   mkdirSync(config.exportDir, { recursive: true })
+}
+
+if (!existsSync(config.structuredExportDir)) {
+  mkdirSync(config.structuredExportDir, { recursive: true })
 }
