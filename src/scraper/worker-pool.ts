@@ -137,6 +137,35 @@ export class WorkerPool {
         ? await this.browserInstance.newContext({ storageState: authenticationState })
         : await this.browserInstance.newContext()
 
+      try {
+        if (authenticationState) {
+          const cookies = Array.isArray(authenticationState?.cookies)
+            ? authenticationState.cookies
+            : []
+          const cookieDomains = Array.from(
+            new Set(cookies.map((c: any) => String(c?.domain ?? '?')))
+          )
+          const cookieNames = cookies.map((c: any) => String(c?.name ?? '?'))
+          const httpOnlyCount = cookies.filter((c: any) => c?.httpOnly === true).length
+          logger.debug(
+            `WorkerPool.recreateSharedBrowserContext: loaded auth ` +
+              `cookieCount=${cookies.length} httpOnlyCount=${httpOnlyCount} ` +
+              `domains=${JSON.stringify(cookieDomains)} ` +
+              `cookieNames=${JSON.stringify(cookieNames)}`
+          )
+        } else {
+          logger.debug(
+            'WorkerPool.recreateSharedBrowserContext: no saved auth available, started empty context'
+          )
+        }
+      } catch (err) {
+        logger.debug(
+          `WorkerPool.recreateSharedBrowserContext: failed to summarize auth state: ${
+            err instanceof Error ? err.message : String(err)
+          }`
+        )
+      }
+
       logger.info('Shared browser context recreated')
     } finally {
       resolveContextLock!()

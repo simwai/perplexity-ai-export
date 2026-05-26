@@ -64,9 +64,38 @@ export class CheckpointManager {
 
   setDiscoveredConversations(conversations: ConversationMetadata[]): void {
     this.currentCheckpoint.discoveredConversations = conversations
+
+    if (conversations.length === 0) {
+      // Refuse to flip the "discoveryCompleted" flag on an empty result set:
+      // an empty discovery is almost always an auth failure (unauthenticated
+      // POSTs to list_ask_threads return [] rather than 401), and persisting
+      // discoveryCompleted=true with zero conversations poisons future runs
+      // into the "All conversations already processed!" false-positive path.
+      this.currentCheckpoint.discoveryCompleted = false
+      this.saveCheckpointToDisk()
+      logger.warn(
+        'Discovery returned 0 conversations — refusing to mark discovery complete. ' +
+          'This usually means the session is not authenticated.'
+      )
+      return
+    }
+
     this.currentCheckpoint.discoveryCompleted = true
     this.saveCheckpointToDisk()
     logger.success(`Discovery complete: ${conversations.length} conversations found`)
+  }
+
+  hasPoisonedEmptyDiscovery(): boolean {
+    return (
+      this.currentCheckpoint.discoveryCompleted &&
+      this.currentCheckpoint.discoveredConversations.length === 0 &&
+      this.currentCheckpoint.processedUrls.length === 0
+    )
+  }
+
+  clearDiscoveryFlag(): void {
+    this.currentCheckpoint.discoveryCompleted = false
+    this.saveCheckpointToDisk()
   }
 
   markProcessed(url: string): void {

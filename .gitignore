@@ -9,3 +9,12 @@ coverage/
 .aider*
 *.old
 exports*
+
+# Local planning and personal/marketing artifacts
+.planning/
+fb-messages-pin.txt
+marketing-script.txt
+repost-state.png
+
+# Auth cookies (never commit credentials)
+cookie.json

@@ -99,6 +99,8 @@ export class ConversationExtractor {
   async extract(url: string): Promise<ExtractedConversation> {
     await this.ensureContextIsAlive()
 
+    const conversationId = this.extractIdFromUrl(url)
+
     let page: Page | null = null
     try {
       page = await this.context.newPage()
@@ -108,7 +110,7 @@ export class ConversationExtractor {
       )
     }
 
-    const apiDataPromise = this.captureConversationApiResponse(page)
+    const apiDataPromise = this.captureConversationApiResponse(page, conversationId)
 
     try {
       await this.navigateToConversationUrl(page, url)
@@ -148,13 +150,37 @@ export class ConversationExtractor {
     }
   }
 
-  private captureConversationApiResponse(page: Page): Promise<any> {
+  private captureConversationApiResponse(page: Page, conversationId: string): Promise<any> {
     let resolved = false
+
+    // The per-thread *detail* endpoint is the only response that carries the
+    // conversation blocks we need:
+    //   /rest/thread/<id>?with_schematized_response=...
+    // Several *list* endpoints also live under /rest/thread/ — list_recent,
+    // list_pinned_ask_threads, list_ask_threads — but they return thread
+    // summaries (no blocks), and list_pinned is frequently an empty array.
+    // The old filter (includes('/rest/thread/') && !includes('list_ask_threads'))
+    // let list_recent and list_pinned_ask_threads slip through, so whichever
+    // fired first won the race and resolved the capture with empty data → the
+    // "No valid entries found" / "Failed to parse conversation data" failures
+    // seen in debug.log. Match the conversation id explicitly instead.
+    const isDetailResponseUrl = (responseUrl: string): boolean => {
+      if (!responseUrl.includes('/rest/thread/')) return false
+      if (conversationId && conversationId !== 'unknown') {
+        return responseUrl.includes(`/rest/thread/${conversationId}`)
+      }
+      // Fallback when we couldn't parse an id from the URL: accept any
+      // /rest/thread/ response that isn't one of the list_* endpoints.
+      return !/\/rest\/thread\/list_/.test(responseUrl)
+    }
 
     return new Promise((resolve) => {
       const timeout = setTimeout(() => {
         if (!resolved) {
-          logger.warn('API response timeout – resolving with null')
+          logger.warn(
+            `API response timeout (30s) — no /rest/thread/${conversationId} detail response ` +
+              `captured; resolving with null`
+          )
           resolved = true
           resolve(null)
         }
@@ -164,7 +190,16 @@ export class ConversationExtractor {
         if (resolved) return
 
         const url = response.url()
-        if (!url.includes('/rest/thread/') || url.includes('list_ask_threads')) return
+        if (!isDetailResponseUrl(url)) {
+          // Surface near-misses (sidebar list endpoints) at debug level so the
+          // trace explains why a capture did or didn't match.
+          if (url.includes('/rest/thread/')) {
+            logger.debug(
+              `captureConversationApiResponse: ignoring non-detail thread endpoint ${url}`
+            )
+          }
+          return
+        }
 
         logger.info(`Found matching thread API response: ${url}`)
 
@@ -199,25 +234,50 @@ export class ConversationExtractor {
       timeout: 30000,
     })
 
-    this.validateNavigationResponse(response)
+    this.validateNavigationResponse(response, page, url)
   }
 
-  private validateNavigationResponse(response: Response | null): void {
+  private validateNavigationResponse(
+    response: Response | null,
+    page: Page,
+    requestedUrl: string
+  ): void {
     if (!response) {
+      logger.debug(
+        `validateNavigationResponse: no response for requestedUrl=${requestedUrl} ` +
+          `pageUrl=${page.url()}`
+      )
       throw new ConversationExtractor.NavigationError('Navigation failed – no response')
     }
 
     const status = response.status()
+    const responseUrl = response.url()
+    const finalPageUrl = page.url()
+
     if (status === 404) {
+      logger.debug(
+        `validateNavigationResponse: 404 requestedUrl=${requestedUrl} responseUrl=${responseUrl} ` +
+          `pageUrl=${finalPageUrl}`
+      )
       throw new ConversationExtractor.NotFoundError('Conversation not found (404)')
     }
     if (status === 403 || status === 401) {
+      logger.debug(
+        `validateNavigationResponse: AUTH ERROR status=${status} ` +
+          `requestedUrl=${requestedUrl} responseUrl=${responseUrl} pageUrl=${finalPageUrl}`
+      )
       throw new ConversationExtractor.AuthError('Authentication required or expired')
     }
     if (status >= 500) {
+      logger.debug(
+        `validateNavigationResponse: server error status=${status} responseUrl=${responseUrl}`
+      )
       throw new ConversationExtractor.ServerError(`Server error (${status})`)
     }
     if (status >= 400) {
+      logger.debug(
+        `validateNavigationResponse: http error status=${status} responseUrl=${responseUrl}`
+      )
       throw new ConversationExtractor.NavigationError(`HTTP error ${status}`)
     }
   }

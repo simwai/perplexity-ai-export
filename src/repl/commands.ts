@@ -88,7 +88,9 @@ export class CommandHandler {
           await this.conversationSearchOrchestrator.validateVectorSearch()
         } catch (_error) {
           if (searchMode === 'auto') {
-            logger.warn('Ollama is not available (required for semantic features). Falling back to Exact Text search (ripgrep).')
+            logger.warn(
+              'Ollama is not available (required for semantic features). Falling back to Exact Text search (ripgrep).'
+            )
             searchMode = 'rg'
           } else {
             const errorMessage = _error instanceof Error ? _error.message : String(_error)
@@ -161,6 +163,16 @@ export class CommandHandler {
   }
 
   private async executeFullScrapingFlow(): Promise<void> {
+    // Auto-heal poisoned checkpoints: discoveryCompleted=true with zero
+    // discovered conversations and zero processed URLs is the signature of a
+    // previous run that committed an empty (unauthenticated) discovery as
+    // "complete". Silently clear the flag so we re-run discovery instead of
+    // declaring "All conversations already processed!".
+    if (this.progressCheckpointManager.hasPoisonedEmptyDiscovery()) {
+      logger.warn('Detected previous empty discovery marked complete — re-running discovery.')
+      this.progressCheckpointManager.clearDiscoveryFlag()
+    }
+
     const browserManager = new BrowserManager()
 
     try {

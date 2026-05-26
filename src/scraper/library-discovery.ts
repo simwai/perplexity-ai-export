@@ -35,6 +35,14 @@ export class LibraryDiscovery {
 
     const discoveredConversations = await this.paginateAndFetchAllThreads(page, activeApiVersion)
 
+    if (discoveredConversations.length === 0) {
+      throw new LibraryDiscovery.NoDataError(
+        'Library discovery returned 0 threads. This usually means the session is not ' +
+          'authenticated (Perplexity returns an empty array instead of HTTP 401 for ' +
+          'unauthenticated list_ask_threads calls). Re-run after logging in.'
+      )
+    }
+
     logger.success(`Discovered ${discoveredConversations.length} threads`)
     return discoveredConversations
   }

@@ -90,6 +90,12 @@ function ensureDirectory(path: string): void {
 
 export const config: Config = parseEnvConfig()
 
+logger.debug(
+  `config: headless=${String(config.headless)} parallelWorkers=${config.parallelWorkers} ` +
+    `waitMode=${config.waitMode} rateLimitMs=${config.rateLimitMs} ` +
+    `enableVectorSearch=${String(config.enableVectorSearch)} exportDir=${config.exportDir}`
+)
+
 ensureDirectory(config.authStoragePath)
 ensureDirectory(config.checkpointPath)
 ensureDirectory(config.vectorIndexPath)
