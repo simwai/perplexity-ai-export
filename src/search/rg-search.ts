@@ -48,6 +48,11 @@ export class RgSearch {
       const matches: RgMatch[] = []
       const ripgrepProcess = spawn(rgPath, argumentsList, { cwd: config.exportDir })
 
+      const timeout = setTimeout(() => {
+        ripgrepProcess.kill()
+        reject(errorBus.raise(RgSearch.RgSearchError, 'ripgrep search timed out after 30 seconds'))
+      }, 30000)
+
       ripgrepProcess.stdout.on('data', (data) => {
         const lines = data.toString().split('\n')
         for (const line of lines) {
@@ -68,16 +73,18 @@ export class RgSearch {
       })
 
       ripgrepProcess.on('error', (error) => {
+        clearTimeout(timeout)
         if ((error as any).code === 'ENOENT') {
-          reject(new RgSearch.RgNotFoundError('ripgrep not found'))
+          reject(errorBus.raise(RgSearch.RgNotFoundError, 'ripgrep not found', error))
         } else {
           reject(errorBus.raise(RgSearch.RgSearchError, 'Search failed', error))
         }
       })
 
       ripgrepProcess.on('close', (code) => {
+        clearTimeout(timeout)
         if (code === 0 || code === 1) resolve(matches)
-        else reject(new RgSearch.RgSearchError(`ripgrep exited with code ${code}`))
+        else reject(errorBus.raise(RgSearch.RgSearchError, `ripgrep exited with code ${code}`))
       })
     })
   }
@@ -90,6 +97,11 @@ export class RgSearch {
         cwd: config.exportDir,
         stdio: ['ignore', 'pipe', 'pipe'],
       })
+
+      const timeout = setTimeout(() => {
+        ripgrepProcess.kill()
+        reject(errorBus.raise(RgSearch.RgSearchError, 'ripgrep search timed out after 30 seconds'))
+      }, 30000)
 
       let matchedResultsFound = false
 
@@ -106,21 +118,29 @@ export class RgSearch {
       })
 
       ripgrepProcess.on('error', (error) => {
+        clearTimeout(timeout)
         if (error.message.includes('ENOENT')) {
-          reject(new RgSearch.RgNotFoundError(this.getRipgrepInstallationInstructions()))
+          reject(
+            errorBus.raise(
+              RgSearch.RgNotFoundError,
+              this.getRipgrepInstallationInstructions(),
+              error
+            )
+          )
         } else {
           reject(errorBus.raise(RgSearch.RgSearchError, 'Search failed', error))
         }
       })
 
       ripgrepProcess.on('close', (exitCode) => {
+        clearTimeout(timeout)
         if (exitCode === 0 || exitCode === 1) {
           if (!matchedResultsFound && exitCode === 1) {
             logger.info('No results found.')
           }
           resolve()
         } else {
-          reject(new RgSearch.RgSearchError(`ripgrep exited with code ${exitCode}`))
+          reject(errorBus.raise(RgSearch.RgSearchError, `ripgrep exited with code ${exitCode}`))
         }
       })
     })

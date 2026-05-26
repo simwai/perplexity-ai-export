@@ -1,19 +1,24 @@
 import { errorBus } from '../utils/error-bus.js'
-import type { Browser, BrowserContext } from '@playwright/test'
 import { existsSync, readFileSync, statSync } from 'node:fs'
-import { logger } from '../utils/logger.js'
 import { config } from '../utils/config.js'
+import { logger } from '../utils/logger.js'
+import type { Browser, BrowserContext } from '@playwright/test'
 import { ConversationExtractor, type ExtractedConversation } from './conversation-extractor.js'
 import { FileWriter } from '../export/file-writer.js'
-import type { CheckpointManager, ConversationMetadata } from './checkpoint-manager.js'
+import type { CheckpointManager } from './checkpoint-manager.js'
 
-export interface Worker {
+export interface ConversationMetadata {
+  url: string
+  title: string
+}
+
+interface Worker {
   id: number
   extractor: ConversationExtractor
   isBusy: boolean
 }
 
-export interface ProcessingStats {
+interface ProcessingStats {
   total: number
   succeeded: number
   failed: number
@@ -31,6 +36,7 @@ function loadPersistedAuthenticationState(): any | null {
     if (fileAgeInMilliseconds >= twentyFourHoursInMilliseconds) return null
     return JSON.parse(readFileSync(authenticationStoragePath, 'utf-8'))
   } catch (error) {
+    errorBus.report(error, { message: 'Failed to load authentication state' })
     return null
   }
 }
@@ -39,14 +45,7 @@ export class WorkerPool {
   static readonly InitializationError = class extends Error {
     constructor(message: string) {
       super(message)
-      this.name = 'WorkerInitializationError'
-    }
-  }
-
-  static readonly ProcessingError = class extends Error {
-    constructor(message: string) {
-      super(message)
-      this.name = 'WorkerProcessingError'
+      this.name = 'WorkerPoolInitializationError'
     }
   }
 
@@ -54,13 +53,6 @@ export class WorkerPool {
     constructor(message: string) {
       super(message)
       this.name = 'FileValidationError'
-    }
-  }
-
-  static readonly ExtractionError = class extends Error {
-    constructor(message: string) {
-      super(message)
-      this.name = 'ExtractionError'
     }
   }
 
@@ -309,6 +301,7 @@ export class WorkerPool {
 
       return null
     } catch (error) {
+      errorBus.report(error, { message: 'File integrity check exception' })
       const errorMessage = error instanceof Error ? error.message : String(error)
       return `Validation exception: ${errorMessage}`
     }

@@ -87,6 +87,7 @@ Return JSON: {"strategy": "...", "queries": [], "hardKeywords": [], "filters": {
         filters: json.filters || {},
       }
     } catch (error) {
+      errorBus.report(error, { message: 'Failed to develop research plan, using default' })
       return { strategy: 'precise', queries: [originalQuestion], hardKeywords: [], filters: {} }
     }
   }
@@ -121,7 +122,7 @@ Return JSON: {"strategy": "...", "queries": [], "hardKeywords": [], "filters": {
         }))
         keywordPool.push(...converted)
       } catch (error) {
-        /* oxlint-disable-next-line no-empty */
+        errorBus.report(error, { message: `Keyword search failed for "${k}"` })
       }
     }
 
@@ -189,6 +190,7 @@ Return JSON array: [{"fact": "...", "node_id": N, "thread": "..."}]
           })
         })
       } catch (error) {
+        errorBus.report(error, { message: 'Fact extraction batch failed, falling back to raw snippets' })
         batch.forEach((r) => {
           findings.push({
             fact: r.meta['snippet'],
@@ -247,6 +249,7 @@ Return JSON: {"status": "ok" | "missed-info", "suggestion": "..."}
       const res = await this.ollamaClient.generate(prompt)
       return JSON.parse(res.match(/\{[\s\S]*\}/)?.[0] || '{"status": "ok"}')
     } catch (error) {
+      errorBus.report(error, { message: 'Quality verification failed' })
       return { status: 'ok' }
     }
   }
