@@ -76,10 +76,30 @@ npm run format
    - `feat/` for novel capabilities.
    - `fix/` for rectifying systemic discrepancies (bugs).
    - `docs/` for enhancing the conceptual clarity of our documentation.
-2. **Commit with Intent**: Write clear, descriptive commit messages.
+2. **Commit with Intent**: To maintain a legible and machine-parsable history of our evolution, we adhere to the **Conventional Commits** specification. Each commit represents a discrete leap in the system's capability or stability.
+   - Format: `<type>(<scope>): <description>`
+   - Examples: `feat(scraper): add support for parallel threads`, `fix(ai): resolve context window overflow`
 3. **Synergize**: Open a Pull Request. Provide a concise summary of the changes and how they contribute to the system's overall utility.
 
 ---
+
+## Automated Quality Gates (Git Hooks)
+
+To ensure syntactic harmony and cognitive consistency, we utilize Git hooks via **Husky**.
+
+- **Pre-commit**: Automatically executes `oxlint` and `oxfmt` on staged changes via `lint-staged`.
+- **Commit-msg**: Validates your commit message against our semantic standards.
+
+### Navigating Stalls (Hanging Hooks)
+
+Should the pre-commit process appear to reach a cognitive deadlock (hanging or appearing stuck), consider these resolutions:
+
+1. **Interrupt and Inspect**: Cancel the process (`Ctrl+C`) and run \`npm run format\` manually to identify if a specific file is causing a processing bottleneck.
+2. **Environmental Reset**: Ensure your dependencies are correctly instantiated (\`npm install\`).
+3. **Emergency Bypass**: If a stall persists and you have verified your changes manually, you may bypass the hooks using the \`--no-verify\` flag (e.g., \`git commit -m "..." --no-verify\`). Use this sparingly, as it bypasses the validation of our shared standards.
+
+---
+
 
 ## Ethical and Intellectual Standards
 
