@@ -8,7 +8,7 @@ import { SearchOrchestrator } from '../search/search-orchestrator.js'
 import { logger } from '../utils/logger.js'
 import { showHelp } from './help.js'
 import { LibraryDiscovery } from '../scraper/library-discovery.js'
-import { config } from '../utils/config.js'
+import { type Config } from '../utils/config.js'
 
 export class CommandHandler {
   static readonly ScraperError = class extends Error {
@@ -48,10 +48,12 @@ export class CommandHandler {
 
   private progressCheckpointManager: CheckpointManager
   private conversationSearchOrchestrator: SearchOrchestrator
+  private config: Config
 
-  constructor() {
-    this.progressCheckpointManager = new CheckpointManager()
-    this.conversationSearchOrchestrator = new SearchOrchestrator()
+  constructor(config: Config) {
+    this.config = config
+    this.progressCheckpointManager = new CheckpointManager(config)
+    this.conversationSearchOrchestrator = new SearchOrchestrator(config)
   }
 
   async handleStartLibraryExport(): Promise<void> {
@@ -162,7 +164,7 @@ export class CommandHandler {
   }
 
   private async executeFullScrapingFlow(): Promise<void> {
-    const browserManager = new BrowserManager()
+    const browserManager = new BrowserManager(this.config)
 
     try {
       const activePage = await browserManager.launch()
@@ -195,7 +197,7 @@ export class CommandHandler {
 
   private async runDiscoveryPhase(page: any): Promise<void> {
     logger.info('\n=== Phase 1: Library Discovery ===\n')
-    const libraryDiscoveryTool = new LibraryDiscovery()
+    const libraryDiscoveryTool = new LibraryDiscovery(this.config)
     const discoveredConversations =
       await libraryDiscoveryTool.discoverAllConversationsFromLibrary(page)
     this.progressCheckpointManager.setDiscoveredConversations(discoveredConversations)
@@ -209,7 +211,7 @@ export class CommandHandler {
       throw new CommandHandler.ScraperError('Browser was not initialized')
     }
 
-    const workerPool = new WorkerPool(this.progressCheckpointManager, activeBrowser)
+    const workerPool = new WorkerPool(this.config, this.progressCheckpointManager, activeBrowser)
     await workerPool.initialize()
     await workerPool.processConversations(pending)
     await workerPool.close()
@@ -283,7 +285,7 @@ export class CommandHandler {
   }
 
   private wipeStorageDirectory(): void {
-    const configuredAuthPath = config.authStoragePath
+    const configuredAuthPath = this.config.authStoragePath
     // Use path.sep instead of hardcoded '/'
     const storageRootDirectory = configuredAuthPath ? configuredAuthPath.split(sep)[0] : '.storage'
     try {

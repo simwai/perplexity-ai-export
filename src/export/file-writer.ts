@@ -1,6 +1,6 @@
 import { join } from 'node:path'
 import { writeFileSync, existsSync, mkdirSync } from 'node:fs'
-import { config } from '../utils/config.js'
+import { type Config } from '../utils/config.js'
 import type { ExtractedConversation } from '../scraper/conversation-extractor.js'
 import { sanitizeFilename, sanitizeSpaceName } from './sanitizer.js'
 
@@ -12,7 +12,10 @@ export class FileWriter {
     }
   }
 
-  constructor() {
+  private config: Config;
+
+  constructor(config: Config) {
+    this.config = config;
     this.ensureRootExportDirectoryExists()
   }
 
@@ -22,7 +25,7 @@ export class FileWriter {
       const markdownContent = this.formatConversationAsMarkdown(conversation)
 
       const spaceSpecificDirectory = join(
-        config.exportDir,
+        this.config.exportDir,
         sanitizeSpaceName(conversation.spaceName)
       )
       if (!existsSync(spaceSpecificDirectory)) {
@@ -39,8 +42,8 @@ export class FileWriter {
   }
 
   private ensureRootExportDirectoryExists(): void {
-    if (!existsSync(config.exportDir)) {
-      mkdirSync(config.exportDir, { recursive: true })
+    if (!existsSync(this.config.exportDir)) {
+      mkdirSync(this.config.exportDir, { recursive: true })
     }
   }
 
@@ -48,7 +51,7 @@ export class FileWriter {
     const safeSpaceName = sanitizeSpaceName(conversation.spaceName)
     const safeFileTitle = sanitizeFilename(conversation.title)
     const fileNameWithId = `${safeFileTitle} (${conversation.id}).md`
-    return join(config.exportDir, safeSpaceName, fileNameWithId)
+    return join(this.config.exportDir, safeSpaceName, fileNameWithId)
   }
 
   private formatConversationAsMarkdown(conversation: ExtractedConversation): string {

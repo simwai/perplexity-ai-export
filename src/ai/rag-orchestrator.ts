@@ -4,17 +4,19 @@ import { RgSearch } from '../search/rg-search.js'
 import { logger } from '../utils/logger.js'
 import chalk from 'chalk'
 import { join } from 'node:path'
-import { config } from '../utils/config.js'
+import { type Config } from '../utils/config.js'
 
 export class RagOrchestrator {
   private vectorStore: VectorStore
   private ollamaClient: OllamaClient
   private ripgrep: RgSearch
+  private config: Config
 
-  constructor() {
-    this.vectorStore = new VectorStore()
-    this.ollamaClient = new OllamaClient()
-    this.ripgrep = new RgSearch()
+  constructor(config: Config) {
+    this.config = config
+    this.vectorStore = new VectorStore(config)
+    this.ollamaClient = new OllamaClient(config)
+    this.ripgrep = new RgSearch(config)
   }
 
   async answerQuestion(question: string): Promise<void> {
@@ -112,7 +114,7 @@ Return JSON: {"strategy": "...", "queries": [], "hardKeywords": [], "filters": {
         const matches = await this.ripgrep.captureSearchMatches({ pattern: k })
         const converted: VectorSearchResult[] = matches.map((m) => ({
           meta: {
-            path: join(config.exportDir, m.path),
+            path: join(this.config.exportDir, m.path),
             snippet: m.text,
             title: m.path.split('/').pop() || 'Untitled',
             id: m.path + m.line,

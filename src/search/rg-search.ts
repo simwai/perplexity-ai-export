@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { createInterface } from 'node:readline'
-import { config } from '../utils/config.js'
+import { type Config } from '../utils/config.js'
 import { logger } from '../utils/logger.js'
 import chalk from 'chalk'
 import { rgPath } from '@vscode/ripgrep'
@@ -34,6 +34,12 @@ export class RgSearch {
     }
   }
 
+  private config: Config;
+
+  constructor(config: Config) {
+    this.config = config;
+  }
+
   async search(options: RgSearchOptions): Promise<void> {
     this.ensureExportDirectoryIsAccessible()
     const ripgrepCommandArguments = this.constructRipgrepArguments(options)
@@ -51,7 +57,7 @@ export class RgSearch {
       const MAX_MATCHES_PER_KEYWORD = 100
       const TIMEOUT_MS = 30000
       const matches: RgMatch[] = []
-      const rg = spawn(rgPath, cleanArgs, { cwd: config.exportDir })
+      const rg = spawn(rgPath, cleanArgs, { cwd: this.config.exportDir })
 
       const timeout = setTimeout(() => {
         logger.warn(
@@ -106,7 +112,7 @@ export class RgSearch {
   }
 
   private ensureExportDirectoryIsAccessible(): void {
-    if (!existsSync(config.exportDir)) {
+    if (!existsSync(this.config.exportDir)) {
       throw new RgSearch.RgSearchError(
         'No exports directory found. Please run the "start" command first to export your history.'
       )
@@ -144,7 +150,7 @@ export class RgSearch {
   private spawnRipgrepProcess(args: string[]): Promise<void> {
     return new Promise((resolve, reject) => {
       const ripgrepProcess = spawn(rgPath, args, {
-        cwd: config.exportDir,
+        cwd: this.config.exportDir,
         stdio: ['ignore', 'pipe', 'pipe'],
       })
 

@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { chromium, type Browser, type BrowserContext } from '@playwright/test'
 import { ConversationExtractor } from '../../src/scraper/conversation-extractor.js'
+import { config } from '../../src/utils/config.js'
 import { existsSync, rmSync } from 'node:fs'
 
 const TEST_OUTPUT = './test-output-e2e'
@@ -26,7 +27,7 @@ describe('Scraper E2E - Critical Path', () => {
 
   it('should handle missing/invalid URL gracefully without crashing', async () => {
     context = await browser.newContext()
-    const extractor = new ConversationExtractor(context)
+    const extractor = new ConversationExtractor(config, context)
 
     // ✅ Now we expect it to THROW with a descriptive error
     await expect(

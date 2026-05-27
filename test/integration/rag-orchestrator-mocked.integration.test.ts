@@ -59,7 +59,7 @@ describe('RagOrchestrator (MSW Mocked)', () => {
     vi.spyOn(VectorStore.prototype, 'validate').mockResolvedValue(undefined)
     vi.spyOn(RgSearch.prototype, 'captureSearchMatches').mockResolvedValue([])
 
-    const ragOrchestratorInstance = new RagOrchestrator()
+    const ragOrchestratorInstance = new RagOrchestrator(config)
     const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
 
     await ragOrchestratorInstance.answerQuestion('What is in my history?')

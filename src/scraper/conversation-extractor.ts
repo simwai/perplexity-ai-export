@@ -3,6 +3,7 @@ import { waitStrategy } from '../utils/wait-strategy.js'
 import { logger } from '../utils/logger.js'
 import { z } from 'zod'
 import { ApiDiagnosticsWriter } from '../utils/api-diagnostics.js'
+import { type Config } from '../utils/config.js'
 
 export interface ExtractedConversation {
   id: string
@@ -97,9 +98,13 @@ export class ConversationExtractor {
   }
 
   private readonly context: BrowserContext
+  private readonly config: Config
+  private readonly diagnostics: ApiDiagnosticsWriter
 
-  constructor(context: BrowserContext) {
+  constructor(config: Config, context: BrowserContext) {
+    this.config = config
     this.context = context
+    this.diagnostics = new ApiDiagnosticsWriter(config)
   }
 
   async extract(url: string): Promise<ExtractedConversation> {
@@ -118,7 +123,7 @@ export class ConversationExtractor {
 
     try {
       await this.navigateToConversationUrl(page, url)
-      await waitStrategy.afterScroll(page)
+      await waitStrategy(this.config).afterScroll(page)
 
       const apiData = await apiDataPromise
       if (!apiData) {
@@ -186,7 +191,7 @@ export class ConversationExtractor {
 
           const parseResult = ConversationExtractor.ApiResponseSchema.safeParse(json)
           if (!parseResult.success) {
-            ApiDiagnosticsWriter.writeFailure({
+            this.diagnostics.writeFailure({
               url: response.url(),
               errorType: 'zod_error',
               zodErrorPaths: parseResult.error.issues.map((e) => e.path.join('.')),
@@ -253,7 +258,7 @@ export class ConversationExtractor {
 
       if (!parseResult.success) {
         if (entries.length === 0) {
-          ApiDiagnosticsWriter.writeFailure({
+          this.diagnostics.writeFailure({
             url,
             errorType: 'empty_entries',
           }).catch(() => {})
@@ -294,7 +299,7 @@ export class ConversationExtractor {
       return [data]
     }
 
-    ApiDiagnosticsWriter.writeFailure({
+    this.diagnostics.writeFailure({
       url,
       errorType: 'unknown_shape',
     }).catch(() => {})
