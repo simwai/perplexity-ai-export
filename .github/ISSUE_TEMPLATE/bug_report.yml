@@ -44,5 +44,5 @@ body:
   - type: textarea
     id: diagnostics
     attributes:
-      label: 'Diagnostic Artifacts'
-      description: 'If enabled, please attach logs from the `logs/` directory. If you encountered a scraping failure, the `debug/api-diagnostics.jsonl` file is also invaluable.'
+      label: 'Visual Evidence (Screenshots/Logs)'
+      description: 'Provide any additional data points to help us triangulate the issue. If you encountered a scraping failure, please attach the `debug/api-diagnostics.jsonl` file (it contains NO sensitive data).'

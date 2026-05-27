@@ -1,15 +1,16 @@
+import { config } from "../../src/utils/config.js"
 import { describe, it, expect } from 'vitest'
 import { OllamaClient } from '../../src/ai/ollama-client.js'
 import { isOllamaAvailable } from '../ollama-available.js'
 
 describe.runIf(await isOllamaAvailable())('OllamaClient Integration', () => {
   it('should validate Ollama is running and model is available', async () => {
-    const client = new OllamaClient()
+    const client = new OllamaClient(config)
     await expect(client.validate()).resolves.not.toThrow()
   })
 
   it('should embed single text and return correct shape', async () => {
-    const client = new OllamaClient()
+    const client = new OllamaClient(config)
     const result = await client.embed(['hello'])
     expect(result).toBeInstanceOf(Array)
     expect(result[0]).toBeInstanceOf(Array)
@@ -17,7 +18,7 @@ describe.runIf(await isOllamaAvailable())('OllamaClient Integration', () => {
   })
 
   it('should embed batch of texts in parallel', async () => {
-    const client = new OllamaClient()
+    const client = new OllamaClient(config)
     const texts = ['hello', 'world', 'test']
     const result = await client.embed(texts)
     expect(result).toHaveLength(3)
@@ -25,7 +26,7 @@ describe.runIf(await isOllamaAvailable())('OllamaClient Integration', () => {
   })
 
   it('should handle empty array gracefully', async () => {
-    const client = new OllamaClient()
+    const client = new OllamaClient(config)
     const result = await client.embed([])
     expect(result).toEqual([])
   })

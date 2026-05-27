@@ -44,8 +44,12 @@ export const logger = {
   },
 
   debug(...args: unknown[]): void {
-    const msg = args.join(' ')
-    console.log(chalk.gray('›'), msg)
-    writeToFile(`DEBUG: ${msg}`)
-  },
+    // TODO: Use DI to get config instead of reading process.env directly
+    if (process.env['DEBUG'] === 'true') {
+      const msg = args.join(' ')
+      console.log(chalk.gray('›'), .
+                 msg);
+      writeToFile(`DEBUG: ${msg}`);
+    }
+  }
 }

@@ -1,6 +1,7 @@
-import type { Page } from '@playwright/test'
+import { type Page } from '@playwright/test'
 import { logger } from '../utils/logger.js'
-import type { ConversationMetadata } from './checkpoint-manager.js'
+import { type ConversationMeta } from './checkpoint-manager.js'
+import { type Config } from '../utils/config.js'
 
 export class LibraryDiscovery {
   static readonly VersionCaptureError = class extends Error {
@@ -24,7 +25,13 @@ export class LibraryDiscovery {
     }
   }
 
-  async discoverAllConversationsFromLibrary(page: Page): Promise<ConversationMetadata[]> {
+  private config: Config
+
+  constructor(config: Config) {
+    this.config = config
+  }
+
+  async discoverAllConversationsFromLibrary(page: Page): Promise<ConversationMeta[]> {
     const perplexityLibraryUrl = 'https://www.perplexity.ai/library'
     logger.info('Discovering threads via REST API...')
 
@@ -68,10 +75,10 @@ export class LibraryDiscovery {
   private async paginateAndFetchAllThreads(
     page: Page,
     apiVersion: string
-  ): Promise<ConversationMetadata[]> {
+  ): Promise<ConversationMeta[]> {
     const batchPageSize = 20
     let currentOffset = 0
-    const allDiscoveredConversations: ConversationMetadata[] = []
+    const allDiscoveredConversations: ConversationMeta[] = []
 
     while (true) {
       const threadBatch = await this.fetchThreadBatchFromApi(
@@ -95,6 +102,9 @@ export class LibraryDiscovery {
 
       logger.info(`Fetched ${threadBatch.length} threads (offset ${currentOffset})`)
       currentOffset += batchPageSize
+
+      // Respect rate limits between batches
+      await page.waitForTimeout(this.config.rateLimitMs)
     }
 
     return allDiscoveredConversations
@@ -135,14 +145,12 @@ export class LibraryDiscovery {
     }
   }
 
-  private mapRawBatchToMetadata(batch: any[]): ConversationMetadata[] {
+  private mapRawBatchToMetadata(batch: any[]): ConversationMeta[] {
     return batch
       .filter((item) => this.isMinimumRequiredThreadDataPresent(item))
       .map((item) => ({
+        id: item.slug,
         url: `https://www.perplexity.ai/search/${item.slug}`,
-        title: item.title ?? 'Untitled',
-        spaceName: item.collection?.title ?? 'General',
-        timestamp: item.last_query_datetime ?? undefined,
       }))
   }
 

@@ -1,7 +1,7 @@
 import { LocalIndex } from 'vectra'
 import { join } from 'node:path'
 import { readFileSync, readdirSync, statSync } from 'node:fs'
-import { config } from '../utils/config.js'
+import { type Config } from '../utils/config.js'
 import { logger } from '../utils/logger.js'
 import { OllamaClient } from '../ai/ollama-client.js'
 import { chunkMarkdown } from '../utils/chunking.js'
@@ -44,10 +44,12 @@ export class VectorStore {
 
   private vectorIndex: LocalIndex
   private ollamaClient: OllamaClient
+  private config: Config
 
-  constructor() {
+  constructor(config: Config) {
+    this.config = config
     this.vectorIndex = new LocalIndex(config.vectorIndexPath)
-    this.ollamaClient = new OllamaClient()
+    this.ollamaClient = new OllamaClient(config)
   }
 
   async validate(): Promise<void> {
@@ -62,7 +64,7 @@ export class VectorStore {
 
   async rebuildFromExports(): Promise<void> {
     logger.info('Building vector index from exports folder...')
-    const markdownFiles = this.getMarkdownFilesRecursively(config.exportDir)
+    const markdownFiles = this.getMarkdownFilesRecursively(this.config.exportDir)
 
     if (markdownFiles.length === 0) {
       logger.warn('No markdown files found to index.')

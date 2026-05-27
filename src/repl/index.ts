@@ -2,13 +2,14 @@ import { select } from '@inquirer/prompts'
 import chalk from 'chalk'
 import { logger } from '../utils/logger.js'
 import { CommandHandler } from './commands.js'
+import { type Config } from '../utils/config.js'
 
 export class Repl {
   private activeCommandHandler: CommandHandler
   private isReplRunning = true
 
-  constructor() {
-    this.activeCommandHandler = new CommandHandler()
+  constructor(config: Config) {
+    this.activeCommandHandler = new CommandHandler(config)
   }
 
   async start(): Promise<void> {

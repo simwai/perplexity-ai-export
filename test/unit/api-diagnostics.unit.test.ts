@@ -6,11 +6,15 @@ import path from 'node:path'
 vi.mock('node:fs/promises')
 
 describe('ApiDiagnosticsWriter (Unit)', () => {
+  const mockConfig = { debug: true } as any;
+  let writer: ApiDiagnosticsWriter;
+
   beforeEach(() => {
     vi.clearAllMocks()
   })
 
-  it('should write diagnostic entry to jsonl file', async () => {
+  it('should write diagnostic entry to jsonl file when debug is true', async () => {
+    mockConfig.debug = true;
     const entry = {
       url: 'http://test.com',
       errorType: 'unknown_shape' as const,
@@ -32,6 +36,7 @@ describe('ApiDiagnosticsWriter (Unit)', () => {
   })
 
   it('should include zodErrorPaths when provided', async () => {
+    mockConfig.debug = true;
     const entry = {
       url: 'http://test.com',
       errorType: 'zod_error' as const,

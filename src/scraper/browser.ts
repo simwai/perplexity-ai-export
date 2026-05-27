@@ -1,6 +1,6 @@
 import { chromium, type Browser, type BrowserContext, type Page } from '@playwright/test'
 import { readFileSync, writeFileSync, existsSync, statSync } from 'node:fs'
-import { config } from '../utils/config.js'
+import { type Config } from '../utils/config.js'
 import { logger } from '../utils/logger.js'
 import { confirm } from '@inquirer/prompts'
 import { logHttpRequest, logHttpResponse } from '../utils/http-logger.js'
@@ -37,14 +37,19 @@ export class BrowserManager {
   public browserInstance: Browser | null = null
   private activeContext: BrowserContext | null = null
   private activePage: Page | null = null
+  private config: Config
+
+  constructor(config: Config) {
+    this.config = config
+  }
 
   async launch(): Promise<Page> {
     try {
-      const isSavedAuthValid = this.checkIfSavedAuthenticationIsFresh(config.authStoragePath)
+      const isSavedAuthValid = this.checkIfSavedAuthenticationIsFresh(this.config.authStoragePath)
 
       if (isSavedAuthValid) {
         // Try starting in requested headless mode directly
-        await this.launchBrowser(config.headless)
+        await this.launchBrowser(this.config.headless)
         await this.initializeBrowserContext()
         await this.navigateToSettingsPage()
         const isLoggedIn = await this.verifyLoginStatus(this.getActivePage())
@@ -67,10 +72,10 @@ export class BrowserManager {
       await this.ensureUserIsAuthenticated()
 
       // If user wants headless, restart now that we are logged in
-      if (config.headless !== false) {
+      if (this.config.headless !== false) {
         logger.info('Authentication successful. Restarting in headless mode...')
         await this.close()
-        await this.launchBrowser(config.headless)
+        await this.launchBrowser(this.config.headless)
         await this.initializeBrowserContext()
         await this.navigateToSettingsPage()
       }
@@ -107,12 +112,12 @@ export class BrowserManager {
   private async initializeBrowserContext(): Promise<void> {
     if (!this.browserInstance) throw new BrowserManager.ContextError('Browser not initialized')
 
-    const isSavedAuthValid = this.checkIfSavedAuthenticationIsFresh(config.authStoragePath)
+    const isSavedAuthValid = this.checkIfSavedAuthenticationIsFresh(this.config.authStoragePath)
 
     if (isSavedAuthValid) {
       logger.info('Loading saved authentication state...')
       try {
-        const storageStateData = JSON.parse(readFileSync(config.authStoragePath, 'utf-8'))
+        const storageStateData = JSON.parse(readFileSync(this.config.authStoragePath, 'utf-8'))
         this.activeContext = await this.browserInstance.newContext({
           storageState: storageStateData,
         })
@@ -121,7 +126,7 @@ export class BrowserManager {
         this.activeContext = await this.browserInstance.newContext()
       }
     } else {
-      if (existsSync(config.authStoragePath)) {
+      if (existsSync(this.config.authStoragePath)) {
         logger.info('Saved authentication is older than 1 day, discarding.')
       }
       this.activeContext = await this.browserInstance.newContext()
@@ -219,7 +224,7 @@ export class BrowserManager {
       throw new BrowserManager.AuthError('No browser context available to save')
     }
     const currentStorageState = await this.activeContext.storageState()
-    writeFileSync(config.authStoragePath, JSON.stringify(currentStorageState, null, 2))
+    writeFileSync(this.config.authStoragePath, JSON.stringify(currentStorageState, null, 2))
   }
 
   private getActivePage(): Page {

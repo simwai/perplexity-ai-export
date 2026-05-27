@@ -1,6 +1,7 @@
-import fs from 'node:fs/promises'
-import path from 'node:path'
-import { logger } from './logger.js'
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import { logger } from './logger.js';
+import type { Config } from './config.js';
 
 export interface ApiDiagnosticEntry {
   timestamp: string
@@ -13,7 +14,6 @@ export class ApiDiagnosticsWriter {
   private static readonly DEBUG_DIR = 'debug'
   private static readonly LOG_FILE = 'api-diagnostics.jsonl'
 
-  static async writeFailure(entry: Omit<ApiDiagnosticEntry, 'timestamp'>): Promise<void> {
     try {
       const fullEntry: ApiDiagnosticEntry = {
         timestamp: new Date().toISOString(),

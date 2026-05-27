@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { config } from '../utils/config.js'
+import { type Config } from '../utils/config.js'
 import { logger } from '../utils/logger.js'
 
 const embeddingItemSchema = z.object({ embedding: z.array(z.number()) })
@@ -14,6 +14,8 @@ const generationResponseSchema = z.object({
 })
 
 export class OllamaClient {
+  private config: Config;
+
   static readonly OllamaError = class extends Error {
     constructor(message: string) {
       super(message)
@@ -21,11 +23,15 @@ export class OllamaClient {
     }
   }
 
+  constructor(config: Config) {
+    this.config = config;
+  }
+
   async embed(texts: string[]): Promise<number[][]> {
     if (texts.length === 0) return []
 
     const requestBody = {
-      model: config.ollamaEmbedModel,
+      model: this.config.ollamaEmbedModel,
       input: texts,
     }
 
@@ -35,7 +41,7 @@ export class OllamaClient {
 
   async generate(prompt: string, modelOverride?: string): Promise<string> {
     const requestBody = {
-      model: modelOverride ?? config.ollamaModel,
+      model: modelOverride ?? this.config.ollamaModel,
       prompt,
       stream: false,
     }
@@ -57,7 +63,7 @@ export class OllamaClient {
   }
 
   private async performOllamaHttpRequest(endpoint: string, body: object): Promise<unknown> {
-    const url = `${config.ollamaUrl}${endpoint}`
+    const url = `${this.config.ollamaUrl}${endpoint}`
 
     try {
       const response = await fetch(url, {

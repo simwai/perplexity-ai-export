@@ -27,7 +27,7 @@ afterAll(() => mswServer.close())
 
 describe('OllamaClient (MSW Mocked)', () => {
   it('should return embeddings using OpenAI format', async () => {
-    const ollamaClientInstance = new OllamaClient()
+    const ollamaClientInstance = new OllamaClient(config)
     const resultVectors = await ollamaClientInstance.embed(['text1', 'text2'])
     expect(resultVectors).toEqual([
       [0.1, 0.2, 0.3],
@@ -36,7 +36,7 @@ describe('OllamaClient (MSW Mocked)', () => {
   })
 
   it('should generate a response from a prompt', async () => {
-    const ollamaClientInstance = new OllamaClient()
+    const ollamaClientInstance = new OllamaClient(config)
     const generatedText = await ollamaClientInstance.generate('test prompt')
     expect(generatedText).toBe('Mocked response for prompt: test prompt')
   })
@@ -47,7 +47,7 @@ describe('OllamaClient (MSW Mocked)', () => {
         return new HttpResponse(null, { status: 500 })
       })
     )
-    const ollamaClientInstance = new OllamaClient()
+    const ollamaClientInstance = new OllamaClient(config)
     await expect(ollamaClientInstance.embed(['text'])).rejects.toThrow(
       'Ollama request failed with status 500'
     )
