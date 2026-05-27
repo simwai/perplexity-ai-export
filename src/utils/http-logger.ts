@@ -33,7 +33,11 @@ function isPromptRequest(url: string, postData: string | null): boolean {
       }
     } catch {
       // Not JSON or failed to parse, fallback to string check
-      if (postData.includes('"query"') || postData.includes('"prompt"') || postData.includes('"messages"')) {
+      if (
+        postData.includes('"query"') ||
+        postData.includes('"prompt"') ||
+        postData.includes('"messages"')
+      ) {
         return true
       }
     }

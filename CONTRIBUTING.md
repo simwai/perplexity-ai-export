@@ -100,7 +100,6 @@ Should the pre-commit process appear to reach a cognitive deadlock (hanging or a
 
 ---
 
-
 ## Ethical and Intellectual Standards
 
 - **Clarity over Complexity**: While our goals are ambitious, our code should remain a model of lucidity.

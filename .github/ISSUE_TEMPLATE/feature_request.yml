@@ -12,7 +12,7 @@ body:
     attributes:
       label: 'Conceptual Limitation'
       description: "Is your request related to a specific gap in the system's current functionality?"
-      placeholder: "Where does the current system fall short of its potential?"
+      placeholder: 'Where does the current system fall short of its potential?'
     validations:
       required: true
   - type: textarea
@@ -20,7 +20,7 @@ body:
     attributes:
       label: 'Proposed Manifestation'
       description: "Describe the new capability or utility you'd like to see implemented."
-      placeholder: "How should this new intelligence behave?"
+      placeholder: 'How should this new intelligence behave?'
     validations:
       required: true
   - type: textarea
