@@ -45,7 +45,7 @@ export class Repl {
   private async executeReplCommand(command: string): Promise<void> {
     switch (command) {
       case 'start-library':
-        await this.activeCommandHandler.handleStartLibraryExport()
+        await this.activeCommandHandler.handleScraperWizard()
         break
       case 'search':
         await this.activeCommandHandler.handleSearchWizard()

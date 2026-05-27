@@ -61,11 +61,20 @@ export class WorkerPool {
         const task = (async () => {
           try {
             const result = await availableWorker.extractor.extract(conversation.url)
-            await this.fileWriter.write(result)
-            this.checkpointManager.markAsProcessed(conversation.id)
+            const existingHash = this.checkpointManager.getContentHash(conversation.id)
 
-            const progress = this.checkpointManager.getProcessingProgress()
-            logger.info(`[${progress.processed}/${progress.total}] Processed: ${result.title}`)
+            if (existingHash && existingHash === result.contentHash) {
+              this.checkpointManager.markAsProcessed(conversation.id)
+              const progress = this.checkpointManager.getProcessingProgress()
+              logger.info(
+                `[${progress.processed}/${progress.total}] Up to date: ${result.title} (skipped write)`
+              )
+            } else {
+              await this.fileWriter.write(result)
+              this.checkpointManager.markAsProcessed(conversation.id, result.contentHash)
+              const progress = this.checkpointManager.getProcessingProgress()
+              logger.info(`[${progress.processed}/${progress.total}] Processed: ${result.title}`)
+            }
           } catch (_error) {
             errorBus.emitError(`Failed to process ${conversation.url}`, _error)
 

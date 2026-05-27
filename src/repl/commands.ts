@@ -225,13 +225,16 @@ export class CommandHandler {
   private async promptUserForCheckpointAction(): Promise<void> {
     const progress = this.progressCheckpointManager.getProcessingProgress()
 
+    const choices: { name: string; value: string }[] = [
+      { name: 'Resume from checkpoint', value: 'resume' },
+      { name: 'Check for updates (Re-scan all threads)', value: 'update' },
+      { name: 'Restart from scratch', value: 'restart' },
+      { name: 'Cancel', value: 'cancel' },
+    ]
+
     const chosenAction = await select({
       message: `Found checkpoint (${progress.processed}/${progress.total} processed). What do you want to do?`,
-      choices: [
-        { name: 'Resume from checkpoint', value: 'resume' },
-        { name: 'Restart from scratch', value: 'restart' },
-        { name: 'Cancel', value: 'cancel' },
-      ],
+      choices,
     })
 
     if (chosenAction === 'cancel') {
@@ -241,6 +244,8 @@ export class CommandHandler {
 
     if (chosenAction === 'restart') {
       this.progressCheckpointManager.resetCheckpoint()
+    } else if (chosenAction === 'update') {
+      this.progressCheckpointManager.prepareForUpdateRun()
     }
   }
 

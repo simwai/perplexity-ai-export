@@ -1,13 +1,15 @@
+import { createHash } from 'node:crypto'
 import { errorBus } from '../utils/error-bus.js'
-import type { BrowserContext, Page, Response } from '@playwright/test'
-import { waitStrategy } from '../utils/wait-strategy.js'
-import { logger } from '../utils/logger.js'
 import { z } from 'zod'
+import { type Page, type BrowserContext, type Response } from '@playwright/test'
+import { logger } from '../utils/logger.js'
+import { waitStrategy } from '../utils/wait-strategy.js'
 import { ApiDiagnosticsWriter } from '../utils/api-diagnostics.js'
 import { type Config } from '../utils/config.js'
 
 export interface ExtractedConversation {
   id: string
+  contentHash: string
   title: string
   spaceName: string
   timestamp: Date
@@ -259,6 +261,20 @@ export class ConversationExtractor {
     }
   }
 
+  private hashEntries(rawEntries: any[]): string {
+    // Stringify with full content
+    const stable = JSON.stringify(rawEntries, (_key, value) => {
+        if (value && typeof value === 'object' && !Array.isArray(value)) {
+            return Object.keys(value).sort().reduce((sorted: any, key) => {
+                sorted[key] = value[key];
+                return sorted;
+            }, {});
+        }
+        return value;
+    });
+    return createHash('sha256').update(stable).digest('hex')
+  }
+
   private parseConversationData(data: any, url: string): ExtractedConversation | null {
     try {
       const entries = this.ensureEntriesFormat(data, url)
@@ -288,6 +304,7 @@ export class ConversationExtractor {
       const spaceName =
         firstEntry.collection_info?.title ?? data.collection_info?.title ?? 'General'
       const timestamp = this.extractTimestamp(firstEntry, data)
+      const contentHash = this.hashEntries(validEntries)
       const content = this.convertEntriesToMarkdown(validEntries, title)
 
       if (!content) {
@@ -295,7 +312,7 @@ export class ConversationExtractor {
         return null
       }
 
-      return { id, title, spaceName, timestamp, content }
+      return { id, title, spaceName, timestamp, content, contentHash }
     } catch (_error) {
       errorBus.emitError('Failed to parse conversation data.')
       return null

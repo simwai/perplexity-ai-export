@@ -5,6 +5,7 @@ import { type Config } from '../utils/config.js'
 export interface ConversationMeta {
   id: string
   url: string
+  contentHash?: string
 }
 
 export interface ProgressState {
@@ -28,7 +29,11 @@ export class CheckpointManager {
   }
 
   setDiscoveredConversations(conversations: ConversationMeta[]): void {
-    this.state.discoveredConversations = conversations
+    // Preserve content hashes for existing conversations
+    this.state.discoveredConversations = conversations.map((newConv) => {
+      const existing = this.state.discoveredConversations.find((c) => c.id === newConv.id)
+      return existing ? { ...newConv, contentHash: existing.contentHash } : newConv
+    })
     this.state.discoveryPhaseComplete = true
     this.saveCheckpoint()
   }
@@ -43,9 +48,26 @@ export class CheckpointManager {
     )
   }
 
-  markAsProcessed(id: string): void {
+  getContentHash(id: string): string | undefined {
+    return this.state.discoveredConversations.find((c) => c.id === id)?.contentHash
+  }
+
+  markAsProcessed(id: string, contentHash?: string): void {
+    let changed = false
     if (!this.state.processedIds.includes(id)) {
       this.state.processedIds.push(id)
+      changed = true
+    }
+
+    if (contentHash) {
+      const conv = this.state.discoveredConversations.find((c) => c.id === id)
+      if (conv && conv.contentHash !== contentHash) {
+        conv.contentHash = contentHash
+        changed = true
+      }
+    }
+
+    if (changed) {
       this.saveCheckpoint()
     }
   }
@@ -55,6 +77,12 @@ export class CheckpointManager {
       processed: this.state.processedIds.length,
       total: this.state.discoveredConversations.length,
     }
+  }
+
+  prepareForUpdateRun(): void {
+    this.state.processedIds = []
+    this.state.discoveryPhaseComplete = false
+    this.saveCheckpoint()
   }
 
   resetCheckpoint(): void {
