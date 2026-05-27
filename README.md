@@ -27,6 +27,7 @@
 - [RAG Capabilities](#rag-capabilities)
 - [Architecture & Deep Dive](#architecture--deep-dive)
   * [Project Structure](#project-structure)
+- [Error Handling Philosophy](#error-handling-philosophy)
 - [Testing](#testing)
 
 <!-- tocstop -->
@@ -145,6 +146,10 @@ For a detailed look at our RAG implementation, hybrid search strategy, and theor
 - **src/search/**: Vector storage (Vectra) and ripgrep search implementation.
 - **src/repl/**: Interactive CLI components.
 - **src/utils/**: Shared utility functions for data chunking and logging.
+
+## Error Handling Philosophy
+
+The system treats operational failure as a metadata-rich event. For a detailed exploration of our resilient architecture, see [ERROR_HANDLING.md](./ERROR_HANDLING.md).
 
 ## Testing
 

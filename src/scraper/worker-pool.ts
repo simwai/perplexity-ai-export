@@ -1,19 +1,25 @@
 import { errorBus } from '../utils/error-bus.js'
-import type { Browser, BrowserContext } from '@playwright/test'
 import { existsSync, readFileSync, statSync } from 'node:fs'
-import { logger } from '../utils/logger.js'
 import { config } from '../utils/config.js'
+import { logger } from '../utils/logger.js'
+import type { Browser, BrowserContext } from '@playwright/test'
 import { ConversationExtractor, type ExtractedConversation } from './conversation-extractor.js'
 import { FileWriter } from '../export/file-writer.js'
-import type { CheckpointManager, ConversationMetadata } from './checkpoint-manager.js'
+import type { CheckpointManager } from './checkpoint-manager.js'
+import { ErrorMessages } from '../utils/error-messages.js'
 
-export interface Worker {
+export interface ConversationMetadata {
+  url: string
+  title: string
+}
+
+interface Worker {
   id: number
   extractor: ConversationExtractor
   isBusy: boolean
 }
 
-export interface ProcessingStats {
+interface ProcessingStats {
   total: number
   succeeded: number
   failed: number
@@ -31,6 +37,7 @@ function loadPersistedAuthenticationState(): any | null {
     if (fileAgeInMilliseconds >= twentyFourHoursInMilliseconds) return null
     return JSON.parse(readFileSync(authenticationStoragePath, 'utf-8'))
   } catch (error) {
+    errorBus.report(error, { message: ErrorMessages.Scraper.WorkerPool.AuthLoadFailed })
     return null
   }
 }
@@ -39,14 +46,7 @@ export class WorkerPool {
   static readonly InitializationError = class extends Error {
     constructor(message: string) {
       super(message)
-      this.name = 'WorkerInitializationError'
-    }
-  }
-
-  static readonly ProcessingError = class extends Error {
-    constructor(message: string) {
-      super(message)
-      this.name = 'WorkerProcessingError'
+      this.name = 'WorkerPoolInitializationError'
     }
   }
 
@@ -54,13 +54,6 @@ export class WorkerPool {
     constructor(message: string) {
       super(message)
       this.name = 'FileValidationError'
-    }
-  }
-
-  static readonly ExtractionError = class extends Error {
-    constructor(message: string) {
-      super(message)
-      this.name = 'ExtractionError'
     }
   }
 
@@ -90,7 +83,7 @@ export class WorkerPool {
         this.activeWorkers.push(worker)
       }
     } catch (error) {
-      throw errorBus.raise(WorkerPool.InitializationError, 'Failed to initialize workers', error)
+      throw errorBus.raise(WorkerPool.InitializationError, ErrorMessages.Scraper.WorkerPool.InitFailed, error)
     }
 
     logger.success(`Worker pool ready with ${this.activeWorkers.length} workers`)
@@ -146,7 +139,7 @@ export class WorkerPool {
 
   private async createNewWorker(workerId: number): Promise<Worker> {
     if (!this.sharedBrowserContext) {
-      throw new WorkerPool.InitializationError('Shared context not initialized')
+      throw new WorkerPool.InitializationError(ErrorMessages.Scraper.WorkerPool.NoSharedContext)
     }
 
     const conversationExtractor = new ConversationExtractor(this.sharedBrowserContext)
@@ -309,6 +302,7 @@ export class WorkerPool {
 
       return null
     } catch (error) {
+      errorBus.report(error, { message: ErrorMessages.Scraper.WorkerPool.FileIntegrityError })
       const errorMessage = error instanceof Error ? error.message : String(error)
       return `Validation exception: ${errorMessage}`
     }
@@ -336,7 +330,7 @@ export class WorkerPool {
     const errorMessage = error instanceof Error ? error.message : String(error)
     logger.error(`Worker ${worker.id} failed for ${conversation.title}`)
     logger.error(`  URL: ${conversation.url}`)
-    errorBus.report(error, { message: 'Worker processing failed' })
+    errorBus.report(error, { message: ErrorMessages.Scraper.WorkerPool.WorkerFailure })
 
     this.processingStats.failed++
     this.processingStats.failures.push({

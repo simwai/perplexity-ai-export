@@ -5,6 +5,7 @@ import { logger } from '../utils/logger.js'
 import { config } from '../utils/config.js'
 import { RagOrchestrator } from '../ai/rag-orchestrator.js'
 import chalk from 'chalk'
+import { ErrorMessages } from '../utils/error-messages.js'
 
 export type SearchMode = 'rg' | 'vector' | 'auto' | 'rag'
 
@@ -37,7 +38,7 @@ export class SearchOrchestrator {
     if (!config.enableVectorSearch) {
       throw errorBus.raise(
         SearchOrchestrator.ValidationError,
-        'Vector search is disabled (ENABLE_VECTOR_SEARCH=false)'
+        ErrorMessages.Search.Orchestrator.VectorDisabled
       )
     }
     await this.vectorStore.validate()
@@ -59,7 +60,7 @@ export class SearchOrchestrator {
         await this.executeAutoSearch(query, rgOptions)
       }
     } catch (error) {
-      throw errorBus.raise(SearchOrchestrator.SearchOrchestratorError, 'Search failed', error)
+      throw errorBus.raise(SearchOrchestrator.SearchOrchestratorError, ErrorMessages.Search.Orchestrator.GenericFailure, error)
     }
   }
 

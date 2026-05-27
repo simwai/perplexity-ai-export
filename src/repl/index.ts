@@ -3,6 +3,7 @@ import { select } from '@inquirer/prompts'
 import chalk from 'chalk'
 import { logger } from '../utils/logger.js'
 import { CommandHandler } from './commands.js'
+import { ErrorMessages } from '../utils/error-messages.js'
 
 export class Repl {
   private activeCommandHandler: CommandHandler
@@ -35,7 +36,7 @@ export class Repl {
         if (error instanceof Error && error.name === 'ExitPromptError') {
           this.terminateRepl()
         } else {
-          errorBus.report(error, { message: 'REPL execution error' })
+          errorBus.report(error, { message: ErrorMessages.Repl.ExecutionError })
         }
       }
     }

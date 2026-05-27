@@ -4,6 +4,7 @@ import { writeFileSync, existsSync, mkdirSync } from 'node:fs'
 import { config } from '../utils/config.js'
 import type { ExtractedConversation } from '../scraper/conversation-extractor.js'
 import { sanitizeFilename, sanitizeSpaceName } from './sanitizer.js'
+import { ErrorMessages } from '../utils/error-messages.js'
 
 export class FileWriter {
   static readonly WriteError = class extends Error {
@@ -35,7 +36,7 @@ export class FileWriter {
     } catch (error) {
       throw errorBus.raise(
         FileWriter.WriteError,
-        `Failed to write conversation ${conversation.id}`,
+        ErrorMessages.Export.FileWriter.WriteFailed(conversation.id),
         error
       )
     }

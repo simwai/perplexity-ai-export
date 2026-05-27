@@ -1,0 +1,91 @@
+export const ErrorMessages = {
+  Ollama: {
+    ValidationFailed: 'Ollama validation failed. Please ensure the Ollama service is running and the required embedding model is pulled.',
+    NetworkError: 'A network error occurred while communicating with the Ollama service. Check your connection and OLLAMA_URL configuration.',
+    UnexpectedFormat: 'Received an unexpected response format from the Ollama embeddings endpoint.',
+    RequestFailed: (status: number, detail: string) => `Ollama request failed with status ${status} – ${detail}`,
+  },
+  Search: {
+    Orchestrator: {
+      GenericFailure: 'The search operation failed due to an internal error in the search orchestrator.',
+      VectorDisabled: 'Vector search is currently disabled. Set ENABLE_VECTOR_SEARCH=true in your environment to enable it.',
+    },
+    VectorStore: {
+      ValidationFailed: 'Failed to validate the vector store configuration or Ollama connectivity.',
+      SearchFailed: 'The vector search operation failed to execute.',
+      FilterSearchFailed: 'The filtered vector search operation failed.',
+      EmbeddingGenerationFailed: 'Failed to generate an embedding for the provided query.',
+      BatchEmbeddingFailed: 'A batch embedding operation failed during indexing.',
+    },
+    RgSearch: {
+      Timeout: 'The ripgrep search operation timed out after 30 seconds. Try a more specific pattern.',
+      NotFound: 'The ripgrep (rg) binary was not found or failed to execute. Ensure it is correctly installed and bundled.',
+      GenericFailure: 'The ripgrep search operation failed.',
+      ExitCode: (code: number | string | null) => `ripgrep search exited unexpectedly with code ${code}.`,
+    },
+  },
+  Scraper: {
+    Extraction: {
+      PageCreationFailed: 'Failed to create a new browser page for conversation extraction.',
+      ApiTimeout: 'Timed out waiting for the conversation API response from Perplexity.',
+      ParseFailed: 'Failed to parse the conversation data retrieved from the API.',
+      GenericFailure: 'An error occurred during the conversation extraction process.',
+      NoContext: 'Browser context is missing or has been destroyed.',
+      ContextDead: 'The browser context is no longer available for operations.',
+      NavigationNoResponse: 'Navigation to the conversation URL failed with no response.',
+      NotFound: 'The requested conversation was not found (404).',
+      AuthRequired: 'Authentication is required or your session has expired. Please log in again.',
+      ServerError: (status: number) => `Perplexity server returned an error during navigation (HTTP ${status}).`,
+      HttpError: (status: number) => `Navigation failed with HTTP error ${status}.`,
+    },
+    WorkerPool: {
+      InitFailed: 'Failed to initialize the worker pool. Check browser and system resources.',
+      NoSharedContext: 'The shared browser context was not properly initialized for the worker pool.',
+      WorkerFailure: 'A worker failed while processing a conversation.',
+      FileIntegrityError: 'An exception occurred during the markdown file integrity check.',
+      AuthLoadFailed: 'Failed to load the persisted authentication state from disk.',
+    },
+    Discovery: {
+      VersionCaptureFailed: 'Failed to detect the current Perplexity API version.',
+      PaginationFailed: (offset: number) => `Failed to fetch the thread batch at offset ${offset}.`,
+    },
+    Browser: {
+      LaunchFailed: 'Failed to launch the browser instance. Check Playwright/Patchright dependencies.',
+      UnexpectedError: 'An unexpected error occurred within the browser manager.',
+      NotInitialized: 'The browser instance has not been initialized.',
+      NoContext: 'No active browser context is available for the requested operation.',
+      NavigationFailed: 'Failed to navigate to the requested page.',
+      AuthPageNotInit: 'The authentication page was not properly initialized.',
+      LoginFailed: (url: string) => `Login verification failed. Unexpected URL state: ${url}`,
+      NoContextToSave: 'No active browser context was found to save the authentication state.',
+    },
+  },
+  Export: {
+    FileWriter: {
+      WriteFailed: (id: string) => `Failed to write the conversation markdown file for ID: ${id}`,
+    },
+  },
+  Checkpoint: {
+    LoadFailed: 'Failed to load the progress checkpoint from disk. Starting with a fresh state.',
+    SaveFailed: 'Failed to write the progress checkpoint to disk.',
+    NotAnObject: 'The loaded checkpoint data is invalid: not an object.',
+    MissingField: (field: string) => `The loaded checkpoint data is missing the required field: ${field}`,
+  },
+  Repl: {
+    StartFailed: 'The REPL interface failed to start.',
+    ExecutionError: 'An error occurred while executing the selected REPL command.',
+    ScraperFailed: 'The library export process failed.',
+    SearchFailed: 'The search wizard encountered an error.',
+    ValidationRetryFailed: 'The retry for vector search validation failed.',
+    ResetFailed: 'Failed to reset the storage directory and progress state.',
+    ScrapingFlowFailed: 'The full scraping flow was interrupted by an error.',
+    VectorSearchValidation: 'Vector search validation failed. Please check Ollama and your configuration.',
+  },
+  Rag: {
+    GenericFailure: 'The Mightiest RAG processing flow failed.',
+    PlanFailed: 'Failed to develop an AI research plan; falling back to default search.',
+    KeywordSearchFailed: (keyword: string) => `Keyword-based search failed for pattern: "${keyword}"`,
+    FactExtractionFailed: 'AI fact extraction batch failed; falling back to raw snippet content.',
+    QualityVerificationFailed: 'The AI answer quality verification step failed.',
+  },
+}

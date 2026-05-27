@@ -6,6 +6,7 @@ import { config } from '../utils/config.js'
 import { logger } from '../utils/logger.js'
 import { OllamaClient } from '../ai/ollama-client.js'
 import { chunkMarkdown } from '../utils/chunking.js'
+import { ErrorMessages } from '../utils/error-messages.js'
 
 export type VectorDocMeta = Record<string, string>
 
@@ -55,7 +56,7 @@ export class VectorStore {
     try {
       await this.ollamaClient.validate()
     } catch (error) {
-      throw errorBus.raise(VectorStore.VectorStoreError, 'Vector store validation failed', error)
+      throw errorBus.raise(VectorStore.VectorStoreError, ErrorMessages.Search.VectorStore.ValidationFailed, error)
     }
   }
 
@@ -80,7 +81,7 @@ export class VectorStore {
       const rawResults = await this.queryVectorIndex(queryEmbedding, query, limit)
       return this.formatVectorSearchResults(rawResults)
     } catch (error) {
-      throw errorBus.raise(VectorStore.SearchError, 'Vector search failed', error)
+      throw errorBus.raise(VectorStore.SearchError, ErrorMessages.Search.VectorStore.SearchFailed, error)
     }
   }
 
@@ -99,7 +100,7 @@ export class VectorStore {
       )
       return this.formatVectorSearchResults(rawResults)
     } catch (error) {
-      throw errorBus.raise(VectorStore.SearchError, 'Filtered vector search failed', error)
+      throw errorBus.raise(VectorStore.SearchError, ErrorMessages.Search.VectorStore.FilterSearchFailed, error)
     }
   }
 
@@ -202,14 +203,14 @@ export class VectorStore {
         })
       }
     } catch (error) {
-      errorBus.report(error, { message: 'Batch embedding failed' })
+      errorBus.report(error, { message: ErrorMessages.Search.VectorStore.BatchEmbeddingFailed })
     }
   }
 
   private async generateQueryEmbedding(query: string): Promise<number[]> {
     const [queryEmbedding] = await this.ollamaClient.embed([query])
     if (!queryEmbedding) {
-      throw new VectorStore.EmbeddingError('Failed to generate embedding for query')
+      throw new VectorStore.EmbeddingError(ErrorMessages.Search.VectorStore.EmbeddingGenerationFailed)
     }
     return queryEmbedding
   }

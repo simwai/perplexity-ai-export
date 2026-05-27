@@ -3,6 +3,7 @@ import type { BrowserContext, Page, Response } from '@playwright/test'
 import { waitStrategy } from '../utils/wait-strategy.js'
 import { logger } from '../utils/logger.js'
 import { z } from 'zod'
+import { ErrorMessages } from '../utils/error-messages.js'
 
 export interface ExtractedConversation {
   id: string
@@ -106,7 +107,7 @@ export class ConversationExtractor {
     } catch (error) {
       throw errorBus.raise(
         ConversationExtractor.ExtractionError,
-        'Failed to create new page',
+        ErrorMessages.Scraper.Extraction.PageCreationFailed,
         error
       )
     }
@@ -119,18 +120,18 @@ export class ConversationExtractor {
 
       const apiData = await apiDataPromise
       if (!apiData) {
-        throw new ConversationExtractor.NoDataError('API response timeout or not found')
+        throw new ConversationExtractor.NoDataError(ErrorMessages.Scraper.Extraction.ApiTimeout)
       }
 
       const parsed = this.parseConversationData(apiData, url)
       if (!parsed) {
-        throw new ConversationExtractor.ParsingError('Failed to parse conversation data')
+        throw new ConversationExtractor.ParsingError(ErrorMessages.Scraper.Extraction.ParseFailed)
       }
 
       return parsed
     } catch (error) {
       if (error instanceof Error && error.name !== 'Error') throw error
-      throw errorBus.raise(ConversationExtractor.ExtractionError, 'Extraction failed', error)
+      throw errorBus.raise(ConversationExtractor.ExtractionError, ErrorMessages.Scraper.Extraction.GenericFailure, error)
     } finally {
       if (page) {
         await page.close().catch(() => {})
@@ -140,14 +141,14 @@ export class ConversationExtractor {
 
   private async ensureContextIsAlive(): Promise<void> {
     if (!this.context) {
-      throw new ConversationExtractor.ExtractionError('Browser context is missing')
+      throw new ConversationExtractor.ExtractionError(ErrorMessages.Scraper.Extraction.NoContext)
     }
     try {
       await this.context.pages()
     } catch (error) {
       throw errorBus.raise(
         ConversationExtractor.ExtractionError,
-        'Browser context is no longer available',
+        ErrorMessages.Scraper.Extraction.ContextDead,
         error
       )
     }
@@ -192,7 +193,7 @@ export class ConversationExtractor {
           resolve(json)
         } catch (error) {
           if (resolved) return
-          errorBus.report(error, { message: 'Failed to parse JSON from thread API' })
+          errorBus.report(error, { message: ErrorMessages.Scraper.Extraction.ParseFailed })
         }
       })
     })
@@ -209,21 +210,21 @@ export class ConversationExtractor {
 
   private validateNavigationResponse(response: Response | null): void {
     if (!response) {
-      throw new ConversationExtractor.NavigationError('Navigation failed – no response')
+      throw new ConversationExtractor.NavigationError(ErrorMessages.Scraper.Extraction.NavigationNoResponse)
     }
 
     const status = response.status()
     if (status === 404) {
-      throw new ConversationExtractor.NotFoundError('Conversation not found (404)')
+      throw new ConversationExtractor.NotFoundError(ErrorMessages.Scraper.Extraction.NotFound)
     }
     if (status === 403 || status === 401) {
-      throw new ConversationExtractor.AuthError('Authentication required or expired')
+      throw new ConversationExtractor.AuthError(ErrorMessages.Scraper.Extraction.AuthRequired)
     }
     if (status >= 500) {
-      throw new ConversationExtractor.ServerError(`Server error (${status})`)
+      throw new ConversationExtractor.ServerError(ErrorMessages.Scraper.Extraction.ServerError(status))
     }
     if (status >= 400) {
-      throw new ConversationExtractor.NavigationError(`HTTP error ${status}`)
+      throw new ConversationExtractor.NavigationError(ErrorMessages.Scraper.Extraction.HttpError(status))
     }
   }
 
@@ -257,7 +258,7 @@ export class ConversationExtractor {
 
       return { id, title, spaceName, timestamp, content }
     } catch (error) {
-      errorBus.report(error, { message: 'Failed to parse conversation data' })
+      errorBus.report(error, { message: ErrorMessages.Scraper.Extraction.ParseFailed })
       return null
     }
   }

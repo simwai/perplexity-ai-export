@@ -10,6 +10,7 @@ import { logger } from '../utils/logger.js'
 import { showHelp } from './help.js'
 import { LibraryDiscovery } from '../scraper/library-discovery.js'
 import { config } from '../utils/config.js'
+import { ErrorMessages } from '../utils/error-messages.js'
 
 export class CommandHandler {
   static readonly ScraperError = class extends Error {
@@ -59,7 +60,7 @@ export class CommandHandler {
     try {
       await this.executeFullScrapingFlow()
     } catch (error) {
-      errorBus.report(error, { message: 'Scraper failed' })
+      errorBus.report(error, { message: ErrorMessages.Repl.ScraperFailed })
     }
   }
 
@@ -97,7 +98,7 @@ export class CommandHandler {
         ripgrepSearchOptions
       )
     } catch (error) {
-      errorBus.report(error, { message: 'Search failed' })
+      errorBus.report(error, { message: ErrorMessages.Repl.SearchFailed })
     }
   }
 
@@ -139,7 +140,7 @@ export class CommandHandler {
       this.progressCheckpointManager.resetCheckpoint()
       logger.success('✅ Storage folder deleted. All progress has been reset.')
     } catch (error) {
-      throw errorBus.raise(CommandHandler.ResetError, 'Failed to reset', error)
+      throw errorBus.raise(CommandHandler.ResetError, ErrorMessages.Repl.ResetFailed, error)
     }
   }
 
@@ -168,7 +169,7 @@ export class CommandHandler {
 
       logger.success('\n✨ Export complete!')
     } catch (error) {
-      throw errorBus.raise(CommandHandler.ScraperError, 'Scraping failed', error)
+      throw errorBus.raise(CommandHandler.ScraperError, ErrorMessages.Repl.ScrapingFlowFailed, error)
     } finally {
       await browserManager.close()
     }
@@ -245,12 +246,12 @@ export class CommandHandler {
       await this.conversationSearchOrchestrator.validateVectorSearch()
     } catch (error) {
       logger.info('Start Ollama with the embedding model, then run "vectorize".')
-      throw errorBus.raise(CommandHandler.ValidationError, 'Vector search validation failed', error)
+      throw errorBus.raise(CommandHandler.ValidationError, ErrorMessages.Repl.VectorSearchValidation, error)
     }
   }
 
   private async handleVectorSearchValidationRetry(error: unknown): Promise<void> {
-    errorBus.report(error, { message: 'Vector search validation failed' })
+    errorBus.report(error, { message: ErrorMessages.Repl.VectorSearchValidation })
 
     const shouldRetry = await confirm({
       message:
@@ -265,7 +266,7 @@ export class CommandHandler {
     try {
       await this.conversationSearchOrchestrator.validateVectorSearch()
     } catch (error) {
-      errorBus.report(error, { message: 'Retry validation failed' })
+      errorBus.report(error, { message: ErrorMessages.Repl.ValidationRetryFailed })
       return
     }
 
