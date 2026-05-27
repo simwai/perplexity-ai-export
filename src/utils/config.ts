@@ -23,6 +23,7 @@ const configSchema = z.object({
     .optional()
     .transform((v) => v === 'true'),
   headless: z.union([z.boolean(), z.literal('new')]),
+  diagnosisMode: z.boolean(),
 })
 
 export type Config = z.infer<typeof configSchema>
@@ -59,6 +60,7 @@ function parseEnvConfig(): Config {
     ollamaEmbedModel: process.env['OLLAMA_EMBED_MODEL'] ?? 'nomic-embed-text',
     enableVectorSearch: process.env['ENABLE_VECTOR_SEARCH'],
     headless: headlessValue,
+    diagnosisMode: process.env['DIAGNOSIS_MODE'] === 'true',
   }
 
   const result = configSchema.safeParse(rawConfig)

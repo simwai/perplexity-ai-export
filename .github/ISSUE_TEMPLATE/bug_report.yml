@@ -1,45 +1,48 @@
 name: '🐛 Bug Report'
-description: 'File a report to help us improve the emergent quality of the system.'
+description: 'Report a discrepancy in the system’s emergent behavior.'
 labels: ['bug']
 body:
   - type: markdown
     attributes:
       value: |
-        Before submitting, please ensure you've searched existing issues to avoid redundant cognitive load.
+        ### Architectural Resilience & Error Analysis
+        Before submitting, please ensure you've searched existing issues to avoid redundant cognitive load. We seek to minimize entropy in our issue tracking.
   - type: textarea
     id: description
     attributes:
-      label: 'A Clear and Concise Description'
+      label: 'Phenomenological Description'
       description: 'Describe the unexpected behavior or the discrepancy between current and expected states.'
+      placeholder: 'What specific manifestation failed to align with your expectations?'
     validations:
       required: true
   - type: textarea
     id: reproduction
     attributes:
-      label: 'Reproduction Steps'
-      description: 'Detail the causal sequence that leads to the observed phenomenon.'
+      label: 'Causal Sequence (Reproduction)'
+      description: 'Detail the sequence of events that leads to the observed phenomenon.'
       placeholder: |
-        1. Run 'npm run dev'
-        2. Select 'Start scraper'
+        1. Invoke the system via 'npm run dev'
+        2. Initiate 'Start scraper'
         3. ...
     validations:
       required: true
   - type: textarea
     id: expected
     attributes:
-      label: 'Expected Behavior'
+      label: 'Teleological Goal (Expected Behavior)'
       description: 'What should the system be manifesting in this context?'
+      placeholder: 'Describe the desired state of existence for this process.'
     validations:
       required: true
   - type: textarea
     id: context
     attributes:
-      label: 'Environmental Context'
-      description: 'OS, Node version, Ollama model, and any other relevant substrate details.'
+      label: 'Environmental Substrate'
+      description: 'OS, Node version, Ollama configuration, and other relevant environmental variables.'
     validations:
       required: true
   - type: textarea
-    id: screenshots
+    id: diagnostics
     attributes:
-      label: 'Visual Evidence (Screenshots/Logs)'
-      description: 'Provide any additional data points to help us triangulate the issue. If you encountered a scraping failure, please attach the `debug/api-diagnostics.jsonl` file (it contains NO sensitive data).'
+      label: 'Diagnostic Artifacts'
+      description: 'If enabled, please attach logs from the `logs/` directory. If you encountered a scraping failure, the `debug/api-diagnostics.jsonl` file is also invaluable.'
