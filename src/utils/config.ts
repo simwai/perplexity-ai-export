@@ -28,7 +28,6 @@ const configSchema = z.object({
 })
 
 export type Config = z.infer<typeof configSchema>
-export type WaitMode = Config['waitMode']
 
 function parseEnvConfig(): Config {
   const defaultOllamaUrl = 'http://localhost:11434'
@@ -36,10 +35,10 @@ function parseEnvConfig(): Config {
   const defaultParallelWorkers = '5'
   const defaultCheckpointInterval = '10'
 
-  const rawHeadless = process.env['HEADLESS'] ?? 'true'
-  let headlessValue: boolean | 'new' = true
-  if (rawHeadless === 'false') {
-    headlessValue = false
+  const rawHeadless = process.env['HEADLESS'] ?? 'false'
+  let headlessValue: boolean | 'new' = false
+  if (rawHeadless === 'true') {
+    headlessValue = true
   } else if (rawHeadless === 'new') {
     headlessValue = 'new'
   }
@@ -53,7 +52,7 @@ function parseEnvConfig(): Config {
       process.env['CHECKPOINT_SAVE_INTERVAL'] ?? defaultCheckpointInterval,
       10
     ),
-    exportDir: process.env['EXPORT_DIR'] ?? 'exports',
+    exportDir: process.env['EXPORT_DIR'] ?? joinFromRoot('exports'),
     checkpointPath: process.env['CHECKPOINT_PATH'] ?? joinFromRoot('.storage', 'checkpoint.json'),
     vectorIndexPath: process.env['VECTOR_INDEX_PATH'] ?? joinFromRoot('.storage', 'vector-index'),
     ollamaUrl: process.env['OLLAMA_URL'] ?? defaultOllamaUrl,
@@ -61,7 +60,10 @@ function parseEnvConfig(): Config {
     ollamaEmbedModel: process.env['OLLAMA_EMBED_MODEL'] ?? 'nomic-embed-text',
     enableVectorSearch: process.env['ENABLE_VECTOR_SEARCH'],
     headless: headlessValue,
-    debug: process.env['DEBUG'] === 'true',
+    debug:
+      process.env['DEBUG'] === 'true' ||
+      process.env['DEBUG_MODE'] === 'true' ||
+      process.env['DIAGNOSIS_MODE'] === 'true',
   }
 
   const result = configSchema.safeParse(rawConfig)

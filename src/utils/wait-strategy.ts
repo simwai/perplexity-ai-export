@@ -1,5 +1,5 @@
 import type { Page } from '@playwright/test'
-import { config } from './config.js'
+import { type Config } from './config.js'
 
 export interface WaitStrategy {
   afterClick(page: Page): Promise<void>
@@ -46,7 +46,7 @@ class StaticWaitStrategy implements WaitStrategy {
   }
 }
 
-export const waitStrategy: WaitStrategy =
+export const waitStrategy = (config: Config): WaitStrategy =>
   config.waitMode === 'dynamic'
     ? new DynamicWaitStrategy()
     : new StaticWaitStrategy(config.rateLimitMs)

@@ -1,25 +1,2 @@
-#!/bin/bash
-
-# Store the original commit message
-COMMIT_MSG_FILE="$GIT_DIR/COMMIT_EDITMSG"
-if [ -f "$COMMIT_MSG_FILE" ]; then
-  COMMIT_MSG=$(cat "$COMMIT_MSG_FILE")
-else
-  COMMIT_MSG=""
-fi
-
-# Capture the list of originally staged files
-STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACM)
-
-# Format JavaScript code
-npm run format
-
-# Only re-stage the files that were originally staged (if they were modified by formatting)
-if [ -n "$STAGED_FILES" ]; then
-  echo "$STAGED_FILES" | xargs git add
-
-  # Reapply the original commit message
-  if [ -n "$COMMIT_MSG" ]; then
-    echo "$COMMIT_MSG" > "$COMMIT_MSG_FILE"
-  fi
-fi
+#!/usr/bin/env sh
+npx lint-staged

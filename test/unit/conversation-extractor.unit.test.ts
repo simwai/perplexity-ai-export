@@ -3,22 +3,31 @@ import { ConversationExtractor } from '../../src/scraper/conversation-extractor.
 import { ApiDiagnosticsWriter } from '../../src/utils/api-diagnostics.js'
 import type { BrowserContext } from '@playwright/test'
 
-vi.mock('../../src/utils/api-diagnostics.js', () => ({
-  ApiDiagnosticsWriter: {
-    writeFailure: vi.fn().mockResolvedValue(undefined),
-  },
-}))
+vi.mock('../../src/utils/api-diagnostics.js', () => {
+  return {
+    ApiDiagnosticsWriter: vi.fn().mockImplementation(function () {
+      return {
+        writeFailure: vi.fn().mockResolvedValue(undefined),
+      }
+    }),
+  }
+})
 
 describe('ConversationExtractor (Unit)', () => {
   let extractor: ConversationExtractor
   let mockContext: BrowserContext
+  const mockConfig = {
+    waitMode: 'static',
+    rateLimitMs: 1000,
+    debug: true,
+  } as any
 
   beforeEach(() => {
     mockContext = {
       newPage: vi.fn(),
       pages: vi.fn(),
     } as unknown as BrowserContext
-    extractor = new ConversationExtractor(mockContext)
+    extractor = new ConversationExtractor(mockConfig, mockContext)
     vi.clearAllMocks()
   })
 
@@ -27,28 +36,28 @@ describe('ConversationExtractor (Unit)', () => {
       const data = [{ query_str: 'test' }]
       const result = (extractor as any).ensureEntriesFormat(data, 'http://test.com')
       expect(result).toEqual(data)
-      expect(ApiDiagnosticsWriter.writeFailure).not.toHaveBeenCalled()
+      expect((extractor as any).diagnostics.writeFailure).not.toHaveBeenCalled()
     })
 
     it('should return data.entries if input has entries array', () => {
       const data = { entries: [{ query_str: 'test' }] }
       const result = (extractor as any).ensureEntriesFormat(data, 'http://test.com')
       expect(result).toEqual(data.entries)
-      expect(ApiDiagnosticsWriter.writeFailure).not.toHaveBeenCalled()
+      expect((extractor as any).diagnostics.writeFailure).not.toHaveBeenCalled()
     })
 
     it('should return [data] if input has query_str', () => {
       const data = { query_str: 'test' }
       const result = (extractor as any).ensureEntriesFormat(data, 'http://test.com')
       expect(result).toEqual([data])
-      expect(ApiDiagnosticsWriter.writeFailure).not.toHaveBeenCalled()
+      expect((extractor as any).diagnostics.writeFailure).not.toHaveBeenCalled()
     })
 
     it('should return empty array and call diagnostics for unknown shape', () => {
       const data = { foo: 'bar' }
       const result = (extractor as any).ensureEntriesFormat(data, 'http://test.com')
       expect(result).toEqual([])
-      expect(ApiDiagnosticsWriter.writeFailure).toHaveBeenCalledWith({
+      expect((extractor as any).diagnostics.writeFailure).toHaveBeenCalledWith({
         url: 'http://test.com',
         errorType: 'unknown_shape',
       })
@@ -60,7 +69,7 @@ describe('ConversationExtractor (Unit)', () => {
       const data = { entries: [] }
       const result = extractor.parseConversationData(data, 'http://test.com')
       expect(result).toBeNull()
-      expect(ApiDiagnosticsWriter.writeFailure).toHaveBeenCalledWith({
+      expect((extractor as any).diagnostics.writeFailure).toHaveBeenCalledWith({
         url: 'http://test.com',
         errorType: 'empty_entries',
       })
@@ -82,15 +91,5 @@ describe('ConversationExtractor (Unit)', () => {
       expect(result?.content).toContain('What is 1+1?')
       expect(result?.content).toContain('2')
     })
-  })
-})
-
-describe('ApiDiagnosticsWriter (Unit)', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-  })
-
-  it('should exist and have writeFailure method', () => {
-    expect(ApiDiagnosticsWriter.writeFailure).toBeDefined()
   })
 })

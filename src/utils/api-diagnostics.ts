@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises'
-import path from 'node:path'
 import { logger } from './logger.js'
+import { joinFromRoot } from './paths.js'
+import { type Config } from './config.js'
 
 export interface ApiDiagnosticEntry {
   timestamp: string
@@ -10,18 +11,24 @@ export interface ApiDiagnosticEntry {
 }
 
 export class ApiDiagnosticsWriter {
-  private static readonly DEBUG_DIR = 'debug'
-  private static readonly LOG_FILE = 'api-diagnostics.jsonl'
+  private _config: Config
 
-  static async writeFailure(entry: Omit<ApiDiagnosticEntry, 'timestamp'>): Promise<void> {
+  constructor(config: Config) {
+    this._config = config
+  }
+
+  async writeFailure(entry: Omit<ApiDiagnosticEntry, 'timestamp'>): Promise<void> {
+    if (!this._config.debug) return
+
     try {
       const fullEntry: ApiDiagnosticEntry = {
         timestamp: new Date().toISOString(),
         ...entry,
       }
 
-      await fs.mkdir(this.DEBUG_DIR, { recursive: true })
-      const logPath = path.join(this.DEBUG_DIR, this.LOG_FILE)
+      const debugDir = joinFromRoot('debug')
+      await fs.mkdir(debugDir, { recursive: true })
+      const logPath = joinFromRoot('debug', 'api-diagnostics.jsonl')
 
       await fs.appendFile(logPath, JSON.stringify(fullEntry) + '\n', 'utf8')
     } catch (error) {

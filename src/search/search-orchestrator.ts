@@ -1,7 +1,7 @@
 import { RgSearch, type RgSearchOptions } from './rg-search.js'
 import { VectorStore } from './vector-store.js'
 import { logger } from '../utils/logger.js'
-import { config } from '../utils/config.js'
+import { type Config } from '../utils/config.js'
 import { RagOrchestrator } from '../ai/rag-orchestrator.js'
 import chalk from 'chalk'
 
@@ -25,15 +25,17 @@ export class SearchOrchestrator {
   private rgSearch: RgSearch
   private vectorStore: VectorStore
   private ragOrchestrator: RagOrchestrator
+  private config: Config
 
-  constructor() {
-    this.rgSearch = new RgSearch()
-    this.vectorStore = new VectorStore()
-    this.ragOrchestrator = new RagOrchestrator()
+  constructor(config: Config) {
+    this.config = config
+    this.rgSearch = new RgSearch(config)
+    this.vectorStore = new VectorStore(config)
+    this.ragOrchestrator = new RagOrchestrator(config)
   }
 
   async validateVectorSearch(): Promise<void> {
-    if (!config.enableVectorSearch) {
+    if (!this.config.enableVectorSearch) {
       const vectorSearchDisabledErrorMessage =
         'Vector search is disabled (ENABLE_VECTOR_SEARCH=false).'
       throw new SearchOrchestrator.ValidationError(vectorSearchDisabledErrorMessage)

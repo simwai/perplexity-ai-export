@@ -1,8 +1,10 @@
+import { errorBus } from '../utils/error-bus.js'
 import type { BrowserContext, Page, Response } from '@playwright/test'
 import { waitStrategy } from '../utils/wait-strategy.js'
 import { logger } from '../utils/logger.js'
 import { z } from 'zod'
 import { ApiDiagnosticsWriter } from '../utils/api-diagnostics.js'
+import { type Config } from '../utils/config.js'
 
 export interface ExtractedConversation {
   id: string
@@ -97,9 +99,13 @@ export class ConversationExtractor {
   }
 
   private readonly context: BrowserContext
+  private readonly config: Config
+  private readonly diagnostics: ApiDiagnosticsWriter
 
-  constructor(context: BrowserContext) {
+  constructor(config: Config, context: BrowserContext) {
+    this.config = config
     this.context = context
+    this.diagnostics = new ApiDiagnosticsWriter(config)
   }
 
   async extract(url: string): Promise<ExtractedConversation> {
@@ -118,7 +124,7 @@ export class ConversationExtractor {
 
     try {
       await this.navigateToConversationUrl(page, url)
-      await waitStrategy.afterScroll(page)
+      await waitStrategy(this.config).afterScroll(page)
 
       const apiData = await apiDataPromise
       if (!apiData) {
@@ -178,7 +184,13 @@ export class ConversationExtractor {
         if (resolved) return
 
         const url = response.url()
-        if (!url.includes('/rest/thread/') || url.includes('list_ask_threads')) return
+        if (
+          !url.includes('/rest/thread/') ||
+          url.includes('list_ask_threads') ||
+          url.includes('list_recent') ||
+          url.includes('list_pinned')
+        )
+          return
 
         if (page.isClosed()) return
 
@@ -187,12 +199,15 @@ export class ConversationExtractor {
           if (resolved) return
 
           const parseResult = ConversationExtractor.ApiResponseSchema.safeParse(json)
+
           if (!parseResult.success) {
-            ApiDiagnosticsWriter.writeFailure({
-              url: response.url(),
-              errorType: 'zod_error',
-              zodErrorPaths: parseResult.error.issues.map((e) => e.path.join('.')),
-            }).catch(() => {})
+            this.diagnostics
+              .writeFailure({
+                url: response.url(),
+                errorType: 'zod_error',
+                zodErrorPaths: parseResult.error.issues.map((e) => e.path.join('.')),
+              })
+              .catch(() => {})
           } else {
             const data = parseResult.data
             const currentEntries = Array.isArray(data) ? data : data.entries
@@ -255,10 +270,12 @@ export class ConversationExtractor {
 
       if (!parseResult.success) {
         if (entries.length === 0) {
-          ApiDiagnosticsWriter.writeFailure({
-            url,
-            errorType: 'empty_entries',
-          }).catch(() => {})
+          this.diagnostics
+            .writeFailure({
+              url,
+              errorType: 'empty_entries',
+            })
+            .catch(() => {})
         }
         logger.warn(`Entry validation failed for ${url}: ${parseResult.error.message}`)
         return null
@@ -280,7 +297,7 @@ export class ConversationExtractor {
 
       return { id, title, spaceName, timestamp, content }
     } catch (_error) {
-      logger.error('Failed to parse conversation data.')
+      errorBus.emitError('Failed to parse conversation data.')
       return null
     }
   }
@@ -296,10 +313,12 @@ export class ConversationExtractor {
       return [data]
     }
 
-    ApiDiagnosticsWriter.writeFailure({
-      url,
-      errorType: 'unknown_shape',
-    }).catch(() => {})
+    this.diagnostics
+      .writeFailure({
+        url,
+        errorType: 'unknown_shape',
+      })
+      .catch(() => {})
 
     return []
   }

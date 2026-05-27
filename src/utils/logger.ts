@@ -2,13 +2,20 @@ import chalk from 'chalk'
 import { appendFileSync, mkdirSync, existsSync } from 'node:fs'
 import { joinFromRoot } from './paths.js'
 
-const DEBUG = process.env['DEBUG'] === 'true'
+function isDebugEnabled(): boolean {
+  return (
+    process.env['DEBUG'] === 'true' ||
+    process.env['DEBUG_MODE'] === 'true' ||
+    process.env['DIAGNOSIS_MODE'] === 'true'
+  )
+}
+
 const LOGS_DIR = joinFromRoot('logs')
 const TIMESTAMP = new Date().toISOString().replace(/[:.]/g, '-')
 const MAIN_LOG_PATH = joinFromRoot('logs', `main-log-${TIMESTAMP}.txt`)
 
 function writeToFile(message: string): void {
-  if (!DEBUG) return
+  if (!isDebugEnabled()) return
 
   if (!existsSync(LOGS_DIR)) {
     mkdirSync(LOGS_DIR, { recursive: true })
@@ -45,6 +52,7 @@ export const logger = {
   },
 
   debug(...args: unknown[]): void {
+    if (!isDebugEnabled()) return
     const msg = args.join(' ')
     console.log(chalk.gray('›'), msg)
     writeToFile(`DEBUG: ${msg}`)

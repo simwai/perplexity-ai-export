@@ -1,11 +1,11 @@
 import { appendFileSync, existsSync, mkdirSync } from 'node:fs'
-import { join } from 'node:path'
 import type { Request, Response } from '@playwright/test'
 import { config } from './config.js'
+import { joinFromRoot } from './paths.js'
 
-const LOGS_DIR = 'logs'
+const LOGS_DIR = joinFromRoot('logs')
 const TIMESTAMP = new Date().toISOString().replace(/[:.]/g, '-')
-const HTTP_LOG_PATH = join(LOGS_DIR, `http-req-res-log-${TIMESTAMP}.txt`)
+const HTTP_LOG_PATH = joinFromRoot('logs', `http-req-res-log-${TIMESTAMP}.txt`)
 
 function sanitizeHeaders(headers: Record<string, string>): Record<string, string> {
   const sanitized = { ...headers }

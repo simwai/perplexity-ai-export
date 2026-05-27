@@ -31,7 +31,6 @@ export function resolveFromDir(importMetaUrl: string, ...paths: string[]): strin
 
 /**
  * Robustly get the project root directory.
- * Assumes this file is located in src/utils/
  */
 export const PROJECT_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..')
 

@@ -1,6 +1,5 @@
 {
   "$schema": "https://unpkg.com/knip@5/schema.json",
-  "entry": ["src/index.ts"],
   "project": ["src/**/*.ts"],
   "ignoreDependencies": [
     "chromium-bidi",
@@ -9,5 +8,7 @@
     "postject",
     "@types/inquirer",
     "@types/sanitize-filename"
-  ]
+  ],
+  "ignoreExportsUsedInFile": true,
+  "ignore": ["src/utils/paths.ts"]
 }
