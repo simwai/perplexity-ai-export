@@ -1,6 +1,6 @@
+import { errorBus } from '../utils/error-bus.js'
 import { readFileSync, writeFileSync, existsSync } from 'node:fs'
 import { type Config } from '../utils/config.js'
-import { logger } from '../utils/logger.js'
 
 export interface ConversationMeta {
   id: string
@@ -72,7 +72,7 @@ export class CheckpointManager {
         const data = readFileSync(this.checkpointPath, 'utf-8')
         return JSON.parse(data)
       } catch (_error) {
-        logger.error('Failed to load checkpoint file. Starting fresh.')
+        errorBus.emitError('Failed to load checkpoint file. Starting fresh.')
       }
     }
     return {
@@ -86,7 +86,7 @@ export class CheckpointManager {
     try {
       writeFileSync(this.checkpointPath, JSON.stringify(this.state, null, 2))
     } catch (_error) {
-      logger.error('Failed to save checkpoint file:', _error)
+      errorBus.emitError('Failed to save checkpoint file', _error)
     }
   }
 }

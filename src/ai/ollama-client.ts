@@ -1,3 +1,4 @@
+import { errorBus } from '../utils/error-bus.js'
 import { z } from 'zod'
 import { type Config } from '../utils/config.js'
 import { logger } from '../utils/logger.js'
@@ -14,7 +15,7 @@ const generationResponseSchema = z.object({
 })
 
 export class OllamaClient {
-  private config: Config;
+  private config: Config
 
   static readonly OllamaError = class extends Error {
     constructor(message: string) {
@@ -24,7 +25,7 @@ export class OllamaClient {
   }
 
   constructor(config: Config) {
-    this.config = config;
+    this.config = config
   }
 
   async embed(texts: string[]): Promise<number[][]> {
@@ -79,7 +80,10 @@ export class OllamaClient {
         } catch (_errorReadingResponseBody) {
           /* oxlint-disable-next-line no-empty */
         }
-        logger.error(`Ollama HTTP ${response.status}`, { body, errorBody: errorBody.slice(0, 500) })
+        errorBus.emitError(`Ollama HTTP ${response.status}`, undefined, {
+          body,
+          errorBody: errorBody.slice(0, 500),
+        })
         throw new OllamaClient.OllamaError(
           `Ollama request failed with status ${response.status} – ${errorBody.slice(0, 200)}`
         )

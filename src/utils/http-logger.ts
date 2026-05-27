@@ -33,7 +33,11 @@ function isPromptRequest(url: string, postData: string | null): boolean {
       }
     } catch {
       // Not JSON or failed to parse, fallback to string check
-      if (postData.includes('"query"') || postData.includes('"prompt"') || postData.includes('"messages"')) {
+      if (
+        postData.includes('"query"') ||
+        postData.includes('"prompt"') ||
+        postData.includes('"messages"')
+      ) {
         return true
       }
     }
@@ -42,7 +46,7 @@ function isPromptRequest(url: string, postData: string | null): boolean {
 }
 
 export async function logHttpRequest(request: Request): Promise<void> {
-  if (!config.diagnosisMode) return
+  if (!config.debugMode) return
 
   if (!existsSync(LOGS_DIR)) {
     mkdirSync(LOGS_DIR, { recursive: true })
@@ -69,7 +73,7 @@ export async function logHttpRequest(request: Request): Promise<void> {
 }
 
 export async function logHttpResponse(response: Response): Promise<void> {
-  if (!config.diagnosisMode) return
+  if (!config.debugMode) return
 
   const request = response.request()
   const url = request.url()

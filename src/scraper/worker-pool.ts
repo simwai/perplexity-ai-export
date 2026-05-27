@@ -1,3 +1,4 @@
+import { errorBus } from '../utils/error-bus.js'
 import { type Browser, type BrowserContext } from '@playwright/test'
 import { ConversationExtractor } from './conversation-extractor.js'
 import { CheckpointManager, type ConversationMeta } from './checkpoint-manager.js'
@@ -30,7 +31,10 @@ export class WorkerPool {
     try {
       this.sharedBrowserContext = await this.browser.newContext()
       for (let i = 0; i < this.config.parallelWorkers; i++) {
-        const conversationExtractor = new ConversationExtractor(this.config, this.sharedBrowserContext)
+        const conversationExtractor = new ConversationExtractor(
+          this.config,
+          this.sharedBrowserContext
+        )
         this.workers.push({
           id: i,
           extractor: conversationExtractor,
@@ -38,7 +42,7 @@ export class WorkerPool {
         })
       }
     } catch (_error) {
-      logger.error('Failed to initialize worker pool:', _error)
+      errorBus.emitError('Failed to initialize worker pool', _error)
       throw _error
     }
   }
@@ -61,16 +65,17 @@ export class WorkerPool {
             this.checkpointManager.markAsProcessed(conversation.id)
 
             const progress = this.checkpointManager.getProcessingProgress()
-            logger.info(
-              `[${progress.processed}/${progress.total}] Processed: ${result.title}`
-            )
+            logger.info(`[${progress.processed}/${progress.total}] Processed: ${result.title}`)
           } catch (_error) {
-            logger.error(`Failed to process ${conversation.url}:`, _error)
+            errorBus.emitError(`Failed to process ${conversation.url}`, _error)
 
             // If the context is dead, we need to refresh the pool
-            if (_error instanceof Error && _error.message.includes('context is no longer available')) {
-               logger.warn('Browser context lost. Refreshing worker context...')
-               await this.refreshContext()
+            if (
+              _error instanceof Error &&
+              _error.message.includes('context is no longer available')
+            ) {
+              logger.warn('Browser context lost. Refreshing worker context...')
+              await this.refreshContext()
             }
           } finally {
             availableWorker.isBusy = false
@@ -98,15 +103,15 @@ export class WorkerPool {
 
   private async refreshContext(): Promise<void> {
     try {
-        if (this.sharedBrowserContext) {
-            await this.sharedBrowserContext.close().catch(() => {})
-        }
-        this.sharedBrowserContext = await this.browser.newContext()
-        for (const worker of this.workers) {
-            worker.extractor = new ConversationExtractor(this.config, this.sharedBrowserContext!)
-        }
+      if (this.sharedBrowserContext) {
+        await this.sharedBrowserContext.close().catch(() => {})
+      }
+      this.sharedBrowserContext = await this.browser.newContext()
+      for (const worker of this.workers) {
+        worker.extractor = new ConversationExtractor(this.config, this.sharedBrowserContext!)
+      }
     } catch (_error) {
-        logger.error('Failed to refresh worker context:', _error)
+      errorBus.emitError('Failed to refresh worker context', _error)
     }
   }
 }

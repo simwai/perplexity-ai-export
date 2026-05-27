@@ -1,4 +1,4 @@
-import { config } from "../../src/utils/config.js"
+import { config } from '../../src/utils/config.js'
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest'
 import { rmSync, existsSync, mkdirSync, writeFileSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'

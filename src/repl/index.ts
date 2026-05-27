@@ -1,3 +1,4 @@
+import { errorBus } from '../utils/error-bus.js'
 import { select } from '@inquirer/prompts'
 import chalk from 'chalk'
 import { logger } from '../utils/logger.js'
@@ -62,7 +63,7 @@ export class Repl {
         this.terminateRepl()
         break
       default:
-        logger.error(`Unknown command: ${command}`)
+        errorBus.emitError(`Unknown command: ${command}`)
         this.activeCommandHandler.handleShowHelp()
     }
   }

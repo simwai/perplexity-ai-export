@@ -12,10 +12,10 @@ export class FileWriter {
     }
   }
 
-  private config: Config;
+  private config: Config
 
   constructor(config: Config) {
-    this.config = config;
+    this.config = config
     this.ensureRootExportDirectoryExists()
   }
 

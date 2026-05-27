@@ -1,3 +1,4 @@
+import { errorBus } from '../utils/error-bus.js'
 import type { BrowserContext, Page, Response } from '@playwright/test'
 import { waitStrategy } from '../utils/wait-strategy.js'
 import { logger } from '../utils/logger.js'
@@ -167,7 +168,9 @@ export class ConversationExtractor {
       const timeout = setTimeout(() => {
         if (!resolved) {
           if (allEntries.length > 0) {
-            logger.info(`API response timeout – resolving with ${allEntries.length} accumulated entries`)
+            logger.info(
+              `API response timeout – resolving with ${allEntries.length} accumulated entries`
+            )
             resolve({ entries: allEntries })
           } else {
             logger.warn('API response timeout – resolving with null')
@@ -196,13 +199,15 @@ export class ConversationExtractor {
           if (resolved) return
 
           const parseResult = ConversationExtractor.ApiResponseSchema.safeParse(json)
-        
+
           if (!parseResult.success) {
-            this.diagnostics.writeFailure({
-              url: response.url(),
-              errorType: 'zod_error',
-              zodErrorPaths: parseResult.error.issues.map((e) => e.path.join('.')),
-            }).catch(() => {})
+            this.diagnostics
+              .writeFailure({
+                url: response.url(),
+                errorType: 'zod_error',
+                zodErrorPaths: parseResult.error.issues.map((e) => e.path.join('.')),
+              })
+              .catch(() => {})
           } else {
             const data = parseResult.data
             const currentEntries = Array.isArray(data) ? data : data.entries
@@ -265,10 +270,12 @@ export class ConversationExtractor {
 
       if (!parseResult.success) {
         if (entries.length === 0) {
-          this.diagnostics.writeFailure({
-            url,
-            errorType: 'empty_entries',
-          }).catch(() => {})
+          this.diagnostics
+            .writeFailure({
+              url,
+              errorType: 'empty_entries',
+            })
+            .catch(() => {})
         }
         logger.warn(`Entry validation failed for ${url}: ${parseResult.error.message}`)
         return null
@@ -290,7 +297,7 @@ export class ConversationExtractor {
 
       return { id, title, spaceName, timestamp, content }
     } catch (_error) {
-      logger.error('Failed to parse conversation data.')
+      errorBus.emitError('Failed to parse conversation data.')
       return null
     }
   }
@@ -306,10 +313,12 @@ export class ConversationExtractor {
       return [data]
     }
 
-    this.diagnostics.writeFailure({
-      url,
-      errorType: 'unknown_shape',
-    }).catch(() => {})
+    this.diagnostics
+      .writeFailure({
+        url,
+        errorType: 'unknown_shape',
+      })
+      .catch(() => {})
 
     return []
   }

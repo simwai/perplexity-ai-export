@@ -1,3 +1,4 @@
+import { errorBus } from '../utils/error-bus.js'
 import { VectorStore, type VectorSearchResult } from '../search/vector-store.js'
 import { OllamaClient } from './ollama-client.js'
 import { RgSearch } from '../search/rg-search.js'
@@ -62,7 +63,7 @@ export class RagOrchestrator {
       }
     } catch (_error) {
       const errorMessage = _error instanceof Error ? _error.message : String(_error)
-      logger.error(`Mightiest RAG failed: ${errorMessage}`)
+      errorBus.emitError(`Mightiest RAG failed: ${errorMessage}`)
     }
   }
 

@@ -1,4 +1,4 @@
-import { config } from "../../src/utils/config.js"
+import { config } from '../../src/utils/config.js'
 import { describe, it, expect } from 'vitest'
 import { OllamaClient } from '../../src/ai/ollama-client.js'
 import { isOllamaAvailable } from '../ollama-available.js'

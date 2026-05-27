@@ -1,3 +1,4 @@
+import { errorBus } from '../utils/error-bus.js'
 import { LocalIndex } from 'vectra'
 import { join } from 'node:path'
 import { readFileSync, readdirSync, statSync } from 'node:fs'
@@ -209,7 +210,7 @@ export class VectorStore {
         })
       }
     } catch (_error) {
-      logger.error(`Batch embedding failed: ${(_error as Error).message}`)
+      errorBus.emitError('Batch embedding failed', _error)
     }
   }
 

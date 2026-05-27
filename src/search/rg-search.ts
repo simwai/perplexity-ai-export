@@ -34,10 +34,10 @@ export class RgSearch {
     }
   }
 
-  private config: Config;
+  private config: Config
 
   constructor(config: Config) {
-    this.config = config;
+    this.config = config
   }
 
   async search(options: RgSearchOptions): Promise<void> {
