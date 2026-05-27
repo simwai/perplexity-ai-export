@@ -30,11 +30,7 @@ describe('ErrorBus (Unit)', () => {
 
     errorBus.emitError(message, undefined, context)
 
-    expect(logger.error).toHaveBeenCalledWith(
-      expect.stringContaining(message)
-    )
-    expect(logger.error).toHaveBeenCalledWith(
-      expect.stringContaining(JSON.stringify(context))
-    )
+    expect(logger.error).toHaveBeenCalledWith(expect.stringContaining(message))
+    expect(logger.error).toHaveBeenCalledWith(expect.stringContaining(JSON.stringify(context)))
   })
 })

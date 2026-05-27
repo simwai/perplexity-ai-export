@@ -14,9 +14,8 @@ let _model: any = null
 async function getCrossEncoder() {
   if (!_tokenizer || !_model) {
     // @ts-expect-error — optional peer dep, gracefully skipped if not installed
-    const { AutoTokenizer, AutoModelForSequenceClassification } = await import(
-      '@huggingface/transformers'
-    ).catch(() => null)
+    const { AutoTokenizer, AutoModelForSequenceClassification } =
+      await import('@huggingface/transformers').catch(() => null)
     if (!AutoTokenizer) return null
     _tokenizer = await AutoTokenizer.from_pretrained('Xenova/ms-marco-MiniLM-L-6-v2')
     _model = await AutoModelForSequenceClassification.from_pretrained(
@@ -210,7 +209,9 @@ Return JSON: {"strategy": "...", "queries": [], "hardKeywords": [], "hydePassage
 
     const ce = await getCrossEncoder()
     if (!ce) {
-      logger.debug('Cross-encoder not available (run: npm install @huggingface/transformers). Skipping rerank.')
+      logger.debug(
+        'Cross-encoder not available (run: npm install @huggingface/transformers). Skipping rerank.'
+      )
       return results
     }
 
@@ -223,15 +224,20 @@ Return JSON: {"strategy": "...", "queries": [], "hardKeywords": [], "hydePassage
     for (let i = 0; i < results.length; i += BATCH_SIZE) {
       const batch = results.slice(i, i + BATCH_SIZE)
       const pairs = batch.map((r) => [question, (r.meta['snippet'] as string) || ''])
-      const inputs = await tokenizer(pairs.map(p => p[0]), {
-        text_pair: pairs.map(p => p[1]),
-        padding: true,
-        truncation: true,
-      })
+      const inputs = await tokenizer(
+        pairs.map((p) => p[0]),
+        {
+          text_pair: pairs.map((p) => p[1]),
+          padding: true,
+          truncation: true,
+        }
+      )
       const output = await model(inputs)
       // Read raw logits directly — do NOT use pipeline() which returns score: 1.0 always
       const logits: number[] = Array.from(output.logits.data as Float32Array)
-      logits.forEach((s, j) => { scores[i + j] = s })
+      logits.forEach((s, j) => {
+        scores[i + j] = s
+      })
     }
 
     return results

@@ -10,11 +10,11 @@ This document describes how the benchmark system works, which metrics it capture
 - [2. How to Run](#2-how-to-run)
 - [3. What Gets Measured](#3-what-gets-measured)
 - [4. The Default Query Set](#4-the-default-query-set)
-  * [Why These Queries?](#why-these-queries)
+  - [Why These Queries?](#why-these-queries)
 - [5. How Each Benchmark Works](#5-how-each-benchmark-works)
-  * [End-to-End Latency](#end-to-end-latency)
-  * [Success Rate](#success-rate)
-  * [Per-Query Breakdown](#per-query-breakdown)
+  - [End-to-End Latency](#end-to-end-latency)
+  - [Success Rate](#success-rate)
+  - [Per-Query Breakdown](#per-query-breakdown)
 - [6. Why We Chose These Metrics](#6-why-we-chose-these-metrics)
 - [7. What Is Not Measured (and Why)](#7-what-is-not-measured-and-why)
 - [8. Customizing the Benchmark](#8-customizing-the-benchmark)
@@ -45,12 +45,12 @@ The benchmark will fail early with a clear error if the vector index has not bee
 
 ## 3. What Gets Measured
 
-| Metric | Unit | Description |
-|---|---|---|
-| **Per-query latency** | ms | Wall-clock time from query submission to final synthesized answer, including all pipeline stages |
-| **Average latency** | ms | Mean across all successful queries |
-| **Success rate** | `n / total` | How many queries completed without throwing an error |
-| **Per-query error flag** | boolean | Whether a specific query caused a pipeline failure (logged separately with `DEBUG=true`) |
+| Metric                   | Unit        | Description                                                                                      |
+| ------------------------ | ----------- | ------------------------------------------------------------------------------------------------ |
+| **Per-query latency**    | ms          | Wall-clock time from query submission to final synthesized answer, including all pipeline stages |
+| **Average latency**      | ms          | Mean across all successful queries                                                               |
+| **Success rate**         | `n / total` | How many queries completed without throwing an error                                             |
+| **Per-query error flag** | boolean     | Whether a specific query caused a pipeline failure (logged separately with `DEBUG=true`)         |
 
 All timing uses Node.js `performance.now()` — monotonic, sub-millisecond resolution, unaffected by system clock adjustments.
 
@@ -72,12 +72,12 @@ The five default queries are intentionally broad and representative of real usag
 
 Each query stress-tests a different retrieval challenge:
 
-| Query | What it tests |
-|---|---|
-| TypeScript patterns | **Semantic clustering** — many loosely related entries; tests whether the vector search can group conceptually similar content |
-| npm packages | **Entity extraction** — specific proper nouns and version numbers; tests exact-match (ripgrep) fallback |
-| Errors and bugs | **Temporal vagueness** — "recently" has no hard boundary; tests how the planner handles underspecified time ranges |
-| AI models / tools | **Broad taxonomy** — many valid answers across unrelated threads; tests exhaustive-mode recall and MapReduce aggregation |
+| Query                  | What it tests                                                                                                                  |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| TypeScript patterns    | **Semantic clustering** — many loosely related entries; tests whether the vector search can group conceptually similar content |
+| npm packages           | **Entity extraction** — specific proper nouns and version numbers; tests exact-match (ripgrep) fallback                        |
+| Errors and bugs        | **Temporal vagueness** — "recently" has no hard boundary; tests how the planner handles underspecified time ranges             |
+| AI models / tools      | **Broad taxonomy** — many valid answers across unrelated threads; tests exhaustive-mode recall and MapReduce aggregation       |
 | Architecture decisions | **Cross-thread synthesis** — relevant content is spread across many separate conversations; the hardest query for the pipeline |
 
 Together they cover the main failure modes: missed recall, entity blindness, planning ambiguity, context overload, and cross-thread reasoning.
@@ -136,13 +136,13 @@ Average latency: 3763ms
 
 ## 7. What Is Not Measured (and Why)
 
-| Not measured | Reason |
-|---|---|
-| **Answer quality / relevance** | Requires ground-truth annotations tied to specific personal history data — not portable across users |
-| **Recall@K / MRR / NDCG** | Standard IR metrics that require labelled relevance judgements; same portability problem |
-| **Stage-level latency** | Useful for profiling but adds instrumentation complexity with minimal actionable benefit for end users |
-| **Memory usage** | Ollama model memory dominates and is outside the process boundary; Node.js heap alone is misleading |
-| **Cold vs. warm start** | ONNX model and Ollama context warming are one-time startup costs, not per-query costs after the first run |
+| Not measured                   | Reason                                                                                                    |
+| ------------------------------ | --------------------------------------------------------------------------------------------------------- |
+| **Answer quality / relevance** | Requires ground-truth annotations tied to specific personal history data — not portable across users      |
+| **Recall@K / MRR / NDCG**      | Standard IR metrics that require labelled relevance judgements; same portability problem                  |
+| **Stage-level latency**        | Useful for profiling but adds instrumentation complexity with minimal actionable benefit for end users    |
+| **Memory usage**               | Ollama model memory dominates and is outside the process boundary; Node.js heap alone is misleading       |
+| **Cold vs. warm start**        | ONNX model and Ollama context warming are one-time startup costs, not per-query costs after the first run |
 
 ---
 
@@ -171,10 +171,10 @@ const BENCHMARK_QUERIES = [
 
 ## 9. Interpreting Results
 
-| Observation | Likely cause | What to check |
-|---|---|---|
-| All queries > 10s | Ollama model too large for available RAM | Try a smaller model (e.g. `mistral` vs `llama3:70b`) |
-| One query consistently slow | Query triggers exhaustive mode + large MapReduce batches | Check planner output with `DEBUG=true` |
-| Latency spikes on first query only | ONNX model cold-load + Ollama KV cache miss | Normal — ignore first-run outlier |
-| Failures on specific queries | Planner or synthesis LLM call timeout | Check Ollama process health; run with `DEBUG=true` |
-| Average latency increased after a change | Regression in pool size, reranker, or prompt length | Diff the change against the baseline run |
+| Observation                              | Likely cause                                             | What to check                                        |
+| ---------------------------------------- | -------------------------------------------------------- | ---------------------------------------------------- |
+| All queries > 10s                        | Ollama model too large for available RAM                 | Try a smaller model (e.g. `mistral` vs `llama3:70b`) |
+| One query consistently slow              | Query triggers exhaustive mode + large MapReduce batches | Check planner output with `DEBUG=true`               |
+| Latency spikes on first query only       | ONNX model cold-load + Ollama KV cache miss              | Normal — ignore first-run outlier                    |
+| Failures on specific queries             | Planner or synthesis LLM call timeout                    | Check Ollama process health; run with `DEBUG=true`   |
+| Average latency increased after a change | Regression in pool size, reranker, or prompt length      | Diff the change against the baseline run             |
