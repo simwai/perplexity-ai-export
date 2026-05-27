@@ -88,6 +88,10 @@ export class LibraryDiscovery {
         batchPageSize
       )
 
+      if (currentOffset === 0 && threadBatch.length > 0) {
+        console.log('RAWITEM:', JSON.stringify(threadBatch[0]).slice(0, 1000))
+      }
+
       if (!threadBatch.length) {
         logger.info(`No more threads found at offset ${currentOffset}`)
         break

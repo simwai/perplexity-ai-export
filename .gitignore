@@ -10,3 +10,4 @@ coverage/
 *.old
 exports*
 debug/
+logs/*.txt
