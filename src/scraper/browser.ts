@@ -4,6 +4,7 @@ import { readFileSync, writeFileSync, existsSync, statSync } from 'node:fs'
 import { config } from '../utils/config.js'
 import { logger } from '../utils/logger.js'
 import { confirm } from '@inquirer/prompts'
+import { ErrorMessages } from '../utils/error-messages.js'
 
 export class BrowserManager {
   static readonly BrowserLaunchError = class extends Error {
@@ -76,7 +77,7 @@ export class BrowserManager {
       return this.getActivePage()
     } catch (error) {
       if (error instanceof Error && error.name !== 'Error') throw error
-      throw errorBus.raise(BrowserManager.BrowserLaunchError, 'Unexpected browser error', error)
+      throw errorBus.raise(BrowserManager.BrowserLaunchError, ErrorMessages.Scraper.Browser.UnexpectedError, error)
     }
   }
 
@@ -96,12 +97,12 @@ export class BrowserManager {
         args: ['--disable-blink-features=AutomationControlled'],
       })
     } catch (error) {
-      throw errorBus.raise(BrowserManager.BrowserLaunchError, 'Failed to launch browser', error)
+      throw errorBus.raise(BrowserManager.BrowserLaunchError, ErrorMessages.Scraper.Browser.LaunchFailed, error)
     }
   }
 
   private async initializeBrowserContext(): Promise<void> {
-    if (!this.browserInstance) throw new BrowserManager.ContextError('Browser not initialized')
+    if (!this.browserInstance) throw new BrowserManager.ContextError(ErrorMessages.Scraper.Browser.NotInitialized)
 
     const isSavedAuthValid = this.checkIfSavedAuthenticationIsFresh(config.authStoragePath)
 
@@ -138,7 +139,7 @@ export class BrowserManager {
 
   private async navigateToSettingsPage(): Promise<void> {
     if (!this.activeContext) {
-      throw new BrowserManager.NavigationError('No browser context available')
+      throw new BrowserManager.NavigationError(ErrorMessages.Scraper.Browser.NoContext)
     }
     this.activePage = await this.activeContext.newPage()
     const perplexitySettingsUrl = 'https://www.perplexity.ai/settings'
@@ -147,13 +148,13 @@ export class BrowserManager {
         timeout: 30000,
       })
     } catch (error) {
-      throw errorBus.raise(BrowserManager.NavigationError, 'Failed to navigate to settings', error)
+      throw errorBus.raise(BrowserManager.NavigationError, ErrorMessages.Scraper.Browser.NavigationFailed, error)
     }
   }
 
   private async ensureUserIsAuthenticated(): Promise<void> {
     if (!this.activePage) {
-      throw new BrowserManager.AuthError('Page not initialized')
+      throw new BrowserManager.AuthError(ErrorMessages.Scraper.Browser.AuthPageNotInit)
     }
 
     const isActuallyLoggedIn = await this.verifyLoginStatus(this.activePage)
@@ -178,7 +179,7 @@ export class BrowserManager {
     const isLoginSuccessfulNow = await this.verifyLoginStatus(this.activePage)
     if (!isLoginSuccessfulNow) {
       throw new BrowserManager.AuthError(
-        `Login verification failed. Current URL: ${this.activePage.url()}`
+        ErrorMessages.Scraper.Browser.LoginFailed(this.activePage.url())
       )
     }
 
@@ -206,7 +207,7 @@ export class BrowserManager {
 
   private async persistAuthenticationState(): Promise<void> {
     if (!this.activeContext) {
-      throw new BrowserManager.AuthError('No browser context available to save')
+      throw new BrowserManager.AuthError(ErrorMessages.Scraper.Browser.NoContextToSave)
     }
     const currentStorageState = await this.activeContext.storageState()
     writeFileSync(config.authStoragePath, JSON.stringify(currentStorageState, null, 2))
@@ -214,7 +215,7 @@ export class BrowserManager {
 
   private getActivePage(): Page {
     if (!this.activePage) {
-      throw new BrowserManager.ContextError('Page not initialized')
+      throw new BrowserManager.ContextError(ErrorMessages.Scraper.Browser.AuthPageNotInit)
     }
     return this.activePage
   }

@@ -2,6 +2,7 @@ import { errorBus } from '../utils/error-bus.js'
 import { z } from 'zod'
 import { config } from '../utils/config.js'
 import { logger } from '../utils/logger.js'
+import { ErrorMessages } from '../utils/error-messages.js'
 
 const embeddingItemSchema = z.object({ embedding: z.array(z.number()) })
 const openAiFormatSchema = z.object({ data: z.array(embeddingItemSchema) })
@@ -52,7 +53,7 @@ export class OllamaClient {
       await this.embed(['ping'])
       logger.success('Ollama embeddings look good.')
     } catch (error) {
-      throw errorBus.raise(OllamaClient.OllamaError, 'Ollama validation failed', error)
+      throw errorBus.raise(OllamaClient.OllamaError, ErrorMessages.Ollama.ValidationFailed, error)
     }
   }
 
@@ -76,14 +77,14 @@ export class OllamaClient {
         logger.error(`Ollama HTTP ${response.status}`, { body, errorBody: errorBody.slice(0, 500) })
         throw errorBus.raise(
           OllamaClient.OllamaError,
-          `Ollama request failed with status ${response.status} – ${errorBody.slice(0, 200)}`
+          ErrorMessages.Ollama.RequestFailed(response.status, errorBody.slice(0, 200))
         )
       }
 
       return await response.json()
     } catch (error) {
       if (error instanceof OllamaClient.OllamaError) throw error
-      throw errorBus.raise(OllamaClient.OllamaError, 'Network error while calling Ollama', error)
+      throw errorBus.raise(OllamaClient.OllamaError, ErrorMessages.Ollama.NetworkError, error)
     }
   }
 
@@ -98,9 +99,6 @@ export class OllamaClient {
       return [legacyResult.data.embedding]
     }
 
-    throw errorBus.raise(
-      OllamaClient.OllamaError,
-      'Unexpected response format from Ollama embeddings endpoint'
-    )
+    throw errorBus.raise(OllamaClient.OllamaError, ErrorMessages.Ollama.UnexpectedFormat)
   }
 }

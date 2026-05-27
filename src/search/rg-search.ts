@@ -4,6 +4,7 @@ import { config } from '../utils/config.js'
 import { logger } from '../utils/logger.js'
 import { rgPath } from '@vscode/ripgrep'
 import chalk from 'chalk'
+import { ErrorMessages } from '../utils/error-messages.js'
 
 export interface RgSearchOptions {
   pattern: string
@@ -50,7 +51,7 @@ export class RgSearch {
 
       const timeout = setTimeout(() => {
         ripgrepProcess.kill()
-        reject(errorBus.raise(RgSearch.RgSearchError, 'ripgrep search timed out after 30 seconds'))
+        reject(errorBus.raise(RgSearch.RgSearchError, ErrorMessages.Search.RgSearch.Timeout))
       }, 30000)
 
       ripgrepProcess.stdout.on('data', (data) => {
@@ -75,16 +76,16 @@ export class RgSearch {
       ripgrepProcess.on('error', (error) => {
         clearTimeout(timeout)
         if ((error as any).code === 'ENOENT') {
-          reject(errorBus.raise(RgSearch.RgNotFoundError, 'ripgrep not found', error))
+          reject(errorBus.raise(RgSearch.RgNotFoundError, ErrorMessages.Search.RgSearch.NotFound, error))
         } else {
-          reject(errorBus.raise(RgSearch.RgSearchError, 'Search failed', error))
+          reject(errorBus.raise(RgSearch.RgSearchError, ErrorMessages.Search.RgSearch.GenericFailure, error))
         }
       })
 
       ripgrepProcess.on('close', (code) => {
         clearTimeout(timeout)
         if (code === 0 || code === 1) resolve(matches)
-        else reject(errorBus.raise(RgSearch.RgSearchError, `ripgrep exited with code ${code}`))
+        else reject(errorBus.raise(RgSearch.RgSearchError, ErrorMessages.Search.RgSearch.ExitCode(code)))
       })
     })
   }
@@ -100,7 +101,7 @@ export class RgSearch {
 
       const timeout = setTimeout(() => {
         ripgrepProcess.kill()
-        reject(errorBus.raise(RgSearch.RgSearchError, 'ripgrep search timed out after 30 seconds'))
+        reject(errorBus.raise(RgSearch.RgSearchError, ErrorMessages.Search.RgSearch.Timeout))
       }, 30000)
 
       let matchedResultsFound = false
@@ -123,12 +124,12 @@ export class RgSearch {
           reject(
             errorBus.raise(
               RgSearch.RgNotFoundError,
-              this.getRipgrepInstallationInstructions(),
+              ErrorMessages.Search.RgSearch.NotFound,
               error
             )
           )
         } else {
-          reject(errorBus.raise(RgSearch.RgSearchError, 'Search failed', error))
+          reject(errorBus.raise(RgSearch.RgSearchError, ErrorMessages.Search.RgSearch.GenericFailure, error))
         }
       })
 
@@ -140,7 +141,7 @@ export class RgSearch {
           }
           resolve()
         } else {
-          reject(errorBus.raise(RgSearch.RgSearchError, `ripgrep exited with code ${exitCode}`))
+          reject(errorBus.raise(RgSearch.RgSearchError, ErrorMessages.Search.RgSearch.ExitCode(exitCode)))
         }
       })
     })
@@ -165,12 +166,5 @@ export class RgSearch {
 
     argumentsList.push('--type', 'markdown')
     return argumentsList
-  }
-
-  private getRipgrepInstallationInstructions(): string {
-    return (
-      'Bundled ripgrep (rg) not found or failed to execute. ' +
-      'Please ensure the application was installed correctly.'
-    )
   }
 }

@@ -6,6 +6,7 @@ import type { Browser, BrowserContext } from '@playwright/test'
 import { ConversationExtractor, type ExtractedConversation } from './conversation-extractor.js'
 import { FileWriter } from '../export/file-writer.js'
 import type { CheckpointManager } from './checkpoint-manager.js'
+import { ErrorMessages } from '../utils/error-messages.js'
 
 export interface ConversationMetadata {
   url: string
@@ -36,7 +37,7 @@ function loadPersistedAuthenticationState(): any | null {
     if (fileAgeInMilliseconds >= twentyFourHoursInMilliseconds) return null
     return JSON.parse(readFileSync(authenticationStoragePath, 'utf-8'))
   } catch (error) {
-    errorBus.report(error, { message: 'Failed to load authentication state' })
+    errorBus.report(error, { message: ErrorMessages.Scraper.WorkerPool.AuthLoadFailed })
     return null
   }
 }
@@ -82,7 +83,7 @@ export class WorkerPool {
         this.activeWorkers.push(worker)
       }
     } catch (error) {
-      throw errorBus.raise(WorkerPool.InitializationError, 'Failed to initialize workers', error)
+      throw errorBus.raise(WorkerPool.InitializationError, ErrorMessages.Scraper.WorkerPool.InitFailed, error)
     }
 
     logger.success(`Worker pool ready with ${this.activeWorkers.length} workers`)
@@ -138,7 +139,7 @@ export class WorkerPool {
 
   private async createNewWorker(workerId: number): Promise<Worker> {
     if (!this.sharedBrowserContext) {
-      throw new WorkerPool.InitializationError('Shared context not initialized')
+      throw new WorkerPool.InitializationError(ErrorMessages.Scraper.WorkerPool.NoSharedContext)
     }
 
     const conversationExtractor = new ConversationExtractor(this.sharedBrowserContext)
@@ -301,7 +302,7 @@ export class WorkerPool {
 
       return null
     } catch (error) {
-      errorBus.report(error, { message: 'File integrity check exception' })
+      errorBus.report(error, { message: ErrorMessages.Scraper.WorkerPool.FileIntegrityError })
       const errorMessage = error instanceof Error ? error.message : String(error)
       return `Validation exception: ${errorMessage}`
     }
@@ -329,7 +330,7 @@ export class WorkerPool {
     const errorMessage = error instanceof Error ? error.message : String(error)
     logger.error(`Worker ${worker.id} failed for ${conversation.title}`)
     logger.error(`  URL: ${conversation.url}`)
-    errorBus.report(error, { message: 'Worker processing failed' })
+    errorBus.report(error, { message: ErrorMessages.Scraper.WorkerPool.WorkerFailure })
 
     this.processingStats.failed++
     this.processingStats.failures.push({

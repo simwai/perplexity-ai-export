@@ -2,6 +2,7 @@ import { errorBus } from '../utils/error-bus.js'
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { config } from '../utils/config.js'
 import { logger } from '../utils/logger.js'
+import { ErrorMessages } from '../utils/error-messages.js'
 
 export interface SpaceMetadata {
   url: string
@@ -124,14 +125,14 @@ export class CheckpointManager {
       this.assertValidCheckpointStructure(parsedCheckpointData)
       return parsedCheckpointData
     } catch (error) {
-      errorBus.report(error, { message: 'Failed to load checkpoint, starting fresh' })
+      errorBus.report(error, { message: ErrorMessages.Checkpoint.LoadFailed })
       return this.createInitialCheckpoint()
     }
   }
 
   private assertValidCheckpointStructure(data: any): asserts data is Checkpoint {
     if (!data || typeof data !== 'object') {
-      throw new CheckpointManager.ValidationError('Checkpoint is not an object')
+      throw new CheckpointManager.ValidationError(ErrorMessages.Checkpoint.NotAnObject)
     }
 
     const requiredKeys: (keyof Checkpoint)[] = [
@@ -145,7 +146,7 @@ export class CheckpointManager {
 
     for (const key of requiredKeys) {
       if (!(key in data)) {
-        throw new CheckpointManager.ValidationError(`Missing required field: ${key}`)
+        throw new CheckpointManager.ValidationError(ErrorMessages.Checkpoint.MissingField(key))
       }
     }
   }
@@ -166,7 +167,7 @@ export class CheckpointManager {
     try {
       writeFileSync(config.checkpointPath, JSON.stringify(this.currentCheckpoint, null, 2))
     } catch (error) {
-      throw errorBus.raise(CheckpointManager.SaveError, 'Failed to write checkpoint', error)
+      throw errorBus.raise(CheckpointManager.SaveError, ErrorMessages.Checkpoint.SaveFailed, error)
     }
   }
 }

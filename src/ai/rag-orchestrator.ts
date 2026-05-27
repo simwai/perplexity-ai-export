@@ -6,6 +6,7 @@ import { logger } from '../utils/logger.js'
 import chalk from 'chalk'
 import { join } from 'node:path'
 import { config } from '../utils/config.js'
+import { ErrorMessages } from '../utils/error-messages.js'
 
 export class RagOrchestrator {
   private vectorStore: VectorStore
@@ -60,7 +61,7 @@ export class RagOrchestrator {
         logger.warn(`Self-Correction: ${chalk.gray(feedback.suggestion)}`)
       }
     } catch (error) {
-      errorBus.report(error, { message: 'Mightiest RAG failed' })
+      errorBus.report(error, { message: ErrorMessages.Rag.GenericFailure })
     }
   }
 
@@ -87,7 +88,7 @@ Return JSON: {"strategy": "...", "queries": [], "hardKeywords": [], "filters": {
         filters: json.filters || {},
       }
     } catch (error) {
-      errorBus.report(error, { message: 'Failed to develop research plan, using default' })
+      errorBus.report(error, { message: ErrorMessages.Rag.PlanFailed })
       return { strategy: 'precise', queries: [originalQuestion], hardKeywords: [], filters: {} }
     }
   }
@@ -122,7 +123,7 @@ Return JSON: {"strategy": "...", "queries": [], "hardKeywords": [], "filters": {
         }))
         keywordPool.push(...converted)
       } catch (error) {
-        errorBus.report(error, { message: `Keyword search failed for "${k}"` })
+        errorBus.report(error, { message: ErrorMessages.Rag.KeywordSearchFailed(k) })
       }
     }
 
@@ -190,7 +191,7 @@ Return JSON array: [{"fact": "...", "node_id": N, "thread": "..."}]
           })
         })
       } catch (error) {
-        errorBus.report(error, { message: 'Fact extraction batch failed, falling back to raw snippets' })
+        errorBus.report(error, { message: ErrorMessages.Rag.FactExtractionFailed })
         batch.forEach((r) => {
           findings.push({
             fact: r.meta['snippet'],
@@ -249,7 +250,7 @@ Return JSON: {"status": "ok" | "missed-info", "suggestion": "..."}
       const res = await this.ollamaClient.generate(prompt)
       return JSON.parse(res.match(/\{[\s\S]*\}/)?.[0] || '{"status": "ok"}')
     } catch (error) {
-      errorBus.report(error, { message: 'Quality verification failed' })
+      errorBus.report(error, { message: ErrorMessages.Rag.QualityVerificationFailed })
       return { status: 'ok' }
     }
   }

@@ -2,6 +2,7 @@ import { errorBus } from '../utils/error-bus.js'
 import type { Page } from '@playwright/test'
 import { logger } from '../utils/logger.js'
 import type { ConversationMetadata } from './checkpoint-manager.js'
+import { ErrorMessages } from '../utils/error-messages.js'
 
 export class LibraryDiscovery {
   static readonly VersionCaptureError = class extends Error {
@@ -127,7 +128,7 @@ export class LibraryDiscovery {
     } catch (error) {
       throw errorBus.raise(
         LibraryDiscovery.PaginationError,
-        `Failed to fetch batch at offset ${offset}`,
+        ErrorMessages.Scraper.Discovery.PaginationFailed(offset),
         error
       )
     }
