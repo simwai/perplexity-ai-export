@@ -42,4 +42,4 @@ body:
     id: screenshots
     attributes:
       label: 'Visual Evidence (Screenshots/Logs)'
-      description: 'Provide any additional data points to help us triangulate the issue.'
+      description: 'Provide any additional data points to help us triangulate the issue. If you encountered a scraping failure, please attach the `debug/api-diagnostics.jsonl` file (it contains NO sensitive data).'

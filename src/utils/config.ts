@@ -23,6 +23,7 @@ const configSchema = z.object({
     .optional()
     .transform((v) => v === 'true'),
   headless: z.union([z.boolean(), z.literal('new')]),
+  debug: z.boolean(),
 })
 
 export type Config = z.infer<typeof configSchema>
@@ -34,10 +35,10 @@ function parseEnvConfig(): Config {
   const defaultParallelWorkers = '5'
   const defaultCheckpointInterval = '10'
 
-  const rawHeadless = process.env['HEADLESS'] ?? 'true'
-  let headlessValue: boolean | 'new' = true
-  if (rawHeadless === 'false') {
-    headlessValue = false
+  const rawHeadless = process.env['HEADLESS'] ?? 'false'
+  let headlessValue: boolean | 'new' = false
+  if (rawHeadless === 'true') {
+    headlessValue = true
   } else if (rawHeadless === 'new') {
     headlessValue = 'new'
   }
@@ -59,6 +60,7 @@ function parseEnvConfig(): Config {
     ollamaEmbedModel: process.env['OLLAMA_EMBED_MODEL'] ?? 'nomic-embed-text',
     enableVectorSearch: process.env['ENABLE_VECTOR_SEARCH'],
     headless: headlessValue,
+    debug: process.env['DEBUG'] === 'true',
   }
 
   const result = configSchema.safeParse(rawConfig)

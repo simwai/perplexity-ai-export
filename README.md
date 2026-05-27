@@ -27,6 +27,7 @@
 - [RAG Capabilities](#rag-capabilities)
 - [Architecture & Deep Dive](#architecture--deep-dive)
   * [Project Structure](#project-structure)
+- [Diagnostics](#diagnostics)
 - [Testing](#testing)
 
 <!-- tocstop -->
@@ -148,7 +149,11 @@ For a detailed look at our RAG implementation, hybrid search strategy, and theor
 - **src/scraper/**: Playwright-based extraction logic and parallel worker pool management.
 - **src/search/**: Vector storage (Vectra) and ripgrep search implementation.
 - **src/repl/**: Interactive CLI components.
-- **src/utils/**: Shared utility functions for data chunking and logging.
+- **src/utils/**: Shared utility functions for data chunking, logging, and API diagnostics.
+
+## Diagnostics
+
+If the scraper encounters unexpected API response formats or empty conversation entries, it logs detailed (but non-sensitive) diagnostic information to `debug/api-diagnostics.jsonl`. This file helps maintain architectural resilience by providing insights into Perplexity's evolving API without compromising user privacy.
 
 ## Testing
 

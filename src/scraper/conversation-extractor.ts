@@ -2,6 +2,7 @@ import type { BrowserContext, Page, Response } from '@playwright/test'
 import { waitStrategy } from '../utils/wait-strategy.js'
 import { logger } from '../utils/logger.js'
 import { z } from 'zod'
+import { ApiDiagnosticsWriter } from '../utils/api-diagnostics.js'
 
 export interface ExtractedConversation {
   id: string
@@ -36,8 +37,13 @@ export class ConversationExtractor {
   private static readonly ApiResponseSchema = z.union([
     z.array(ConversationExtractor.EntrySchema),
     z.object({
-      status: z.string().optional(),
       entries: z.array(ConversationExtractor.EntrySchema),
+      background_entries: z.array(z.unknown()).optional(),
+      collection_info: z
+        .object({
+          has_next_page: z.boolean().optional(),
+        })
+        .optional(),
     }),
   ])
 
@@ -149,14 +155,20 @@ export class ConversationExtractor {
   }
 
   private captureConversationApiResponse(page: Page): Promise<any> {
+    let allEntries: any[] = []
     let resolved = false
 
     return new Promise((resolve) => {
       const timeout = setTimeout(() => {
         if (!resolved) {
-          logger.warn('API response timeout – resolving with null')
+          if (allEntries.length > 0) {
+            logger.info(`API response timeout – resolving with ${allEntries.length} accumulated entries`)
+            resolve({ entries: allEntries })
+          } else {
+            logger.warn('API response timeout – resolving with null')
+            resolve(null)
+          }
           resolved = true
-          resolve(null)
         }
       }, 30000)
 
@@ -166,12 +178,7 @@ export class ConversationExtractor {
         const url = response.url()
         if (!url.includes('/rest/thread/') || url.includes('list_ask_threads')) return
 
-        logger.info(`Found matching thread API response: ${url}`)
-
-        if (page.isClosed()) {
-          logger.warn('Page is closed – cannot read response body')
-          return
-        }
+        if (page.isClosed()) return
 
         try {
           const json = await response.json()
@@ -179,15 +186,28 @@ export class ConversationExtractor {
 
           const parseResult = ConversationExtractor.ApiResponseSchema.safeParse(json)
           if (!parseResult.success) {
-            logger.warn(`API response validation failed: ${parseResult.error.message}`)
-          }
+            ApiDiagnosticsWriter.writeFailure({
+              url: response.url(),
+              errorType: 'zod_error',
+              zodErrorPaths: parseResult.error.issues.map((e) => e.path.join('.')),
+            }).catch(() => {})
+          } else {
+            const data = parseResult.data
+            const currentEntries = Array.isArray(data) ? data : data.entries
+            allEntries.push(...currentEntries)
 
-          clearTimeout(timeout)
-          resolved = true
-          resolve(json)
+            const hasNextPage = !Array.isArray(data) && data.collection_info?.has_next_page === true
+            if (!hasNextPage) {
+              clearTimeout(timeout)
+              resolved = true
+              resolve({ entries: allEntries })
+            } else {
+              logger.info(`Captured paginated response, ${allEntries.length} entries so far...`)
+            }
+          }
         } catch (_error) {
-          if (resolved) return
-          logger.error(`Failed to parse JSON from thread API: ${_error}`)
+          // Silent catch for JSON parse errors from other non-JSON responses
+          // or if the response was already consumed/closed.
         }
       })
     })
@@ -224,7 +244,7 @@ export class ConversationExtractor {
 
   private parseConversationData(data: any, url: string): ExtractedConversation | null {
     try {
-      const entries = this.ensureEntriesFormat(data)
+      const entries = this.ensureEntriesFormat(data, url)
 
       const parseResult = z
         .array(ConversationExtractor.EntrySchema)
@@ -232,6 +252,12 @@ export class ConversationExtractor {
         .safeParse(entries)
 
       if (!parseResult.success) {
+        if (entries.length === 0) {
+          ApiDiagnosticsWriter.writeFailure({
+            url,
+            errorType: 'empty_entries',
+          }).catch(() => {})
+        }
         logger.warn(`Entry validation failed for ${url}: ${parseResult.error.message}`)
         return null
       }
@@ -257,16 +283,22 @@ export class ConversationExtractor {
     }
   }
 
-  private ensureEntriesFormat(data: any): any[] {
+  private ensureEntriesFormat(data: any, url: string): any[] {
     if (Array.isArray(data)) {
       return data
     }
-    if (Array.isArray(data.entries) && data.entries.length > 0) {
+    if (data && Array.isArray(data.entries)) {
       return data.entries
     }
     if (data && (data.query_str || data.blocks)) {
       return [data]
     }
+
+    ApiDiagnosticsWriter.writeFailure({
+      url,
+      errorType: 'unknown_shape',
+    }).catch(() => {})
+
     return []
   }
 

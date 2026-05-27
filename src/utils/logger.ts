@@ -18,6 +18,10 @@ export const logger = {
   },
 
   debug(...args: unknown[]): void {
-    console.log(chalk.gray('›'), ...args)
+    // We only show debug logs if the DEBUG environment variable is set to true.
+    // Note: This is checked at runtime to avoid circular dependencies with config.ts
+    if (process.env['DEBUG'] === 'true') {
+      console.log(chalk.gray('›'), ...args)
+    }
   },
 }

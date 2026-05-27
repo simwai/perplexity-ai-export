@@ -59,6 +59,7 @@ export class CommandHandler {
       await this.executeFullScrapingFlow()
     } catch (_error) {
       logger.error('Scraper failed:', _error instanceof Error ? _error : String(_error))
+      logger.info('\nNote: Check "debug/api-diagnostics.jsonl" for details if the failure is related to API response changes.')
     }
   }
 
@@ -180,6 +181,9 @@ export class CommandHandler {
       await this.runExtractionPhase(browserManager, pendingConversations)
 
       logger.success('\n✨ Export complete!')
+      logger.info(
+        '\nNote: If some conversations were missed or the format looks wrong, please check "debug/api-diagnostics.jsonl" and consider opening a GitHub issue with that file attached.'
+      )
     } catch (_error) {
       throw new CommandHandler.ScraperError(
         `Scraping failed: ${_error instanceof Error ? _error.message : String(_error)}`
