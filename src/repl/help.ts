@@ -19,6 +19,11 @@ export function showHelp(): void {
     '    Build or update the local vector index from your exports to enable semantic search and RAG.\n'
   )
 
+  logger.info(chalk.cyan('  Start diagnosis mode'))
+  logger.info(
+    `    Activate persistent logging by setting ${chalk.magenta('DEBUG=true')} in your environment. Logs are saved to the ${chalk.magenta('logs/')} directory.\n`
+  )
+
   logger.info(chalk.cyan('  Reset all data'))
   logger.info(
     '    Remove all stored checkpoints, authentication data, and the vector index to start fresh.\n'

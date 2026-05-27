@@ -127,7 +127,7 @@ export class BrowserManager {
       this.activeContext = await this.browserInstance.newContext()
     }
 
-    if (config.diagnosisMode && this.activeContext) {
+    if (config.debug && this.activeContext) {
       this.activeContext.on('request', (request) => logHttpRequest(request))
       this.activeContext.on('response', (response) => logHttpResponse(response))
     }

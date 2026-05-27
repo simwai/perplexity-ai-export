@@ -2,13 +2,13 @@ import chalk from 'chalk'
 import { appendFileSync, mkdirSync, existsSync } from 'node:fs'
 import { joinFromRoot } from './paths.js'
 
-const DIAGNOSIS_MODE = process.env['DIAGNOSIS_MODE'] === 'true'
+const DEBUG = process.env['DEBUG'] === 'true'
 const LOGS_DIR = joinFromRoot('logs')
 const TIMESTAMP = new Date().toISOString().replace(/[:.]/g, '-')
 const MAIN_LOG_PATH = joinFromRoot('logs', `main-log-${TIMESTAMP}.txt`)
 
 function writeToFile(message: string): void {
-  if (!DIAGNOSIS_MODE) return
+  if (!DEBUG) return
 
   if (!existsSync(LOGS_DIR)) {
     mkdirSync(LOGS_DIR, { recursive: true })

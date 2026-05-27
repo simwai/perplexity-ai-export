@@ -1,8 +1,9 @@
 import { config as loadEnv } from 'dotenv'
 import { existsSync, mkdirSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { dirname } from 'node:path'
 import { z } from 'zod'
 import { logger } from './logger.js'
+import { joinFromRoot } from './paths.js'
 
 loadEnv()
 
@@ -23,7 +24,7 @@ const configSchema = z.object({
     .optional()
     .transform((v) => v === 'true'),
   headless: z.union([z.boolean(), z.literal('new')]),
-  diagnosisMode: z.boolean(),
+  debug: z.boolean(),
 })
 
 export type Config = z.infer<typeof configSchema>
@@ -44,7 +45,7 @@ function parseEnvConfig(): Config {
   }
 
   const rawConfig = {
-    authStoragePath: process.env['AUTH_STORAGE_PATH'] ?? join('.storage', 'auth.json'),
+    authStoragePath: process.env['AUTH_STORAGE_PATH'] ?? joinFromRoot('.storage', 'auth.json'),
     waitMode: process.env['WAIT_MODE'] ?? 'dynamic',
     rateLimitMs: parseInt(process.env['RATE_LIMIT_MS'] ?? defaultRateLimitMs, 10),
     parallelWorkers: parseInt(process.env['PARALLEL_WORKERS'] ?? defaultParallelWorkers, 10),
@@ -53,14 +54,14 @@ function parseEnvConfig(): Config {
       10
     ),
     exportDir: process.env['EXPORT_DIR'] ?? 'exports',
-    checkpointPath: process.env['CHECKPOINT_PATH'] ?? join('.storage', 'checkpoint.json'),
-    vectorIndexPath: process.env['VECTOR_INDEX_PATH'] ?? join('.storage', 'vector-index'),
+    checkpointPath: process.env['CHECKPOINT_PATH'] ?? joinFromRoot('.storage', 'checkpoint.json'),
+    vectorIndexPath: process.env['VECTOR_INDEX_PATH'] ?? joinFromRoot('.storage', 'vector-index'),
     ollamaUrl: process.env['OLLAMA_URL'] ?? defaultOllamaUrl,
     ollamaModel: process.env['OLLAMA_MODEL'] ?? 'llama3.1',
     ollamaEmbedModel: process.env['OLLAMA_EMBED_MODEL'] ?? 'nomic-embed-text',
     enableVectorSearch: process.env['ENABLE_VECTOR_SEARCH'],
     headless: headlessValue,
-    diagnosisMode: process.env['DIAGNOSIS_MODE'] === 'true',
+    debug: process.env['DEBUG'] === 'true',
   }
 
   const result = configSchema.safeParse(rawConfig)

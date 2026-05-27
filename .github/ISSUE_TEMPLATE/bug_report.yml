@@ -45,4 +45,4 @@ body:
     id: diagnostics
     attributes:
       label: 'Diagnostic Artifacts'
-      description: 'If enabled, please attach logs from the `logs/` directory. If you encountered a scraping failure, the `debug/api-diagnostics.jsonl` file is also invaluable.'
+      description: 'If enabled, please attach logs from the `logs/` directory (enabled via `DEBUG=true`). If you encountered a scraping failure, the `debug/api-diagnostics.jsonl` file is also invaluable.'
