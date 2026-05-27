@@ -60,10 +60,7 @@ function parseEnvConfig(): Config {
     ollamaEmbedModel: process.env['OLLAMA_EMBED_MODEL'] ?? 'nomic-embed-text',
     enableVectorSearch: process.env['ENABLE_VECTOR_SEARCH'],
     headless: headlessValue,
-    debug:
-      process.env['DEBUG'] === 'true' ||
-      process.env['DEBUG_MODE'] === 'true' ||
-      process.env['DIAGNOSIS_MODE'] === 'true',
+    debug: process.env['DEBUG'] === 'true' || process.env['DEBUG_MODE'] === 'true',
   }
 
   const result = configSchema.safeParse(rawConfig)

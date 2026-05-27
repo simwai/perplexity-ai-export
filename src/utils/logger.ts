@@ -3,11 +3,7 @@ import { appendFileSync, mkdirSync, existsSync } from 'node:fs'
 import { joinFromRoot } from './paths.js'
 
 function isDebugEnabled(): boolean {
-  return (
-    process.env['DEBUG'] === 'true' ||
-    process.env['DEBUG_MODE'] === 'true' ||
-    process.env['DIAGNOSIS_MODE'] === 'true'
-  )
+  return process.env['DEBUG'] === 'true' || process.env['DEBUG_MODE'] === 'true'
 }
 
 const LOGS_DIR = joinFromRoot('logs')
