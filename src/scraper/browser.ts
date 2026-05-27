@@ -3,6 +3,7 @@ import { readFileSync, writeFileSync, existsSync, statSync } from 'node:fs'
 import { config } from '../utils/config.js'
 import { logger } from '../utils/logger.js'
 import { confirm } from '@inquirer/prompts'
+import { logHttpRequest, logHttpResponse } from '../utils/http-logger.js'
 
 export class BrowserManager {
   static readonly BrowserLaunchError = class extends Error {
@@ -124,6 +125,11 @@ export class BrowserManager {
         logger.info('Saved authentication is older than 1 day, discarding.')
       }
       this.activeContext = await this.browserInstance.newContext()
+    }
+
+    if (config.diagnosisMode && this.activeContext) {
+      this.activeContext.on('request', (request) => logHttpRequest(request))
+      this.activeContext.on('response', (response) => logHttpResponse(response))
     }
   }
 

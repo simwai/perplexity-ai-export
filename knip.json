@@ -1,0 +1,13 @@
+{
+  "$schema": "https://unpkg.com/knip@5/schema.json",
+  "entry": ["src/index.ts"],
+  "project": ["src/**/*.ts"],
+  "ignoreDependencies": [
+    "chromium-bidi",
+    "playwright-core",
+    "markdown-toc",
+    "postject",
+    "@types/inquirer",
+    "@types/sanitize-filename"
+  ]
+}

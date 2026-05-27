@@ -162,7 +162,9 @@ export class ConversationExtractor {
       const timeout = setTimeout(() => {
         if (!resolved) {
           if (allEntries.length > 0) {
-            logger.info(`API response timeout – resolving with ${allEntries.length} accumulated entries`)
+            logger.info(
+              `API response timeout – resolving with ${allEntries.length} accumulated entries`
+            )
             resolve({ entries: allEntries })
           } else {
             logger.warn('API response timeout – resolving with null')
