@@ -10,7 +10,7 @@ This document elucidates the architectural blueprints and theoretical underpinni
 - [2. RAG Cognitive Structure](#2-rag-cognitive-structure)
   * [Stage A: Adaptive Planning](#stage-a-adaptive-planning)
   * [Stage B: Hybrid Retrieval & Fusion](#stage-b-hybrid-retrieval--fusion)
-  * [Stage B¹: Cross-Encoder Reranking](#stage-b1-cross-encoder-reranking)
+  * [Stage B¹: Cross-Encoder Reranking](#stage-b%C2%B9-cross-encoder-reranking)
   * [Stage C: Granular MapReduce Fact Extraction](#stage-c-granular-mapreduce-fact-extraction)
 - [3. Theoretical Foundations](#3-theoretical-foundations)
   * [Hybrid Search & RRF](#hybrid-search--rrf)
@@ -20,6 +20,7 @@ This document elucidates the architectural blueprints and theoretical underpinni
   * [MapReduce for Context Compression](#mapreduce-for-context-compression)
 - [4. Visualizing the Retrieval Loop](#4-visualizing-the-retrieval-loop)
 - [5. Glossary](#5-glossary)
+  * [Content Integrity & Incremental Updates](#content-integrity--incremental-updates)
 
 <!-- tocstop -->
 
@@ -87,7 +88,7 @@ Before any retrieval, the system acts as a **Research Planner**. It decomposes t
 - **Strategy**: Selecting between `precise` (targeted facts, pool of 35) or `exhaustive` (broad historical overview, pool of 60).
 - **Semantic Variations**: Generating multiple search phrases to cover different linguistic facets of the query.
 - **Hard Keywords**: Identifying unique entities or technical IDs that require exact-match precision.
-- **HyDE Passage**: Generating a short hypothetical answer passage — 1-2 sentences that would plausibly appear in stored history for this question. This passage is embedded and searched alongside the query variations, improving recall when the user's question wording diverges from how the content was originally written.
+- **HyDE Passage**: Generating a short hypothetical answer passage (1-2 sentences) that would plausibly appear in stored history for this question. This passage is embedded and searched alongside the query variations, improving recall when the user's question wording diverges from how the content was originally written.
 
 ### Stage B: Hybrid Retrieval & Fusion
 
@@ -102,11 +103,11 @@ Results from all pools are merged using **Reciprocal Rank Fusion (RRF)**, which 
 
 After RRF fusion, the top candidates are passed to a **cross-encoder reranker** before fact extraction. Unlike the bi-encoder embeddings used for retrieval (which score query and passage independently), a cross-encoder processes the query and each passage jointly, enabling it to reason about fine-grained relevance:
 
-- **Model**: `Xenova/ms-marco-MiniLM-L-6-v2` — runs locally via ONNX (`@huggingface/transformers`), no API key required.
+- **Model**: `Xenova/ms-marco-MiniLM-L-6-v2`. It runs locally via ONNX (`@huggingface/transformers`), no API key required.
 - **Quantization**: Loaded in `int8` for a 3× latency reduction with <0.5% rank-correlation loss versus fp32.
 - **Batching**: Processed in chunks of 64 pairs for optimal throughput.
 - **Fallback**: Gracefully skips reranking if the package is not installed, preserving the RRF order.
-- **Implementation note**: The raw relevance logit is read directly from `AutoModelForSequenceClassification` output — the high-level `pipeline()` API is intentionally bypassed as it normalizes single-class regression heads to a constant `score: 1.0`.
+- **Implementation note**: The raw relevance logit is read directly from `AutoModelForSequenceClassification` output. The high-level `pipeline()` API is intentionally bypassed as it normalizes single-class regression heads to a constant `score: 1.0`.
 
 ### Stage C: Granular MapReduce Fact Extraction
 
@@ -197,8 +198,8 @@ Plain-language definitions for every technical term used in this document.
 | **RAG** (Retrieval-Augmented Generation) | Instead of the AI making things up from memory, it first searches your actual saved data, then uses those results to write the answer. Think: open-book exam vs. closed-book. |
 | **Embedding / Vector** | Turning a piece of text into a list of numbers that captures its meaning. Texts with similar meaning end up with similar numbers, so you can find related content by comparing numbers. |
 | **Vector Store (Vectra)** | A database that stores those number-lists (embeddings) and can quickly find the ones most similar to a query. Like a library that sorts books by vibe instead of title. |
-| **Bi-Encoder** | Two separate "understanding machines" — one encodes the query, one encodes each passage — and you compare the resulting numbers. Fast, but the query and passage never "see" each other during encoding, so subtle relevance signals can be missed. |
-| **Cross-Encoder** | One "understanding machine" that reads the query and a passage *together* at the same time. Much more accurate at judging relevance, but slower — used as a second pass after bi-encoder retrieval narrows the field. |
+| **Bi-Encoder** | Two separate "understanding machines": one encodes the query, one encodes each passage; and you compare the resulting numbers. Fast, but the query and passage never "see" each other during encoding, so subtle relevance signals can be missed. |
+| **Cross-Encoder** | One "understanding machine" that reads the query and a passage *together* at the same time. Much more accurate at judging relevance, but slower. It is used as a second pass after bi-encoder retrieval narrows the field. |
 | **Reranking** | Taking a first batch of search results and sorting them again with a smarter (but slower) method. The first pass casts a wide net; reranking picks the actual best ones. |
 | **Dense Retrieval** | Search by meaning/semantics using embeddings. Good at finding conceptually related content even if the exact words differ. |
 | **Sparse Retrieval** | Search by exact keywords or strings (e.g. ripgrep). Perfect for finding specific names, IDs, or code snippets that embeddings might miss. |
@@ -206,11 +207,11 @@ Plain-language definitions for every technical term used in this document.
 | **RRF** (Reciprocal Rank Fusion) | A formula for merging ranked lists from multiple search methods into one combined ranking. It rewards results that appear near the top in multiple lists, without needing to normalize scores. |
 | **HyDE** (Hypothetical Document Embeddings) | Before searching, ask the LLM: "What would a good answer to this question look like?" Then search using *that* hypothetical answer instead of the raw question. Helps when your question phrasing doesn't match how the answer was originally written. |
 | **MapReduce** | A two-step processing pattern: **Map** = process many small chunks independently in parallel; **Reduce** = combine all those results into one final output. Used here to extract facts from many snippets without overloading the LLM's context window. |
-| **Context Window** | The maximum amount of text an LLM can read and reason about at once. Stuffing too many search results in at once causes the model to "lose" information in the middle — hence MapReduce. |
+| **Context Window** | The maximum amount of text an LLM can read and reason about at once. Stuffing too many search results in at once causes the model to "lose" information in the middle; we use MapReduce to mitigate this. |
 | **Lost in the Middle** | A known LLM failure mode: when given a very long input, the model tends to remember the start and end well but forgets details buried in the middle. MapReduce mitigates this by processing small chunks. |
-| **ONNX** | A standard file format for AI models that lets them run efficiently on different hardware and in different programming languages — including Node.js — without needing Python or a GPU. |
-| **Quantization (int8)** | Compressing a model's internal numbers from 32-bit floats down to 8-bit integers. Makes the model ~3–4× faster and smaller with minimal accuracy loss. |
-| **LLM** (Large Language Model) | The AI model that reads text and generates responses — in this project, served locally via Ollama (e.g. mistral, llama3). |
+| **ONNX** | A standard file format for AI models that lets them run efficiently on different hardware and in different programming languages (including Node.js) without needing Python or a GPU. |
+| **Quantization (int8)** | Compressing a model's internal numbers from 32-bit floats down to 8-bit integers. Makes the model ~3-4× faster and smaller with minimal accuracy loss. |
+| **LLM** (Large Language Model) | The AI model that reads text and generates responses. In this project, served locally via Ollama (e.g. mistral, llama3). |
 | **Ollama** | A local server that runs open-source LLMs on your own machine. No API key, no cloud, no data leaving your device. |
 | **Playwright** | A browser automation library used here to scrape conversation history from Perplexity.ai and save it as Markdown files. |
 | **ripgrep (rg)** | An extremely fast command-line search tool that scans files for exact text matches. Used here for the sparse/keyword retrieval leg of hybrid search. |
@@ -222,5 +223,5 @@ Plain-language definitions for every technical term used in this document.
 To achieve high-fidelity synchronization without redundant operations, the system employs a content-driven skipping mechanism:
 - **Stable Serialization**: Raw API entries are serialized into JSON with keys sorted alphabetically to ensure a deterministic representation.
 - **SHA-256 Hashing**: A cryptographic hash is generated from the stable JSON.
-- **Checkpoint Comparison**: On each run (or when manually triggered via "Check for updates"), the system compares the fresh hash against the stored value in `.storage/checkpoint.json`.
+- **Checkpoint Comparison**: On each run (or when manually triggered via "Sync"), the system compares the fresh hash against the stored value in `.storage/checkpoint.json`.
 - **Differential Export**: Only threads with mismatched hashes are re-rendered and written to disk, preserving existing files and minimizing filesystem I/O.

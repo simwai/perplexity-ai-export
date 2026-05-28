@@ -128,7 +128,7 @@ npm run dev
 - **Search conversations**: Interface with your history using various modes:
   - **Auto**: Heuristic selection between semantic and exact search.
   - **Semantic**: Fuzzy matching via high-dimensional vector space.
-  - **RAG**: Direct inquiry—e.g., "What did I learn about emergent intelligence?"
+  - **RAG**: Direct inquiry, such as "What did I learn about emergent intelligence?"
   - **Exact**: Rapid string matching via ripgrep (bundled).
 - **Build vector index**: Processes Markdown exports into a local vector store.
 - **Reset all data**: Purges checkpoints, authentication data, and the vector index.
@@ -143,9 +143,9 @@ The RAG modality is engineered for various levels of cognitive inquiry:
 
 The pipeline runs three enhancement stages automatically:
 
-1. **HyDE** — the planner writes a hypothetical answer passage and uses it as an extra search vector alongside your query variations, improving recall when question wording diverges from stored content.
-2. **Expanded pool** — precise mode retrieves 35 candidates (up from 20), exhaustive mode retrieves 60.
-3. **Cross-encoder reranking** — a local ONNX model (`Xenova/ms-marco-MiniLM-L-6-v2`) jointly scores each (query, passage) pair and reorders before synthesis. Activates automatically after `npm install`. First run downloads ~85MB model, cached thereafter.
+1. **HyDE**: The planner writes a hypothetical answer passage and uses it as an extra search vector alongside your query variations, improving recall when question wording diverges from stored content.
+2. **Expanded pool**: Precise mode retrieves 35 candidates (up from 20), exhaustive mode retrieves 60.
+3. **Cross-encoder reranking**: A local ONNX model (`Xenova/ms-marco-MiniLM-L-6-v2`) jointly scores each (query, passage) pair and reorders before synthesis. Activates automatically after `npm install`. First run downloads ~85MB model, cached thereafter.
 
 ## Architecture & Deep Dive
 
@@ -187,4 +187,4 @@ npm run benchmark
 
 Requires a built vector index and a running Ollama instance. The benchmark runs a set of predefined queries end-to-end through the full pipeline (HyDE → hybrid search → cross-encoder reranking → MapReduce → synthesis) and reports per-query latency and success rate. Edit `BENCHMARK_QUERIES` in `src/benchmark.ts` to tailor queries to your history.
 
-👉 **[BENCHMARKS.md](./BENCHMARKS.md)** — full details on each benchmark, why the metrics were chosen, how to interpret results, and how to write effective custom queries.
+👉 **[BENCHMARKS.md](./BENCHMARKS.md)**: Full details on each benchmark, why the metrics were chosen, how to interpret results, and how to write effective custom queries.

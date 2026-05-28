@@ -227,9 +227,9 @@ export class CommandHandler {
     const progress = this.progressCheckpointManager.getProcessingProgress()
 
     const choices: { name: string; value: string }[] = [
-      { name: 'Resume from checkpoint', value: 'resume' },
-      { name: 'Check for updates (Re-scan all threads)', value: 'update' },
-      { name: 'Restart from scratch', value: 'restart' },
+      { name: 'Resume (Continue processing known threads)', value: 'resume' },
+      { name: 'Sync (Re-scan library for new threads and updates)', value: 'update' },
+      { name: 'Start Over (Re-scan and re-process everything)', value: 'restart' },
       { name: 'Cancel', value: 'cancel' },
     ]
 
