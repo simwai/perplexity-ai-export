@@ -115,7 +115,7 @@ export class LibraryDiscovery {
     apiVersion: string,
     offset: number,
     limit: number
-  ): Promise<any[]> {
+  ): Promise<unknown[]> {
     try {
       return await page.evaluate(
         async ({ offset, limit, version }) => {
@@ -145,16 +145,21 @@ export class LibraryDiscovery {
     }
   }
 
-  private mapRawBatchToMetadata(batch: any[]): ConversationMeta[] {
+  private mapRawBatchToMetadata(batch: unknown[]): ConversationMeta[] {
     return batch
-      .filter((item) => this.isMinimumRequiredThreadDataPresent(item))
+      .filter((item): item is { slug: string } => this.isMinimumRequiredThreadDataPresent(item))
       .map((item) => ({
         id: item.slug,
         url: `https://www.perplexity.ai/search/${item.slug}`,
       }))
   }
 
-  private isMinimumRequiredThreadDataPresent(item: any): boolean {
-    return !!(item && typeof item === 'object' && item.slug && typeof item.slug === 'string')
+  private isMinimumRequiredThreadDataPresent(item: unknown): boolean {
+    return !!(
+        item &&
+        typeof item === 'object' &&
+        'slug' in item &&
+        typeof (item as any).slug === 'string'
+    )
   }
 }

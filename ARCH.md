@@ -216,3 +216,11 @@ Plain-language definitions for every technical term used in this document.
 | **ripgrep (rg)** | An extremely fast command-line search tool that scans files for exact text matches. Used here for the sparse/keyword retrieval leg of hybrid search. |
 | **nomic-embed-text** | The embedding model (run via Ollama) that converts text snippets into vectors for storage and similarity search in Vectra. |
 | **Provenance** | Knowing exactly which source document a fact came from. The system tracks this so the final answer can cite where each piece of information originated. |
+
+### Content Integrity & Incremental Updates
+
+To achieve high-fidelity synchronization without redundant operations, the system employs a content-driven skipping mechanism:
+- **Stable Serialization**: Raw API entries are serialized into JSON with keys sorted alphabetically to ensure a deterministic representation.
+- **SHA-256 Hashing**: A cryptographic hash is generated from the stable JSON.
+- **Checkpoint Comparison**: On each run (or when manually triggered via "Check for updates"), the system compares the fresh hash against the stored value in `.storage/checkpoint.json`.
+- **Differential Export**: Only threads with mismatched hashes are re-rendered and written to disk, preserving existing files and minimizing filesystem I/O.

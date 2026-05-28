@@ -49,6 +49,7 @@ This tool is designed to externalize your Perplexity.ai conversation history int
 - **Semantic Vector Search**: Move beyond keyword matching. Locate information based on conceptual depth and semantic relevance.
 - **Persistent State Tracking**: Frequent checkpoints allow the system to resume progress after any interruption.
 - **Interactive Synthesis (REPL)**: A streamlined command-line interface for human-system synergy.
+- **Smart Content Hashing**: The scraper now computes a SHA-256 hash of thread content. Subsequent runs will skip unchanged threads, significantly reducing execution time and API overhead while ensuring your local history stays up to date when new messages are added.
 
 ## Environment Setup Guide
 

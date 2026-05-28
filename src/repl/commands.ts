@@ -1,3 +1,4 @@
+import { type Page } from '@playwright/test'
 import { errorBus } from '../utils/error-bus.js'
 import { input, select, confirm } from '@inquirer/prompts'
 import { rmSync } from 'node:fs'
@@ -200,7 +201,7 @@ export class CommandHandler {
     }
   }
 
-  private async runDiscoveryPhase(page: any): Promise<void> {
+  private async runDiscoveryPhase(page: Page): Promise<void> {
     logger.info('\n=== Phase 1: Library Discovery ===\n')
     const libraryDiscoveryTool = new LibraryDiscovery(this.config)
     const discoveredConversations =
