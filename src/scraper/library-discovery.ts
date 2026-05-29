@@ -1,6 +1,7 @@
-import type { Page } from '@playwright/test'
+import { type Page } from '@playwright/test'
 import { logger } from '../utils/logger.js'
-import type { ConversationMetadata } from './checkpoint-manager.js'
+import { type ConversationMeta } from './checkpoint-manager.js'
+import { type Config } from '../utils/config.js'
 
 export class LibraryDiscovery {
   static readonly VersionCaptureError = class extends Error {
@@ -24,15 +25,16 @@ export class LibraryDiscovery {
     }
   }
 
-  async discoverAllConversationsFromLibrary(page: Page): Promise<ConversationMetadata[]> {
-    const perplexityLibraryUrl = 'https://www.perplexity.ai/library'
+  constructor(private readonly config: Config) {}
+
+  async discoverAllConversationsFromLibrary(page: Page): Promise<ConversationMeta[]> {
+    const PERPLEXITY_LIBRARY_URL = 'https://www.perplexity.ai/library'
     logger.info('Discovering threads via REST API...')
 
-    await page.goto(perplexityLibraryUrl)
+    await page.goto(PERPLEXITY_LIBRARY_URL)
     await page.waitForLoadState('domcontentloaded')
 
     const activeApiVersion = await this.detectCurrentApiVersion(page)
-
     const discoveredConversations = await this.paginateAndFetchAllThreads(page, activeApiVersion)
 
     logger.success(`Discovered ${discoveredConversations.length} threads`)
@@ -40,7 +42,7 @@ export class LibraryDiscovery {
   }
 
   private async detectCurrentApiVersion(page: Page): Promise<string> {
-    const defaultFallbackVersion = '2.18'
+    const FALLBACK_API_VERSION = '2.18'
 
     try {
       const interceptedRequest = await page.waitForRequest(
@@ -49,39 +51,40 @@ export class LibraryDiscovery {
       )
 
       const requestUrl = interceptedRequest.url()
-      const versionQueryParameterMatch = requestUrl.match(/[?&]version=([^&]+)/)
+      const versionMatch = requestUrl.match(/[?&]version=([^&]+)/)
 
-      if (versionQueryParameterMatch?.[1]) {
-        const detectedVersion = versionQueryParameterMatch[1]
+      const detectedVersion = versionMatch?.[1]
+      if (detectedVersion) {
         logger.info(`Discovered API version: ${detectedVersion}`)
         return detectedVersion
       }
 
       logger.warn('Found list_ask_threads request but no version parameter, using fallback')
-      return defaultFallbackVersion
+      return FALLBACK_API_VERSION
     } catch (_error) {
       logger.warn('No list_ask_threads request detected, using fallback version')
-      return defaultFallbackVersion
+      return FALLBACK_API_VERSION
     }
   }
 
   private async paginateAndFetchAllThreads(
     page: Page,
     apiVersion: string
-  ): Promise<ConversationMetadata[]> {
-    const batchPageSize = 20
+  ): Promise<ConversationMeta[]> {
+    const BATCH_PAGE_SIZE = 20
     let currentOffset = 0
-    const allDiscoveredConversations: ConversationMetadata[] = []
+    const allDiscoveredConversations: ConversationMeta[] = []
 
     while (true) {
       const threadBatch = await this.fetchThreadBatchFromApi(
         page,
         apiVersion,
         currentOffset,
-        batchPageSize
+        BATCH_PAGE_SIZE
       )
 
-      if (!threadBatch.length) {
+      const isBatchEmpty = threadBatch.length === 0
+      if (isBatchEmpty) {
         logger.info(`No more threads found at offset ${currentOffset}`)
         break
       }
@@ -90,7 +93,9 @@ export class LibraryDiscovery {
       allDiscoveredConversations.push(...formattedMetadata)
 
       logger.info(`Fetched ${threadBatch.length} threads (offset ${currentOffset})`)
-      currentOffset += batchPageSize
+      currentOffset += BATCH_PAGE_SIZE
+
+      await page.waitForTimeout(this.config.rateLimitMs)
     }
 
     return allDiscoveredConversations
@@ -101,48 +106,50 @@ export class LibraryDiscovery {
     apiVersion: string,
     offset: number,
     limit: number
-  ): Promise<any[]> {
+  ): Promise<unknown[]> {
     try {
       return await page.evaluate(
         async ({ offset, limit, version }) => {
-          const response = await fetch(
-            `/rest/thread/list_ask_threads?version=${version}&source=default`,
-            {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ limit, ascending: false, offset, search_term: '' }),
-            }
-          )
+          const apiEndpoint = `/rest/thread/list_ask_threads?version=${version}&source=default`
+          const apiPayload = { limit, ascending: false, offset, search_term: '' }
 
-          if (!response.ok) {
-            throw new Error(`API responded with ${response.status}`)
+          const apiResponse = await fetch(apiEndpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(apiPayload),
+          })
+
+          const isResponseSuccessful = apiResponse.ok
+          if (!isResponseSuccessful) {
+            throw new Error(`API responded with ${apiResponse.status}`)
           }
 
-          const responseData = await response.json()
-          return Array.isArray(responseData) ? responseData : []
+          const responseJson = await apiResponse.json()
+          const isJsonArray = Array.isArray(responseJson)
+          return isJsonArray ? responseJson : []
         },
         { offset, limit, version: apiVersion }
       )
-    } catch (_error) {
-      const errorMessage = _error instanceof Error ? _error.message : String(_error)
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error)
       throw new LibraryDiscovery.PaginationError(
         `Failed to fetch batch at offset ${offset}: ${errorMessage}`
       )
     }
   }
 
-  private mapRawBatchToMetadata(batch: any[]): ConversationMetadata[] {
+  private mapRawBatchToMetadata(batch: unknown[]): ConversationMeta[] {
     return batch
-      .filter((item) => this.isMinimumRequiredThreadDataPresent(item))
+      .filter((item): item is { slug: string } => this.isMinimumRequiredThreadDataPresent(item))
       .map((item) => ({
+        id: item.slug,
         url: `https://www.perplexity.ai/search/${item.slug}`,
-        title: item.title ?? 'Untitled',
-        spaceName: item.collection?.title ?? 'General',
-        timestamp: item.last_query_datetime ?? undefined,
       }))
   }
 
-  private isMinimumRequiredThreadDataPresent(item: any): boolean {
-    return !!(item && typeof item === 'object' && item.slug && typeof item.slug === 'string')
+  private isMinimumRequiredThreadDataPresent(item: unknown): boolean {
+    const isObject = item && typeof item === 'object'
+    const hasSlug = isObject && 'slug' in item && typeof (item as any).slug === 'string'
+    return !!hasSlug
   }
 }

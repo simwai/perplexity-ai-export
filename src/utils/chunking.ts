@@ -1,7 +1,7 @@
-export function chunkMarkdown(markdown: string, maxChars = 1500, overlap = 150): string[] {
-  const splitByHeaderOrRule = /(?=^#{1,3}\s)|(?=^---)/gm
+export function chunkMarkdown(markdown: string, maxChars = 1500, overlapChars = 150): string[] {
+  const HEADER_OR_RULE_REGEX = /(?=^#{1,3}\s)|(?=^---)/gm
 
-  const sections = markdown.split(splitByHeaderOrRule)
+  const sections = markdown.split(HEADER_OR_RULE_REGEX)
 
   const chunks: string[] = []
   let currentChunk = ''
@@ -10,27 +10,35 @@ export function chunkMarkdown(markdown: string, maxChars = 1500, overlap = 150):
     const trimmedSection = section.trim()
     if (!trimmedSection) continue
 
-    if (currentChunk.length + trimmedSection.length > maxChars && currentChunk.length > 0) {
+    const wouldExceedMaxSize = currentChunk.length + trimmedSection.length > maxChars
+    const isCurrentChunkPopulated = currentChunk.length > 0
+
+    if (wouldExceedMaxSize && isCurrentChunkPopulated) {
       chunks.push(currentChunk.trim())
 
-      const overlapText = currentChunk.slice(-overlap).replace(/^---\s*/, '')
+      const overlapText = currentChunk.slice(-overlapChars).replace(/^---\s*/, '')
       currentChunk = overlapText + '\n\n' + trimmedSection
     } else {
-      currentChunk += (currentChunk ? '\n\n' : '') + trimmedSection
+      const separator = currentChunk ? '\n\n' : ''
+      currentChunk += separator + trimmedSection
     }
   }
 
-  if (currentChunk.trim().length > 0) {
-    chunks.push(currentChunk.trim())
+  const trimmedRemainingChunk = currentChunk.trim()
+  if (trimmedRemainingChunk.length > 0) {
+    chunks.push(trimmedRemainingChunk)
   }
 
+  const MAX_CHUNK_THRESHOLD = maxChars + 500
   return chunks.flatMap((chunk) => {
-    if (chunk.length <= maxChars + 500) return [chunk]
-
-    const subChunks: string[] = []
-    for (let i = 0; i < chunk.length; i += maxChars) {
-      subChunks.push(chunk.slice(i, i + maxChars))
+    if (chunk.length <= MAX_CHUNK_THRESHOLD) {
+      return [chunk]
     }
-    return subChunks
+
+    const oversizedSubChunks: string[] = []
+    for (let offset = 0; offset < chunk.length; offset += maxChars) {
+      oversizedSubChunks.push(chunk.slice(offset, offset + maxChars))
+    }
+    return oversizedSubChunks
   })
 }

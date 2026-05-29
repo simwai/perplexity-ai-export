@@ -1,5 +1,6 @@
+import { errorBus } from '../utils/error-bus.js'
 import { z } from 'zod'
-import { config } from '../utils/config.js'
+import { type Config } from '../utils/config.js'
 import { logger } from '../utils/logger.js'
 
 const embeddingItemSchema = z.object({ embedding: z.array(z.number()) })
@@ -21,22 +22,25 @@ export class OllamaClient {
     }
   }
 
-  async embed(texts: string[]): Promise<number[][]> {
-    if (texts.length === 0) return []
+  constructor(private readonly config: Config) {}
+
+  async embed(inputTexts: string[]): Promise<number[][]> {
+    const isInputEmpty = inputTexts.length === 0
+    if (isInputEmpty) return []
 
     const requestBody = {
-      model: config.ollamaEmbedModel,
-      input: texts,
+      model: this.config.ollamaEmbedModel,
+      input: inputTexts,
     }
 
     const responseData = await this.performOllamaHttpRequest('/v1/embeddings', requestBody)
     return this.parseEmbeddingsFromResponse(responseData)
   }
 
-  async generate(prompt: string, modelOverride?: string): Promise<string> {
+  async generate(promptText: string, modelOverride?: string): Promise<string> {
     const requestBody = {
-      model: modelOverride ?? config.ollamaModel,
-      prompt,
+      model: modelOverride ?? this.config.ollamaModel,
+      prompt: promptText,
       stream: false,
     }
 
@@ -50,53 +54,64 @@ export class OllamaClient {
     try {
       await this.embed(['ping'])
       logger.success('Ollama embeddings look good.')
-    } catch (_error) {
-      const message = _error instanceof Error ? _error.message : String(_error)
-      throw new OllamaClient.OllamaError(`Ollama validation failed: ${message}`)
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      throw new OllamaClient.OllamaError(`Ollama validation failed: ${errorMessage}`)
     }
   }
 
-  private async performOllamaHttpRequest(endpoint: string, body: object): Promise<unknown> {
-    const url = `${config.ollamaUrl}${endpoint}`
+  private async performOllamaHttpRequest(
+    apiEndpoint: string,
+    requestBody: object
+  ): Promise<unknown> {
+    const fullRequestUrl = `${this.config.ollamaUrl}${apiEndpoint}`
 
     try {
-      const response = await fetch(url, {
+      const httpResponse = await fetch(fullRequestUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
+        body: JSON.stringify(requestBody),
       })
 
-      if (!response.ok) {
-        let errorBody = ''
+      const isResponseSuccessful = httpResponse.ok
+      if (!isResponseSuccessful) {
+        let rawErrorBody = ''
         try {
-          errorBody = await response.text()
-        } catch (_errorReadingResponseBody) {
-          /* oxlint-disable-next-line no-empty */
+          rawErrorBody = await httpResponse.text()
+        } catch (_ignored) {
+          // Fallback to empty string if body reading fails
         }
-        logger.error(`Ollama HTTP ${response.status}`, { body, errorBody: errorBody.slice(0, 500) })
+
+        errorBus.emitError(`Ollama HTTP ${httpResponse.status}`, undefined, {
+          body: requestBody,
+          errorBody: rawErrorBody.slice(0, 500),
+        })
+
+        const errorExcerpt = rawErrorBody.slice(0, 200)
         throw new OllamaClient.OllamaError(
-          `Ollama request failed with status ${response.status} – ${errorBody.slice(0, 200)}`
+          `Ollama request failed with status ${httpResponse.status} – ${errorExcerpt}`
         )
       }
 
-      return await response.json()
-    } catch (_error) {
-      if (_error instanceof OllamaClient.OllamaError) throw _error
-      throw new OllamaClient.OllamaError(
-        `Network error while calling Ollama: ${_error instanceof Error ? _error.message : String(_error)}`
-      )
+      return await httpResponse.json()
+    } catch (error) {
+      const isOllamaError = error instanceof OllamaClient.OllamaError
+      if (isOllamaError) throw error
+
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      throw new OllamaClient.OllamaError(`Network error while calling Ollama: ${errorMessage}`)
     }
   }
 
-  private parseEmbeddingsFromResponse(data: unknown): number[][] {
-    const openAiResult = openAiFormatSchema.safeParse(data)
-    if (openAiResult.success) {
-      return openAiResult.data.data.map((item) => item.embedding)
+  private parseEmbeddingsFromResponse(responseData: unknown): number[][] {
+    const openAiParseResult = openAiFormatSchema.safeParse(responseData)
+    if (openAiParseResult.success) {
+      return openAiParseResult.data.data.map((item) => item.embedding)
     }
 
-    const legacyResult = legacyFormatSchema.safeParse(data)
-    if (legacyResult.success) {
-      return [legacyResult.data.embedding]
+    const legacyParseResult = legacyFormatSchema.safeParse(responseData)
+    if (legacyParseResult.success) {
+      return [legacyParseResult.data.embedding]
     }
 
     throw new OllamaClient.OllamaError('Unexpected response format from Ollama embeddings endpoint')

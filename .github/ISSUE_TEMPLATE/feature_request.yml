@@ -1,32 +1,35 @@
 name: '🚀 Feature Request'
-description: "Suggest a novel capability or enhancement for the system's evolution."
+description: "Propose a novel capability for the system's evolution."
 labels: ['enhancement']
 body:
   - type: markdown
     attributes:
       value: |
-        We are always seeking to expand the system's cognitive horizons. Please share your vision.
+        ### Expanding Cognitive Horizons
+        We are always seeking to enhance the system's intelligence and utility. Please share your vision for its next evolutionary step.
   - type: textarea
     id: problem
     attributes:
-      label: 'Problem Description'
-      description: "Is your request related to a specific limitation or a gap in the system's current functionality?"
+      label: 'Conceptual Limitation'
+      description: "Is your request related to a specific gap in the system's current functionality?"
+      placeholder: 'Where does the current system fall short of its potential?'
     validations:
       required: true
   - type: textarea
     id: solution
     attributes:
-      label: 'Proposed Evolutionary Path'
-      description: "Describe the new manifestation of intelligence or utility you'd like to see implemented."
+      label: 'Proposed Manifestation'
+      description: "Describe the new capability or utility you'd like to see implemented."
+      placeholder: 'How should this new intelligence behave?'
     validations:
       required: true
   - type: textarea
     id: alternatives
     attributes:
-      label: 'Alternative Approaches'
+      label: 'Alternative Evolutionary Paths'
       description: 'Have you considered other methods to achieve this outcome?'
   - type: textarea
     id: context
     attributes:
-      label: 'Additional Context'
+      label: 'Additional Theoretical Context'
       description: 'Any further conceptual or technical details to help us understand the vision.'

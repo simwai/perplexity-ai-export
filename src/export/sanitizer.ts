@@ -1,20 +1,22 @@
 import sanitize from 'sanitize-filename'
 
 export function sanitizeFilename(filename: string): string {
-  const illegalCharacterReplacement = '_'
-  const maximumFilenameLength = 100
+  const ILLEGAL_CHARACTER_REPLACEMENT = '_'
+  const MAXIMUM_FILENAME_LENGTH = 100
 
-  return sanitize(filename, {
-    replacement: illegalCharacterReplacement,
+  const safeFilename = sanitize(filename, {
+    replacement: ILLEGAL_CHARACTER_REPLACEMENT,
   })
-    .replace(/\s+/g, '_')
-    .substring(0, maximumFilenameLength)
+
+  return safeFilename
+    .replace(/\s+/g, ILLEGAL_CHARACTER_REPLACEMENT)
+    .substring(0, MAXIMUM_FILENAME_LENGTH)
 }
 
 export function sanitizeSpaceName(spaceName: string): string {
   return sanitizeFilename(spaceName)
 }
 
-export function sanitizeMarkdownContent(raw: string): string {
-  return raw || ''
+export function sanitizeMarkdownContent(rawMarkdown: string): string {
+  return rawMarkdown || ''
 }

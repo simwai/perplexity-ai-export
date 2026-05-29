@@ -1,6 +1,7 @@
 {
   "name": "perplexity-history-export",
   "version": "1.1.0",
+  "license": "PolyForm-Noncommercial-1.0.0",
   "type": "module",
   "scripts": {
     "dev": "tsx src/index.ts",
@@ -19,9 +20,12 @@
     "test:coverage": "vitest run --coverage",
     "test:ci": "vitest run --reporter=verbose",
     "prepare": "husky",
-    "commitlint": "commitlint --edit"
+    "commitlint": "commitlint --edit",
+    "benchmark": "tsx src/benchmark.ts"
   },
   "dependencies": {
+    "@huggingface/transformers": "~3.5.0",
+    "@inquirer/prompts": "^8.5.0",
     "@vscode/ripgrep": "^1.17.1",
     "chalk": "^5.6.2",
     "chromium-bidi": "^15.0.0",

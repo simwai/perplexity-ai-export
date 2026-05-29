@@ -1,3 +1,4 @@
+import { config } from '../../src/utils/config.js'
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest'
 import { rmSync, existsSync, mkdirSync, writeFileSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -57,7 +58,7 @@ describe.runIf(await isOllamaAvailable())('VectorStore Integration', () => {
   })
 
   it('should build index from markdown files with real Ollama embeddings', async () => {
-    const store = new VectorStore()
+    const store = new VectorStore(config)
 
     writeFileSync(
       join(TEST_EXPORTS, 'test-conv.md'),
@@ -74,7 +75,7 @@ describe.runIf(await isOllamaAvailable())('VectorStore Integration', () => {
   }, 30000)
 
   it('should chunk large files automatically during indexing', async () => {
-    const store = new VectorStore()
+    const store = new VectorStore(config)
 
     const largeContent = `# Large File\n\n**Space:** Test\n**ID:** large-1\n\n${'Lorem ipsum dolor sit amet consectetur adipiscing elit. '.repeat(100)}`
     writeFileSync(join(TEST_EXPORTS, 'large.md'), largeContent)
@@ -85,7 +86,7 @@ describe.runIf(await isOllamaAvailable())('VectorStore Integration', () => {
   }, 30000)
 
   it('should search and return relevant results with scores', async () => {
-    const store = new VectorStore()
+    const store = new VectorStore(config)
 
     writeFileSync(
       join(TEST_EXPORTS, 'typescript.md'),
@@ -103,7 +104,7 @@ describe.runIf(await isOllamaAvailable())('VectorStore Integration', () => {
   }, 30000)
 
   it('should handle empty exports directory gracefully', async () => {
-    const store = new VectorStore()
+    const store = new VectorStore(config)
     await expect(store.rebuildFromExports()).resolves.not.toThrow()
   })
 })

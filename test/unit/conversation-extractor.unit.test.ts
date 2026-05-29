@@ -1,70 +1,79 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { ConversationExtractor } from '../../src/scraper/conversation-extractor.js';
-import { ApiDiagnosticsWriter } from '../../src/utils/api-diagnostics.js';
-import type { BrowserContext } from '@playwright/test';
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { ConversationExtractor } from '../../src/scraper/conversation-extractor.js'
+import { ApiDiagnosticsWriter } from '../../src/utils/api-diagnostics.js'
+import type { BrowserContext } from '@playwright/test'
 
-vi.mock('../../src/utils/api-diagnostics.js', () => ({
-  ApiDiagnosticsWriter: {
-    writeFailure: vi.fn().mockResolvedValue(undefined),
-  },
-}));
+vi.mock('../../src/utils/api-diagnostics.js', () => {
+  return {
+    ApiDiagnosticsWriter: vi.fn().mockImplementation(function () {
+      return {
+        writeFailure: vi.fn().mockResolvedValue(undefined),
+      }
+    }),
+  }
+})
 
 describe('ConversationExtractor (Unit)', () => {
-  let extractor: ConversationExtractor;
-  let mockContext: BrowserContext;
+  let extractor: ConversationExtractor
+  let mockContext: BrowserContext
+  const mockConfig = {
+    waitMode: 'static',
+    rateLimitMs: 1000,
+    debug: true,
+  } as any
 
   beforeEach(() => {
     mockContext = {
       newPage: vi.fn(),
       pages: vi.fn(),
-    } as unknown as BrowserContext;
-    extractor = new ConversationExtractor(mockContext);
-    vi.clearAllMocks();
-  });
+    } as unknown as BrowserContext
+    extractor = new ConversationExtractor(mockConfig, mockContext)
+    vi.clearAllMocks()
+  })
 
   describe('ensureEntriesFormat', () => {
     it('should return array if input is array', () => {
-      const data = [{ query_str: 'test' }];
-      const result = (extractor as any).ensureEntriesFormat(data, 'http://test.com');
-      expect(result).toEqual(data);
-      expect(ApiDiagnosticsWriter.writeFailure).not.toHaveBeenCalled();
-    });
+      const data = [{ query_str: 'test' }]
+      const result = (extractor as any).ensureEntriesFormat(data, 'http://test.com')
+      expect(result).toEqual(data)
+      expect((extractor as any).diagnostics.writeFailure).not.toHaveBeenCalled()
+    })
 
     it('should return data.entries if input has entries array', () => {
-      const data = { entries: [{ query_str: 'test' }] };
-      const result = (extractor as any).ensureEntriesFormat(data, 'http://test.com');
-      expect(result).toEqual(data.entries);
-      expect(ApiDiagnosticsWriter.writeFailure).not.toHaveBeenCalled();
-    });
+      const data = { entries: [{ query_str: 'test' }] }
+      const result = (extractor as any).ensureEntriesFormat(data, 'http://test.com')
+      expect(result).toEqual(data.entries)
+      expect((extractor as any).diagnostics.writeFailure).not.toHaveBeenCalled()
+    })
 
     it('should return [data] if input has query_str', () => {
-      const data = { query_str: 'test' };
-      const result = (extractor as any).ensureEntriesFormat(data, 'http://test.com');
-      expect(result).toEqual([data]);
-      expect(ApiDiagnosticsWriter.writeFailure).not.toHaveBeenCalled();
-    });
+      const data = { query_str: 'test' }
+      const result = (extractor as any).ensureEntriesFormat(data, 'http://test.com')
+      expect(result).toEqual([data])
+      expect((extractor as any).diagnostics.writeFailure).not.toHaveBeenCalled()
+    })
 
     it('should return empty array and call diagnostics for unknown shape', () => {
-      const data = { foo: 'bar' };
-      const result = (extractor as any).ensureEntriesFormat(data, 'http://test.com');
-      expect(result).toEqual([]);
-      expect(ApiDiagnosticsWriter.writeFailure).toHaveBeenCalledWith({
+      const data = { foo: 'bar' }
+      const result = (extractor as any).ensureEntriesFormat(data, 'http://test.com')
+      expect(result).toEqual([])
+      expect((extractor as any).diagnostics.writeFailure).toHaveBeenCalledWith({
         url: 'http://test.com',
         errorType: 'unknown_shape',
-      });
-    });
-  });
+      })
+    })
+  })
 
   describe('parseConversationData', () => {
     it('should return null and call diagnostics if entries are empty', () => {
-      const data = { entries: [] };
-      const result = extractor.parseConversationData(data, 'http://test.com');
-      expect(result).toBeNull();
-      expect(ApiDiagnosticsWriter.writeFailure).toHaveBeenCalledWith({
+      const data = { entries: [] }
+      const result = extractor.parseConversationData(data, 'http://test.com')
+      expect(result).toBeNull()
+      expect((extractor as any).diagnostics.writeFailure).toHaveBeenCalledWith({
         url: 'http://test.com',
         errorType: 'empty_entries',
-      });
-    });
+      })
+    })
 
     it('should parse valid entries correctly', () => {
       const data = {
@@ -75,22 +84,12 @@ describe('ConversationExtractor (Unit)', () => {
             blocks: [{ markdown_block: { answer: '2' } }],
           },
         ],
-      };
-      const result = extractor.parseConversationData(data, 'https://perplexity.ai/search/uuid');
-      expect(result).not.toBeNull();
-      expect(result?.title).toBe('Test Thread');
-      expect(result?.content).toContain('What is 1+1?');
-      expect(result?.content).toContain('2');
-    });
-  });
-});
-
-describe('ApiDiagnosticsWriter (Unit)', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it('should exist and have writeFailure method', () => {
-    expect(ApiDiagnosticsWriter.writeFailure).toBeDefined();
-  });
-});
+      }
+      const result = extractor.parseConversationData(data, 'https://perplexity.ai/search/uuid')
+      expect(result).not.toBeNull()
+      expect(result?.title).toBe('Test Thread')
+      expect(result?.content).toContain('What is 1+1?')
+      expect(result?.content).toContain('2')
+    })
+  })
+})
