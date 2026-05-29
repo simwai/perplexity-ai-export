@@ -17,9 +17,7 @@ describe('ConversationExtractor Hashing (Unit)', () => {
   })
 
   it('should generate the same hash for identical entries', () => {
-    const entries = [
-      { id: '1', query_str: 'test', blocks: [{ markdown_block: { answer: 'hi' } }] }
-    ]
+    const entries = [{ id: '1', query_str: 'test', blocks: [{ markdown_block: { answer: 'hi' } }] }]
     const hash1 = (extractor as any).hashEntries(entries)
     const hash2 = (extractor as any).hashEntries(entries)
     expect(hash1).toBe(hash2)
@@ -28,10 +26,10 @@ describe('ConversationExtractor Hashing (Unit)', () => {
 
   it('should generate different hashes for different entries', () => {
     const entries1 = [
-      { id: '1', query_str: 'test', blocks: [{ markdown_block: { answer: 'hi' } }] }
+      { id: '1', query_str: 'test', blocks: [{ markdown_block: { answer: 'hi' } }] },
     ]
     const entries2 = [
-      { id: '1', query_str: 'test', blocks: [{ markdown_block: { answer: 'hello' } }] }
+      { id: '1', query_str: 'test', blocks: [{ markdown_block: { answer: 'hello' } }] },
     ]
     const hash1 = (extractor as any).hashEntries(entries1)
     const hash2 = (extractor as any).hashEntries(entries2)
@@ -39,12 +37,8 @@ describe('ConversationExtractor Hashing (Unit)', () => {
   })
 
   it('should be stable regardless of key order in entries', () => {
-    const entries1 = [
-      { a: 1, b: 2 }
-    ]
-    const entries2 = [
-      { b: 2, a: 1 }
-    ]
+    const entries1 = [{ a: 1, b: 2 }]
+    const entries2 = [{ b: 2, a: 1 }]
     const hash1 = (extractor as any).hashEntries(entries1)
     const hash2 = (extractor as any).hashEntries(entries2)
     expect(hash1).toBe(hash2)

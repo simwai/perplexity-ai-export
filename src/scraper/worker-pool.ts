@@ -13,76 +13,80 @@ interface ExtractionWorker {
 }
 
 export class WorkerPool {
-  private workers: ExtractionWorker[] = []
-  private checkpointManager: CheckpointManager
-  private browser: Browser
-  private fileWriter: FileWriter
+  private readonly workers: ExtractionWorker[] = []
+  private readonly fileWriter: FileWriter
   private sharedBrowserContext: BrowserContext | null = null
-  private config: Config
 
-  constructor(config: Config, checkpointManager: CheckpointManager, browser: Browser) {
-    this.config = config
-    this.checkpointManager = checkpointManager
-    this.browser = browser
+  constructor(
+    private readonly config: Config,
+    private readonly checkpointManager: CheckpointManager,
+    private readonly browser: Browser
+  ) {
     this.fileWriter = new FileWriter(config)
   }
 
   async initialize(): Promise<void> {
     try {
       this.sharedBrowserContext = await this.browser.newContext()
-      for (let i = 0; i < this.config.parallelWorkers; i++) {
-        const conversationExtractor = new ConversationExtractor(
-          this.config,
-          this.sharedBrowserContext
-        )
+
+      const workerCount = this.config.parallelWorkers
+      for (let i = 0; i < workerCount; i++) {
+        const extractor = new ConversationExtractor(this.config, this.sharedBrowserContext)
         this.workers.push({
           id: i,
-          extractor: conversationExtractor,
+          extractor: extractor,
           isBusy: false,
         })
       }
-    } catch (_error) {
-      errorBus.emitError('Failed to initialize worker pool', _error)
-      throw _error
+    } catch (error) {
+      errorBus.emitError('Failed to initialize worker pool', error)
+      throw error
     }
   }
 
-  async processConversations(conversations: ConversationMeta[]): Promise<void> {
-    const queue = [...conversations]
-    const activeTasks: Promise<void>[] = []
+  async processConversations(conversationsToProcess: ConversationMeta[]): Promise<void> {
+    const conversationQueue = [...conversationsToProcess]
+    const activeExtractionTasks: Promise<void>[] = []
 
-    while (queue.length > 0 || activeTasks.length > 0) {
-      const availableWorker = this.workers.find((w) => !w.isBusy)
+    while (conversationQueue.length > 0 || activeExtractionTasks.length > 0) {
+      const availableWorker = this.workers.find((worker) => !worker.isBusy)
 
-      if (availableWorker && queue.length > 0) {
-        const conversation = queue.shift()!
+      const shouldStartNewTask = availableWorker && conversationQueue.length > 0
+      if (shouldStartNewTask) {
+        const conversationMetadata = conversationQueue.shift()!
         availableWorker.isBusy = true
 
-        const task = (async () => {
+        const extractionTask = (async () => {
           try {
-            const result = await availableWorker.extractor.extract(conversation.url)
-            const existingHash = this.checkpointManager.getContentHash(conversation.id)
+            const extractionResult = await availableWorker.extractor.extract(
+              conversationMetadata.url
+            )
+            const existingContentHash = this.checkpointManager.getContentHash(
+              conversationMetadata.id
+            )
 
-            if (existingHash && existingHash === result.contentHash) {
-              this.checkpointManager.markAsProcessed(conversation.id)
-              const progress = this.checkpointManager.getProcessingProgress()
-              logger.info(
-                `[${progress.processed}/${progress.total}] Up to date: ${result.title} (skipped write)`
-              )
+            const isUpToDate =
+              existingContentHash && existingContentHash === extractionResult.contentHash
+            const currentProgress = this.checkpointManager.getProcessingProgress()
+            const progressLabel = `[${currentProgress.processed}/${currentProgress.total}]`
+
+            if (isUpToDate) {
+              this.checkpointManager.markAsProcessed(conversationMetadata.id)
+              logger.info(`${progressLabel} Up to date: ${extractionResult.title} (skipped write)`)
             } else {
-              await this.fileWriter.write(result)
-              this.checkpointManager.markAsProcessed(conversation.id, result.contentHash)
-              const progress = this.checkpointManager.getProcessingProgress()
-              logger.info(`[${progress.processed}/${progress.total}] Processed: ${result.title}`)
+              await this.fileWriter.write(extractionResult)
+              this.checkpointManager.markAsProcessed(
+                conversationMetadata.id,
+                extractionResult.contentHash
+              )
+              logger.info(`${progressLabel} Processed: ${extractionResult.title}`)
             }
-          } catch (_error) {
-            errorBus.emitError(`Failed to process ${conversation.url}`, _error)
+          } catch (error) {
+            errorBus.emitError(`Failed to process ${conversationMetadata.url}`, error)
 
-            // If the context is dead, we need to refresh the pool
-            if (
-              _error instanceof Error &&
-              _error.message.includes('context is no longer available')
-            ) {
+            const isContextLostError =
+              error instanceof Error && error.message.includes('context is no longer available')
+            if (isContextLostError) {
               logger.warn('Browser context lost. Refreshing worker context...')
               await this.refreshContext()
             }
@@ -91,36 +95,45 @@ export class WorkerPool {
           }
         })()
 
-        activeTasks.push(task)
-        // Clean up completed tasks
-        task.finally(() => {
-          const index = activeTasks.indexOf(task)
-          if (index > -1) activeTasks.splice(index, 1)
+        activeExtractionTasks.push(extractionTask)
+
+        extractionTask.finally(() => {
+          const taskIndex = activeExtractionTasks.indexOf(extractionTask)
+          const isTaskInList = taskIndex > -1
+          if (isTaskInList) {
+            activeExtractionTasks.splice(taskIndex, 1)
+          }
         })
       } else {
-        // Wait for a worker to become available
-        await new Promise((resolve) => setTimeout(resolve, 100))
+        const POLLING_INTERVAL_MS = 100
+        await new Promise((resolve) => setTimeout(resolve, POLLING_INTERVAL_MS))
       }
     }
   }
 
   async close(): Promise<void> {
-    if (this.sharedBrowserContext) {
-      await this.sharedBrowserContext.close().catch(() => {})
+    const isContextOpen = !!this.sharedBrowserContext
+    if (isContextOpen) {
+      await this.sharedBrowserContext!.close().catch(() => {
+        // Silently handle close errors
+      })
     }
   }
 
   private async refreshContext(): Promise<void> {
     try {
-      if (this.sharedBrowserContext) {
-        await this.sharedBrowserContext.close().catch(() => {})
+      const isContextOpen = !!this.sharedBrowserContext
+      if (isContextOpen) {
+        await this.sharedBrowserContext!.close().catch(() => {})
       }
+
       this.sharedBrowserContext = await this.browser.newContext()
+
       for (const worker of this.workers) {
-        worker.extractor = new ConversationExtractor(this.config, this.sharedBrowserContext!)
+        worker.extractor = new ConversationExtractor(this.config, this.sharedBrowserContext)
       }
-    } catch (_error) {
-      errorBus.emitError('Failed to refresh worker context', _error)
+    } catch (error) {
+      errorBus.emitError('Failed to refresh worker context', error)
     }
   }
 }

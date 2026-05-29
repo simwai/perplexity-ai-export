@@ -7,33 +7,54 @@ import chalk from 'chalk'
 import { join } from 'node:path'
 import { type Config } from '../utils/config.js'
 
-// Cross-encoder reranker — loaded lazily on first use (downloads ~85MB ONNX model once)
-let _tokenizer: any = null
-let _model: any = null
+let crossEncoderTokenizer: any = null
+let crossEncoderModel: any = null
 
 async function getCrossEncoder() {
-  if (!_tokenizer || !_model) {
-    // @ts-expect-error — optional peer dep, gracefully skipped if not installed
-    const { AutoTokenizer, AutoModelForSequenceClassification } =
-      await import('@huggingface/transformers').catch(() => null)
-    if (!AutoTokenizer) return null
-    _tokenizer = await AutoTokenizer.from_pretrained('Xenova/ms-marco-MiniLM-L-6-v2')
-    _model = await AutoModelForSequenceClassification.from_pretrained(
-      'Xenova/ms-marco-MiniLM-L-6-v2',
-      { dtype: 'int8' }
-    )
+  const isAlreadyLoaded = crossEncoderTokenizer && crossEncoderModel
+  if (isAlreadyLoaded) {
+    return { tokenizer: crossEncoderTokenizer, model: crossEncoderModel }
   }
-  return { tokenizer: _tokenizer, model: _model }
+
+  const transformers = await import('@huggingface/transformers').catch(() => null)
+  const isTransformersInstalled =
+    transformers && transformers.AutoTokenizer && transformers.AutoModelForSequenceClassification
+
+  if (!isTransformersInstalled) {
+    return null
+  }
+
+  const { AutoTokenizer, AutoModelForSequenceClassification } = transformers
+
+  crossEncoderTokenizer = await AutoTokenizer.from_pretrained('Xenova/ms-marco-MiniLM-L-6-v2')
+  crossEncoderModel = await AutoModelForSequenceClassification.from_pretrained(
+    'Xenova/ms-marco-MiniLM-L-6-v2',
+    { dtype: 'int8' }
+  )
+
+  return { tokenizer: crossEncoderTokenizer, model: crossEncoderModel }
+}
+
+interface ResearchPlan {
+  strategy: 'precise' | 'exhaustive'
+  queries: string[]
+  hardKeywords: string[]
+  hydePassage: string
+  filters: Record<string, unknown>
+}
+
+interface ExtractedFact {
+  fact: string
+  source_title: string
+  thread: string
 }
 
 export class RagOrchestrator {
-  private vectorStore: VectorStore
-  private ollamaClient: OllamaClient
-  private ripgrep: RgSearch
-  private config: Config
+  private readonly vectorStore: VectorStore
+  private readonly ollamaClient: OllamaClient
+  private readonly ripgrep: RgSearch
 
-  constructor(config: Config) {
-    this.config = config
+  constructor(private readonly config: Config) {
     this.vectorStore = new VectorStore(config)
     this.ollamaClient = new OllamaClient(config)
     this.ripgrep = new RgSearch(config)
@@ -44,16 +65,17 @@ export class RagOrchestrator {
 
     try {
       const researchPlan = await this.developResearchPlan(question)
-      const exhaustiveMode = researchPlan.strategy === 'exhaustive'
+      const isExhaustiveMode = researchPlan.strategy === 'exhaustive'
 
       logger.info(`Plan: ${chalk.bold.yellow(researchPlan.strategy.toUpperCase())}`)
-      if (exhaustiveMode) {
+      if (isExhaustiveMode) {
         logger.warn(
           `Exhaustive mode enabled. This may take a while as I'll be doing a deep dive into your history.`
         )
       }
 
-      if (researchPlan.hardKeywords?.length) {
+      const hasHardKeywords = researchPlan.hardKeywords?.length > 0
+      if (hasHardKeywords) {
         logger.info(`Hard Keywords detected: ${chalk.gray(researchPlan.hardKeywords.join(', '))}`)
       }
 
@@ -66,7 +88,7 @@ export class RagOrchestrator {
       const contextFacts = await this.extractFactsWithGranularMapReduce(
         question,
         rerankedResults,
-        exhaustiveMode
+        isExhaustiveMode
       )
 
       logger.info(`Synthesizing final answer from ${contextFacts.length} verified facts...`)
@@ -81,23 +103,18 @@ export class RagOrchestrator {
 
       this.displaySourceProvenance(contextFacts)
 
-      const feedback = await this.verifyAnswerQuality(question, finalAnswer, contextFacts)
-      if (feedback.status === 'improvement-needed') {
+      const feedback = await this.verifyAnswerQuality(question, finalAnswer)
+      const isImprovementSuggested = feedback.status === 'improvement-needed'
+      if (isImprovementSuggested) {
         logger.warn(`Self-Correction: ${chalk.gray(feedback.suggestion)}`)
       }
-    } catch (_error) {
-      const errorMessage = _error instanceof Error ? _error.message : String(_error)
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error)
       errorBus.emitError(`Mightiest RAG failed: ${errorMessage}`)
     }
   }
 
-  private async developResearchPlan(originalQuestion: string): Promise<{
-    strategy: 'precise' | 'exhaustive'
-    queries: string[]
-    hardKeywords: string[]
-    hydePassage: string
-    filters: Record<string, unknown>
-  }> {
+  private async developResearchPlan(originalQuestion: string): Promise<ResearchPlan> {
     const plannerPrompt = `
 Analyze: "${originalQuestion}"
 1. Strategy: "precise" (specific facts) or "exhaustive" (broad summary/entity history).
@@ -108,15 +125,16 @@ Return JSON: {"strategy": "...", "queries": [], "hardKeywords": [], "hydePassage
 `
     try {
       const response = await this.ollamaClient.generate(plannerPrompt)
-      const json = JSON.parse(response.match(/\{[\s\S]*\}/)?.[0] || '{}')
+      const planJson = this.parseJsonFromResponse(response, {})
+
       return {
-        strategy: json.strategy || 'precise',
-        queries: json.queries || [originalQuestion],
-        hardKeywords: json.hardKeywords || [],
-        hydePassage: json.hydePassage || '',
-        filters: json.filters || {},
+        strategy: planJson.strategy || 'precise',
+        queries: planJson.queries || [originalQuestion],
+        hardKeywords: planJson.hardKeywords || [],
+        hydePassage: planJson.hydePassage || '',
+        filters: planJson.filters || {},
       }
-    } catch (_err) {
+    } catch (error) {
       return {
         strategy: 'precise',
         queries: [originalQuestion],
@@ -127,185 +145,198 @@ Return JSON: {"strategy": "...", "queries": [], "hardKeywords": [], "hydePassage
     }
   }
 
-  private async executeAdaptiveHybridSearch(plan: {
-    queries: string[]
-    hardKeywords: string[]
-    hydePassage: string
-  }): Promise<VectorSearchResult[]> {
+  private async executeAdaptiveHybridSearch(plan: ResearchPlan): Promise<VectorSearchResult[]> {
     const searchPools: VectorSearchResult[][] = []
 
     for (let i = 0; i < (plan.queries || []).length; i++) {
-      const q = plan.queries[i]!
-      logger.debug(`Executing semantic search [${i + 1}/${plan.queries.length}]: "${q}"`)
-      const res = await this.vectorStore.search(q, 40)
-      searchPools.push(res)
+      const searchQuery = plan.queries[i]!
+      logger.debug(`Executing semantic search [${i + 1}/${plan.queries.length}]: "${searchQuery}"`)
+      const vectorResults = await this.vectorStore.search(searchQuery, 40)
+      searchPools.push(vectorResults)
     }
 
-    // HyDE: search using the hypothetical document passage for better semantic match
     if (plan.hydePassage) {
       logger.debug(`Executing HyDE search: "${plan.hydePassage.slice(0, 60)}..."`)
       const hydeResults = await this.vectorStore.search(plan.hydePassage, 40)
       searchPools.push(hydeResults)
     }
 
-    const keywordPool: VectorSearchResult[] = []
-    for (let i = 0; i < (plan.hardKeywords || []).length; i++) {
-      const k = plan.hardKeywords[i]!
-      logger.debug(`Executing keyword search [${i + 1}/${plan.hardKeywords.length}]: "${k}"`)
+    const keywordMatchPool: VectorSearchResult[] = []
+    for (const hardKeyword of plan.hardKeywords || []) {
+      logger.debug(`Executing keyword search: "${hardKeyword}"`)
       try {
-        const matches = await this.ripgrep.captureSearchMatches({ pattern: k })
-        const converted: VectorSearchResult[] = matches.map((m) => ({
+        const matches = await this.ripgrep.captureSearchMatches({ pattern: hardKeyword })
+        const convertedMatches: VectorSearchResult[] = matches.map((match) => ({
           meta: {
-            path: join(this.config.exportDir, m.path),
-            snippet: m.text,
-            title: m.path.split('/').pop() || 'Untitled',
-            id: m.path + m.line,
+            path: join(this.config.exportDir, match.path),
+            snippet: match.text,
+            title: match.path.split('/').pop() || 'Untitled',
+            id: match.path + match.line,
           },
           score: 1.0,
         }))
-        keywordPool.push(...converted)
-      } catch (_err) {
-        /* oxlint-disable-next-line no-empty */
+        keywordMatchPool.push(...convertedMatches)
+      } catch (error) {
+        // Silently skip failed keyword searches
       }
     }
 
-    if (keywordPool.length > 0) {
-      searchPools.push(keywordPool)
+    const hasKeywordResults = keywordMatchPool.length > 0
+    if (hasKeywordResults) {
+      searchPools.push(keywordMatchPool)
     }
 
     return this.mergeAndFusionRank(searchPools)
   }
 
   private mergeAndFusionRank(pools: VectorSearchResult[][]): VectorSearchResult[] {
-    const scores = new Map<string, { res: VectorSearchResult; score: number }>()
+    const fusionScores = new Map<string, { result: VectorSearchResult; totalScore: number }>()
+
     pools.forEach((pool) => {
-      pool.forEach((res, rank) => {
-        const path = res.meta['path'] || 'unknown'
-        const snippet = res.meta['snippet'] || ''
-        const id = res.meta['id'] || `${path}:${snippet}`
-        const s = 1 / (60 + rank)
-        if (scores.has(id)) {
-          scores.get(id)!.score += s
+      pool.forEach((result, rank) => {
+        const path = result.meta['path'] || 'unknown'
+        const snippet = result.meta['snippet'] || ''
+        const uniqueId = result.meta['id'] || `${path}:${snippet}`
+
+        const rankScore = 1 / (60 + rank)
+        const existingEntry = fusionScores.get(uniqueId)
+
+        if (existingEntry) {
+          existingEntry.totalScore += rankScore
         } else {
-          scores.set(id, { res, score: s })
+          fusionScores.set(uniqueId, { result, totalScore: rankScore })
         }
       })
     })
-    return Array.from(scores.values())
-      .sort((a, b) => b.score - a.score)
-      .map((v) => v.res)
+
+    return Array.from(fusionScores.values())
+      .sort((a, b) => b.totalScore - a.totalScore)
+      .map((entry) => entry.result)
   }
 
-  /**
-   * Cross-encoder reranking using Xenova/ms-marco-MiniLM-L-6-v2 (ONNX, runs locally).
-   * Gracefully falls back to original order if @huggingface/transformers is not installed.
-   * Install: npm install @huggingface/transformers
-   */
   private async crossEncoderRerank(
     question: string,
     results: VectorSearchResult[]
   ): Promise<VectorSearchResult[]> {
-    if (results.length === 0) return results
+    const isResultsEmpty = results.length === 0
+    if (isResultsEmpty) return results
 
-    const ce = await getCrossEncoder()
-    if (!ce) {
+    const crossEncoder = await getCrossEncoder()
+    if (!crossEncoder) {
       logger.debug(
         'Cross-encoder not available (run: npm install @huggingface/transformers). Skipping rerank.'
       )
       return results
     }
 
-    const { tokenizer, model } = ce
+    const { tokenizer, model } = crossEncoder
     logger.info(`Cross-encoder reranking ${results.length} candidates...`)
 
-    const BATCH_SIZE = 64
-    const scores: number[] = new Array(results.length).fill(0)
+    const RERANK_BATCH_SIZE = 64
+    const rerankScores: number[] = new Array(results.length).fill(0)
 
-    for (let i = 0; i < results.length; i += BATCH_SIZE) {
-      const batch = results.slice(i, i + BATCH_SIZE)
-      const pairs = batch.map((r) => [question, (r.meta['snippet'] as string) || ''])
-      const inputs = await tokenizer(
-        pairs.map((p) => p[0]),
+    for (let i = 0; i < results.length; i += RERANK_BATCH_SIZE) {
+      const currentBatch = results.slice(i, i + RERANK_BATCH_SIZE)
+      const inputPairs = currentBatch.map((res) => [
+        question,
+        (res.meta['snippet'] as string) || '',
+      ])
+
+      const tokenizedInputs = await tokenizer(
+        inputPairs.map((pair) => pair[0]),
         {
-          text_pair: pairs.map((p) => p[1]),
+          text_pair: inputPairs.map((pair) => pair[1]),
           padding: true,
           truncation: true,
         }
       )
-      const output = await model(inputs)
-      // Read raw logits directly — do NOT use pipeline() which returns score: 1.0 always
-      const logits: number[] = Array.from(output.logits.data as Float32Array)
-      logits.forEach((s, j) => {
-        scores[i + j] = s
+
+      const modelOutput = await model(tokenizedInputs)
+      const batchLogits: number[] = Array.from(modelOutput.logits.data as Float32Array)
+
+      batchLogits.forEach((logit, offset) => {
+        rerankScores[i + offset] = logit
       })
     }
 
     return results
-      .map((res, i) => ({ res, score: scores[i]! }))
-      .sort((a, b) => b.score - a.score)
-      .map((v) => v.res)
+      .map((result, index) => ({ result, rerankScore: rerankScores[index]! }))
+      .sort((a, b) => b.rerankScore - a.rerankScore)
+      .map((entry) => entry.result)
   }
 
   private async extractFactsWithGranularMapReduce(
     question: string,
     results: VectorSearchResult[],
-    exhaustive: boolean
-  ): Promise<any[]> {
-    // Bumped from 20 → 35 in precise mode to reduce missed details
-    const poolLimit = exhaustive ? 60 : 35
-    const pool = results.slice(0, poolLimit)
-    if (pool.length === 0) return []
+    isExhaustive: boolean
+  ): Promise<ExtractedFact[]> {
+    const POOL_LIMIT_EXHAUSTIVE = 60
+    const POOL_LIMIT_PRECISE = 35
+    const poolLimit = isExhaustive ? POOL_LIMIT_EXHAUSTIVE : POOL_LIMIT_PRECISE
 
-    const findings: unknown[] = []
-    const batchSize = 10
-    const totalBatches = Math.ceil(pool.length / batchSize)
+    const processingPool = results.slice(0, poolLimit)
+    const isPoolEmpty = processingPool.length === 0
+    if (isPoolEmpty) return []
 
-    for (let i = 0, batchIdx = 0; i < pool.length; i += batchSize, batchIdx++) {
-      const batch = pool.slice(i, i + batchSize)
-      logger.info(`Analyzing history snippets... batch ${batchIdx + 1} of ${totalBatches}`)
+    const extractedFindings: ExtractedFact[] = []
+    const ANALYSIS_BATCH_SIZE = 10
+    const totalBatches = Math.ceil(processingPool.length / ANALYSIS_BATCH_SIZE)
+
+    for (
+      let batchStartIndex = 0, batchNumber = 1;
+      batchStartIndex < processingPool.length;
+      batchStartIndex += ANALYSIS_BATCH_SIZE, batchNumber++
+    ) {
+      const currentBatch = processingPool.slice(
+        batchStartIndex,
+        batchStartIndex + ANALYSIS_BATCH_SIZE
+      )
+      logger.info(`Analyzing history snippets... batch ${batchNumber} of ${totalBatches}`)
 
       const researchPrompt = `
 You are the Researcher. Analyze these snippets from the user's history for the question: "${question}"
 Context:
-${batch.map((r, j) => `[Node ${i + j}] ${r.meta['title']}: ${r.meta['snippet']}`).join('\n\n')}
+${currentBatch.map((res, index) => `[Node ${batchStartIndex + index}] ${res.meta['title']}: ${res.meta['snippet']}`).join('\n\n')}
 
 Extract every specific fact, mention, date, or piece of code.
 Return JSON array: [{"fact": "...", "node_id": N, "thread": "..."}]
 `
       try {
         const response = await this.ollamaClient.generate(researchPrompt)
-        const extracted = JSON.parse(response.match(/\[[\s\S]*\]/)?.[0] || '[]')
-        extracted.forEach((f: any) => {
-          const original = pool[f.node_id - i]
-          findings.push({
-            fact: f.fact,
-            source_title: original?.meta['title'] || f.thread || 'Unknown',
-            thread: f.thread || original?.meta['title'] || 'Unknown',
+        const extractedFacts = this.parseJsonFromResponse(response, [])
+
+        extractedFacts.forEach((factEntry: any) => {
+          const originalSnippet = processingPool[factEntry.node_id]
+          extractedFindings.push({
+            fact: factEntry.fact,
+            source_title: originalSnippet?.meta['title'] || factEntry.thread || 'Unknown',
+            thread: factEntry.thread || originalSnippet?.meta['title'] || 'Unknown',
           })
         })
-      } catch (_err) {
-        batch.forEach((r) => {
-          findings.push({
-            fact: r.meta['snippet'],
-            source_title: r.meta['title'],
+      } catch (error) {
+        currentBatch.forEach((res) => {
+          extractedFindings.push({
+            fact: res.meta['snippet'] as string,
+            source_title: res.meta['title'] as string,
+            thread: res.meta['title'] as string,
           })
         })
       }
     }
 
-    return findings
+    return extractedFindings
   }
 
   private async generateMightiestResponse(
     question: string,
-    findings: unknown[],
+    extractedFacts: ExtractedFact[],
     strategy: string
   ): Promise<string> {
-    const prompt = `
+    const synthesisPrompt = `
 You are the Narrator. Synthesize these research findings into a cohesive, mightiest answer for: "${question}"
 Strategy: ${strategy}
 Findings:
-${findings.map((f: any, i) => `[Find ${i}] (${f.source_title}): ${f.fact}`).join('\n')}
+${extractedFacts.map((fact, index) => `[Find ${index}] (${fact.source_title}): ${fact.fact}`).join('\n')}
 
 INSTRUCTIONS:
 1. Provide a comprehensive, authoritative response.
@@ -315,23 +346,24 @@ INSTRUCTIONS:
 
 ANSWER:
 `
-    return this.ollamaClient.generate(prompt)
+    return this.ollamaClient.generate(synthesisPrompt)
   }
 
-  private displaySourceProvenance(facts: unknown[]): void {
-    const uniqueThreads = new Set(facts.map((f: any) => f.source_title))
-    if (uniqueThreads.size > 0) {
+  private displaySourceProvenance(extractedFacts: ExtractedFact[]): void {
+    const uniqueSourceTitles = new Set(extractedFacts.map((fact) => fact.source_title))
+    const hasSources = uniqueSourceTitles.size > 0
+
+    if (hasSources) {
       console.log(`\n${chalk.bold.cyan('History Sources Explored:')}`)
-      uniqueThreads.forEach((t) => console.log(` - ${t}`))
+      uniqueSourceTitles.forEach((title) => console.log(` - ${title}`))
     }
   }
 
   private async verifyAnswerQuality(
     question: string,
-    answer: string,
-    _facts: unknown[]
+    answer: string
   ): Promise<{ status: string; suggestion?: string }> {
-    const prompt = `
+    const verificationPrompt = `
 Verify the answer.
 Question: "${question}"
 Answer: "${answer.slice(0, 500)}..."
@@ -339,10 +371,22 @@ Did I miss anything important?
 Return JSON: {"status": "ok" | "missed-info", "suggestion": "..."}
 `
     try {
-      const res = await this.ollamaClient.generate(prompt)
-      return JSON.parse(res.match(/\{[\s\S]*\}/)?.[0] || '{"status": "ok"}')
-    } catch (_err) {
+      const verificationResponse = await this.ollamaClient.generate(verificationPrompt)
+      return this.parseJsonFromResponse(verificationResponse, { status: 'ok' })
+    } catch (error) {
       return { status: 'ok' }
     }
+  }
+
+  private parseJsonFromResponse(response: string, defaultValue: any): any {
+    const jsonMatch = response.match(/(\{[\s\S]*\}|\[[\s\S]*\])/)
+    if (jsonMatch?.[0]) {
+      try {
+        return JSON.parse(jsonMatch[0])
+      } catch (error) {
+        return defaultValue
+      }
+    }
+    return defaultValue
   }
 }

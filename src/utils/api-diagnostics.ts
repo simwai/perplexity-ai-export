@@ -11,26 +11,28 @@ export interface ApiDiagnosticEntry {
 }
 
 export class ApiDiagnosticsWriter {
-  private readonly debugDir = 'debug'
-  private readonly logFile = 'api-diagnostics.jsonl'
+  private readonly DEBUG_DIRECTORY = 'debug'
+  private readonly DIAGNOSTICS_FILENAME = 'api-diagnostics.jsonl'
 
-  constructor(private config: Config) {}
+  constructor(private readonly config: Config) {}
 
   async writeFailure(entry: Omit<ApiDiagnosticEntry, 'timestamp'>): Promise<void> {
     if (!this.config.debug) return
 
     try {
-      const fullEntry: ApiDiagnosticEntry = {
+      const diagnosticEntry: ApiDiagnosticEntry = {
         timestamp: new Date().toISOString(),
         ...entry,
       }
 
-      await fs.mkdir(this.debugDir, { recursive: true })
-      const logPath = path.join(this.debugDir, this.logFile)
-      await fs.appendFile(logPath, JSON.stringify(fullEntry) + '\n', 'utf8')
+      await fs.mkdir(this.DEBUG_DIRECTORY, { recursive: true })
+      const diagnosticLogPath = path.join(this.DEBUG_DIRECTORY, this.DIAGNOSTICS_FILENAME)
+
+      const entryAsJsonLine = JSON.stringify(diagnosticEntry) + '\n'
+      await fs.appendFile(diagnosticLogPath, entryAsJsonLine, 'utf8')
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      logger.warn(`Failed to write API diagnostic: ${message}`)
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      logger.warn(`Failed to write API diagnostic: ${errorMessage}`)
     }
   }
 }

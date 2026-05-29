@@ -25,21 +25,16 @@ export class LibraryDiscovery {
     }
   }
 
-  private config: Config
-
-  constructor(config: Config) {
-    this.config = config
-  }
+  constructor(private readonly config: Config) {}
 
   async discoverAllConversationsFromLibrary(page: Page): Promise<ConversationMeta[]> {
-    const perplexityLibraryUrl = 'https://www.perplexity.ai/library'
+    const PERPLEXITY_LIBRARY_URL = 'https://www.perplexity.ai/library'
     logger.info('Discovering threads via REST API...')
 
-    await page.goto(perplexityLibraryUrl)
+    await page.goto(PERPLEXITY_LIBRARY_URL)
     await page.waitForLoadState('domcontentloaded')
 
     const activeApiVersion = await this.detectCurrentApiVersion(page)
-
     const discoveredConversations = await this.paginateAndFetchAllThreads(page, activeApiVersion)
 
     logger.success(`Discovered ${discoveredConversations.length} threads`)
@@ -47,7 +42,7 @@ export class LibraryDiscovery {
   }
 
   private async detectCurrentApiVersion(page: Page): Promise<string> {
-    const defaultFallbackVersion = '2.18'
+    const FALLBACK_API_VERSION = '2.18'
 
     try {
       const interceptedRequest = await page.waitForRequest(
@@ -56,19 +51,19 @@ export class LibraryDiscovery {
       )
 
       const requestUrl = interceptedRequest.url()
-      const versionQueryParameterMatch = requestUrl.match(/[?&]version=([^&]+)/)
+      const versionMatch = requestUrl.match(/[?&]version=([^&]+)/)
 
-      if (versionQueryParameterMatch?.[1]) {
-        const detectedVersion = versionQueryParameterMatch[1]
+      const detectedVersion = versionMatch?.[1]
+      if (detectedVersion) {
         logger.info(`Discovered API version: ${detectedVersion}`)
         return detectedVersion
       }
 
       logger.warn('Found list_ask_threads request but no version parameter, using fallback')
-      return defaultFallbackVersion
+      return FALLBACK_API_VERSION
     } catch (_error) {
       logger.warn('No list_ask_threads request detected, using fallback version')
-      return defaultFallbackVersion
+      return FALLBACK_API_VERSION
     }
   }
 
@@ -76,7 +71,7 @@ export class LibraryDiscovery {
     page: Page,
     apiVersion: string
   ): Promise<ConversationMeta[]> {
-    const batchPageSize = 20
+    const BATCH_PAGE_SIZE = 20
     let currentOffset = 0
     const allDiscoveredConversations: ConversationMeta[] = []
 
@@ -85,14 +80,11 @@ export class LibraryDiscovery {
         page,
         apiVersion,
         currentOffset,
-        batchPageSize
+        BATCH_PAGE_SIZE
       )
 
-      if (currentOffset === 0 && threadBatch.length > 0) {
-        console.log('RAWITEM:', JSON.stringify(threadBatch[0]).slice(0, 1000))
-      }
-
-      if (!threadBatch.length) {
+      const isBatchEmpty = threadBatch.length === 0
+      if (isBatchEmpty) {
         logger.info(`No more threads found at offset ${currentOffset}`)
         break
       }
@@ -101,9 +93,8 @@ export class LibraryDiscovery {
       allDiscoveredConversations.push(...formattedMetadata)
 
       logger.info(`Fetched ${threadBatch.length} threads (offset ${currentOffset})`)
-      currentOffset += batchPageSize
+      currentOffset += BATCH_PAGE_SIZE
 
-      // Respect rate limits between batches
       await page.waitForTimeout(this.config.rateLimitMs)
     }
 
@@ -119,26 +110,28 @@ export class LibraryDiscovery {
     try {
       return await page.evaluate(
         async ({ offset, limit, version }) => {
-          const response = await fetch(
-            `/rest/thread/list_ask_threads?version=${version}&source=default`,
-            {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ limit, ascending: false, offset, search_term: '' }),
-            }
-          )
+          const apiEndpoint = `/rest/thread/list_ask_threads?version=${version}&source=default`
+          const apiPayload = { limit, ascending: false, offset, search_term: '' }
 
-          if (!response.ok) {
-            throw new Error(`API responded with ${response.status}`)
+          const apiResponse = await fetch(apiEndpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(apiPayload),
+          })
+
+          const isResponseSuccessful = apiResponse.ok
+          if (!isResponseSuccessful) {
+            throw new Error(`API responded with ${apiResponse.status}`)
           }
 
-          const responseData = await response.json()
-          return Array.isArray(responseData) ? responseData : []
+          const responseJson = await apiResponse.json()
+          const isJsonArray = Array.isArray(responseJson)
+          return isJsonArray ? responseJson : []
         },
         { offset, limit, version: apiVersion }
       )
-    } catch (_error) {
-      const errorMessage = _error instanceof Error ? _error.message : String(_error)
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error)
       throw new LibraryDiscovery.PaginationError(
         `Failed to fetch batch at offset ${offset}: ${errorMessage}`
       )
@@ -155,11 +148,8 @@ export class LibraryDiscovery {
   }
 
   private isMinimumRequiredThreadDataPresent(item: unknown): boolean {
-    return !!(
-        item &&
-        typeof item === 'object' &&
-        'slug' in item &&
-        typeof (item as any).slug === 'string'
-    )
+    const isObject = item && typeof item === 'object'
+    const hasSlug = isObject && 'slug' in item && typeof (item as any).slug === 'string'
+    return !!hasSlug
   }
 }

@@ -22,13 +22,11 @@ export class SearchOrchestrator {
     }
   }
 
-  private rgSearch: RgSearch
-  private vectorStore: VectorStore
-  private ragOrchestrator: RagOrchestrator
-  private config: Config
+  private readonly rgSearch: RgSearch
+  private readonly vectorStore: VectorStore
+  private readonly ragOrchestrator: RagOrchestrator
 
-  constructor(config: Config) {
-    this.config = config
+  constructor(private readonly config: Config) {
     this.rgSearch = new RgSearch(config)
     this.vectorStore = new VectorStore(config)
     this.ragOrchestrator = new RagOrchestrator(config)
@@ -49,14 +47,20 @@ export class SearchOrchestrator {
 
   async search(query: string, mode: SearchMode, rgOptions: RgSearchOptions): Promise<void> {
     try {
-      if (mode === 'rg') {
-        await this.rgSearch.search(rgOptions)
-      } else if (mode === 'vector') {
-        await this.performVectorOnlySearch(query)
-      } else if (mode === 'rag') {
-        await this.ragOrchestrator.answerQuestion(query)
-      } else {
-        await this.executeAutoSearch(query, rgOptions)
+      switch (mode) {
+        case 'rg':
+          await this.rgSearch.search(rgOptions)
+          break
+        case 'vector':
+          await this.performVectorOnlySearch(query)
+          break
+        case 'rag':
+          await this.ragOrchestrator.answerQuestion(query)
+          break
+        case 'auto':
+        default:
+          await this.executeAutoSearch(query, rgOptions)
+          break
       }
     } catch (_error) {
       if (_error instanceof Error) {
@@ -68,8 +72,10 @@ export class SearchOrchestrator {
   }
 
   private async executeAutoSearch(query: string, rgOptions: RgSearchOptions): Promise<void> {
-    const queryWordCountThreshold = 5
-    const isLongQuery = query.trim().split(/\s+/).length > queryWordCountThreshold
+    const LONG_QUERY_WORD_COUNT_THRESHOLD = 5
+    const queryWordCount = query.trim().split(/\s+/).length
+    const isLongQuery = queryWordCount > LONG_QUERY_WORD_COUNT_THRESHOLD
+
     if (isLongQuery) {
       await this.performVectorOnlySearch(query)
     } else {
@@ -79,8 +85,8 @@ export class SearchOrchestrator {
 
   private async performVectorOnlySearch(query: string): Promise<void> {
     logger.info('Using vector search (Ollama + Vectra)...')
-    const searchResultLimit = 10
-    const searchResults = await this.vectorStore.search(query, searchResultLimit)
+    const SEARCH_RESULT_LIMIT = 10
+    const searchResults = await this.vectorStore.search(query, SEARCH_RESULT_LIMIT)
 
     if (searchResults.length === 0) {
       logger.info('No vector search results found.')
@@ -89,11 +95,16 @@ export class SearchOrchestrator {
 
     for (const result of searchResults) {
       const { meta, score } = result
-      const relevanceScore = score.toFixed(3)
+      const relevanceScoreLabel = score.toFixed(3)
+
+      const spaceNameDisplay = chalk.green(meta['spaceName'] as string)
+      const arrowSeparator = chalk.gray('›')
+      const titleDisplay = chalk.cyan(meta['title'] as string)
+      const scoreDisplay = chalk.gray(`(${relevanceScoreLabel})`)
+      const pathDisplay = chalk.gray(meta['path'] as string)
+
       logger.info(
-        `${chalk.green(meta['spaceName'])} ${chalk.gray('›')} ${chalk.cyan(
-          meta['title']
-        )} ${chalk.gray(`(${relevanceScore})`)}\n${chalk.gray(meta['path'])}\n`
+        `${spaceNameDisplay} ${arrowSeparator} ${titleDisplay} ${scoreDisplay}\n${pathDisplay}\n`
       )
     }
   }

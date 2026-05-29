@@ -7,7 +7,6 @@ import { logger } from './utils/logger.js'
 import { VectorStore } from './search/vector-store.js'
 import { RagOrchestrator } from './ai/rag-orchestrator.js'
 
-// Add your own questions here — the more specific, the more useful the benchmark
 const BENCHMARK_QUERIES = [
   'What TypeScript patterns have I used in past projects?',
   'Which npm packages have I discussed installing?',
@@ -17,65 +16,73 @@ const BENCHMARK_QUERIES = [
 ]
 
 async function runBenchmark(): Promise<void> {
-  const indexPath = join(config.vectorIndexPath, 'index.json')
-  if (!existsSync(indexPath)) {
+  const indexJsonPath = join(config.vectorIndexPath, 'index.json')
+  const isIndexPresent = existsSync(indexJsonPath)
+  if (!isIndexPresent) {
     logger.error('No vector index found. Build the index first via the main menu.')
     process.exit(1)
   }
 
   logger.info(`Starting benchmark with ${BENCHMARK_QUERIES.length} queries...`)
 
-  const vectorStore = new VectorStore(config)
-  await vectorStore.validate()
+  const benchmarkVectorStore = new VectorStore(config)
+  await benchmarkVectorStore.validate()
 
-  const orchestrator = new RagOrchestrator(config)
-  const results: { query: string; ms: number; error: boolean }[] = []
+  const ragOrchestrator = new RagOrchestrator(config)
+  const benchmarkResults: { query: string; durationMs: number; isFailure: boolean }[] = []
 
-  for (let i = 0; i < BENCHMARK_QUERIES.length; i++) {
-    const query = BENCHMARK_QUERIES[i]!
-    logger.info(`[${i + 1}/${BENCHMARK_QUERIES.length}] "${query}"`)
+  for (let queryIndex = 0; queryIndex < BENCHMARK_QUERIES.length; queryIndex++) {
+    const currentQuery = BENCHMARK_QUERIES[queryIndex]!
+    logger.info(`[${queryIndex + 1}/${BENCHMARK_QUERIES.length}] "${currentQuery}"`)
 
-    const start = performance.now()
-    let failed = false
+    const startTime = performance.now()
+    let isFailure = false
 
     try {
-      await orchestrator.answerQuestion(query)
-    } catch (err) {
-      failed = true
-      errorBus.emitError('Benchmark query failed', err, { query })
+      await ragOrchestrator.answerQuestion(currentQuery)
+    } catch (error) {
+      isFailure = true
+      errorBus.emitError('Benchmark query failed', error, { query: currentQuery })
     }
 
-    const ms = Math.round(performance.now() - start)
-    results.push({ query, ms, error: failed })
+    const durationMs = Math.round(performance.now() - startTime)
+    benchmarkResults.push({ query: currentQuery, durationMs, isFailure })
 
-    if (failed) {
-      logger.warn(`Query failed after ${ms}ms`)
+    if (isFailure) {
+      logger.warn(`Query failed after ${durationMs}ms`)
     } else {
-      logger.success(`Done in ${ms}ms`)
+      logger.success(`Done in ${durationMs}ms`)
     }
   }
 
-  const successful = results.filter((r) => !r.error)
-  const failed = results.filter((r) => r.error)
-  const avgMs =
-    successful.length > 0
-      ? Math.round(successful.reduce((acc, r) => acc + r.ms, 0) / successful.length)
+  const successfulResults = benchmarkResults.filter((result) => !result.isFailure)
+  const failedResults = benchmarkResults.filter((result) => result.isFailure)
+
+  const totalSuccessfulDuration = successfulResults.reduce(
+    (accumulator, result) => accumulator + result.durationMs,
+    0
+  )
+  const averageLatencyMs =
+    successfulResults.length > 0
+      ? Math.round(totalSuccessfulDuration / successfulResults.length)
       : 0
 
   logger.info('--- Benchmark Results ---')
-  results.forEach((r, i) => {
-    const status = r.error ? '✗' : '✓'
-    logger.info(`  ${status} [${i + 1}] ${r.ms}ms — ${r.query}`)
+  benchmarkResults.forEach((result, index) => {
+    const statusSymbol = result.isFailure ? '✗' : '✓'
+    logger.info(`  ${statusSymbol} [${index + 1}] ${result.durationMs}ms — ${result.query}`)
   })
-  logger.info(`Successful: ${successful.length}/${results.length}`)
-  logger.info(`Average latency: ${avgMs}ms`)
 
-  if (failed.length > 0) {
-    logger.warn(`${failed.length} queries failed — run with DEBUG=true for details`)
+  logger.info(`Successful: ${successfulResults.length}/${benchmarkResults.length}`)
+  logger.info(`Average latency: ${averageLatencyMs}ms`)
+
+  const hasFailures = failedResults.length > 0
+  if (hasFailures) {
+    logger.warn(`${failedResults.length} queries failed — run with DEBUG=true for details`)
   }
 }
 
-runBenchmark().catch((err) => {
-  errorBus.emitError('Benchmark failed', err)
+runBenchmark().catch((error) => {
+  errorBus.emitError('Benchmark execution failed', error)
   process.exit(1)
 })

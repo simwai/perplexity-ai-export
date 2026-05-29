@@ -3,41 +3,42 @@ import { join } from 'node:path'
 import type { Request, Response } from '@playwright/test'
 import { config } from './config.js'
 
-const LOGS_DIR = 'logs'
-const TIMESTAMP = new Date().toISOString().replace(/[:.]/g, '-')
-const HTTP_LOG_PATH = join(LOGS_DIR, `http-req-res-log-${TIMESTAMP}.txt`)
+const LOGS_DIRECTORY = 'logs'
+const LOG_FILE_TIMESTAMP = new Date().toISOString().replace(/[:.]/g, '-')
+const HTTP_LOG_FILENAME = `http-req-res-log-${LOG_FILE_TIMESTAMP}.txt`
+const HTTP_LOG_PATH = join(LOGS_DIRECTORY, HTTP_LOG_FILENAME)
 
-function sanitizeHeaders(headers: Record<string, string>): Record<string, string> {
-  const sanitized = { ...headers }
-  const sensitiveHeaders = ['authorization', 'cookie', 'set-cookie', 'x-api-key']
+const SENSITIVE_HEADERS = ['authorization', 'cookie', 'set-cookie', 'x-api-key']
+const PROMPT_KEYWORDS = ['"query"', '"prompt"', '"messages"']
 
-  for (const header of sensitiveHeaders) {
-    if (sanitized[header]) {
-      sanitized[header] = '[REDACTED]'
+function redactSensitiveHeaders(headers: Record<string, string>): Record<string, string> {
+  const redactedHeaders = { ...headers }
+
+  for (const headerKey of SENSITIVE_HEADERS) {
+    if (redactedHeaders[headerKey]) {
+      redactedHeaders[headerKey] = '[REDACTED]'
     }
   }
-  return sanitized
+  return redactedHeaders
 }
 
 function isPromptRequest(url: string, postData: string | null): boolean {
-  // Perplexity specific prompt detection (heuristics based on typical API patterns)
-  const isAiRequest = url.includes('/backend-api/chat') || url.includes('/api/v1/chat')
-  if (isAiRequest) return true
+  const isPerplexityAiApi = url.includes('/backend-api/chat') || url.includes('/api/v1/chat')
+  if (isPerplexityAiApi) return true
 
   if (postData) {
     try {
-      const parsed = JSON.parse(postData)
-      // Check for common prompt fields
-      if (parsed.query || parsed.prompt || (parsed.messages && Array.isArray(parsed.messages))) {
+      const parsedPostData = JSON.parse(postData)
+      const hasPromptFields =
+        parsedPostData.query ||
+        parsedPostData.prompt ||
+        (parsedPostData.messages && Array.isArray(parsedPostData.messages))
+      if (hasPromptFields) {
         return true
       }
     } catch {
-      // Not JSON or failed to parse, fallback to string check
-      if (
-        postData.includes('"query"') ||
-        postData.includes('"prompt"') ||
-        postData.includes('"messages"')
-      ) {
+      const containsPromptKeyword = PROMPT_KEYWORDS.some((keyword) => postData.includes(keyword))
+      if (containsPromptKeyword) {
         return true
       }
     }
@@ -45,27 +46,32 @@ function isPromptRequest(url: string, postData: string | null): boolean {
   return false
 }
 
+function ensureLogsDirectoryExists(): void {
+  if (!existsSync(LOGS_DIRECTORY)) {
+    mkdirSync(LOGS_DIRECTORY, { recursive: true })
+  }
+}
+
 export async function logHttpRequest(request: Request): Promise<void> {
   if (!config.debugMode) return
 
-  if (!existsSync(LOGS_DIR)) {
-    mkdirSync(LOGS_DIR, { recursive: true })
+  ensureLogsDirectoryExists()
+
+  const requestUrl = request.url()
+  const requestMethod = request.method()
+  const sanitizedHeaders = redactSensitiveHeaders(request.headers())
+  const rawPostData = request.postData()
+
+  let requestBody = rawPostData
+  if (isPromptRequest(requestUrl, rawPostData)) {
+    requestBody = '[PROMPT REDACTED]'
   }
 
-  const url = request.url()
-  const method = request.method()
-  const headers = sanitizeHeaders(request.headers())
-  const postData = request.postData()
-
-  let body = postData
-  if (isPromptRequest(url, postData)) {
-    body = '[PROMPT REDACTED]'
-  }
-
+  const logTimestamp = new Date().toISOString()
   const logEntry = [
-    `[${new Date().toISOString()}] REQUEST: ${method} ${url}`,
-    `Headers: ${JSON.stringify(headers, null, 2)}`,
-    `Body: ${body ?? 'None'}`,
+    `[${logTimestamp}] REQUEST: ${requestMethod} ${requestUrl}`,
+    `Headers: ${JSON.stringify(sanitizedHeaders, null, 2)}`,
+    `Body: ${requestBody ?? 'None'}`,
     '--------------------------------------------------------------------------------',
   ].join('\n')
 
@@ -75,28 +81,31 @@ export async function logHttpRequest(request: Request): Promise<void> {
 export async function logHttpResponse(response: Response): Promise<void> {
   if (!config.debugMode) return
 
-  const request = response.request()
-  const url = request.url()
-  const status = response.status()
-  const headers = sanitizeHeaders(response.headers())
+  const originalRequest = response.request()
+  const responseUrl = originalRequest.url()
+  const responseStatus = response.status()
+  const sanitizedHeaders = redactSensitiveHeaders(response.headers())
 
-  let body = '[BODY SKIPPED]'
+  let responseBody = '[BODY SKIPPED]'
 
-  // We only log bodies for small JSON responses that aren't prompts to keep logs manageable
-  const contentType = headers['content-type'] ?? ''
-  if (contentType.includes('application/json') && !isPromptRequest(url, request.postData())) {
+  const contentType = sanitizedHeaders['content-type'] ?? ''
+  const isJsonContent = contentType.includes('application/json')
+  const isPrompt = isPromptRequest(responseUrl, originalRequest.postData())
+
+  if (isJsonContent && !isPrompt) {
     try {
-      const json = await response.json()
-      body = JSON.stringify(json, null, 2)
+      const jsonResponse = await response.json()
+      responseBody = JSON.stringify(jsonResponse, null, 2)
     } catch {
-      body = '[COULD NOT PARSE JSON BODY]'
+      responseBody = '[COULD NOT PARSE JSON BODY]'
     }
   }
 
+  const logTimestamp = new Date().toISOString()
   const logEntry = [
-    `[${new Date().toISOString()}] RESPONSE: ${status} ${url}`,
-    `Headers: ${JSON.stringify(headers, null, 2)}`,
-    `Body: ${body}`,
+    `[${logTimestamp}] RESPONSE: ${responseStatus} ${responseUrl}`,
+    `Headers: ${JSON.stringify(sanitizedHeaders, null, 2)}`,
+    `Body: ${responseBody}`,
     '--------------------------------------------------------------------------------',
   ].join('\n')
 

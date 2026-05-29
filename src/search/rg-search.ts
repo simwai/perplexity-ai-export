@@ -34,11 +34,7 @@ export class RgSearch {
     }
   }
 
-  private config: Config
-
-  constructor(config: Config) {
-    this.config = config
-  }
+  constructor(private readonly config: Config) {}
 
   async search(options: RgSearchOptions): Promise<void> {
     this.ensureExportDirectoryIsAccessible()
@@ -48,71 +44,80 @@ export class RgSearch {
 
   async captureSearchMatches(options: RgSearchOptions): Promise<RgMatch[]> {
     this.ensureExportDirectoryIsAccessible()
-    const args = this.constructRipgrepArguments(options)
-    const cleanArgs = args
-      .filter((a) => a !== '--color=always')
+
+    const baseArguments = this.constructRipgrepArguments(options)
+    const jsonOutputArguments = baseArguments
+      .filter((arg) => arg !== '--color=always')
       .concat(['--color=never', '--json', '--max-filesize', '1M', '--no-binary'])
 
     return new Promise((resolve, reject) => {
-      const MAX_MATCHES_PER_KEYWORD = 100
-      const TIMEOUT_MS = 30000
+      const MAX_MATCHES_PER_QUERY = 100
+      const SEARCH_TIMEOUT_MS = 30000
       const matches: RgMatch[] = []
-      const rg = spawn(rgPath, cleanArgs, { cwd: this.config.exportDir })
 
-      const timeout = setTimeout(() => {
+      const ripgrepProcess = spawn(rgPath, jsonOutputArguments, { cwd: this.config.exportDir })
+
+      const timeoutId = setTimeout(() => {
+        const timeoutSeconds = SEARCH_TIMEOUT_MS / 1000
         logger.warn(
-          `Ripgrep search for "${options.pattern}" timed out after ${TIMEOUT_MS / 1000}s. Killing process.`
+          `Ripgrep search for "${options.pattern}" timed out after ${timeoutSeconds}s. Killing process.`
         )
-        rg.kill('SIGKILL')
-      }, TIMEOUT_MS)
+        ripgrepProcess.kill('SIGKILL')
+      }, SEARCH_TIMEOUT_MS)
 
-      const rl = createInterface({
-        input: rg.stdout,
+      const readlineInterface = createInterface({
+        input: ripgrepProcess.stdout,
         terminal: false,
       })
 
-      rl.on('line', (line) => {
-        if (matches.length >= MAX_MATCHES_PER_KEYWORD) {
-          rg.kill()
+      readlineInterface.on('line', (line) => {
+        if (matches.length >= MAX_MATCHES_PER_QUERY) {
+          ripgrepProcess.kill()
           return
         }
 
         try {
-          const parsed = JSON.parse(line)
-          if (parsed.type === 'match') {
+          const parsedLine = JSON.parse(line)
+          if (parsedLine.type === 'match') {
             matches.push({
-              path: parsed.data.path.text,
-              line: parsed.data.line_number,
-              text: parsed.data.lines.text,
+              path: parsedLine.data.path.text,
+              line: parsedLine.data.line_number,
+              text: parsedLine.data.lines.text,
             })
           }
         } catch (_err) {
-          /* ignore */
+          // Ignore lines that are not valid JSON or of a different type
         }
       })
 
-      rg.stderr.on('data', () => {})
-
-      rg.on('error', (err) => {
-        clearTimeout(timeout)
-        rl.close()
-        reject(err)
+      ripgrepProcess.stderr.on('data', () => {
+        // Silently consume stderr to avoid buffer filling up
       })
 
-      rg.on('close', (code) => {
-        clearTimeout(timeout)
-        rl.close()
-        if (code === 0 || code === 1 || code === null || rg.killed) {
+      ripgrepProcess.on('error', (processError) => {
+        clearTimeout(timeoutId)
+        readlineInterface.close()
+        reject(processError)
+      })
+
+      ripgrepProcess.on('close', (exitCode) => {
+        clearTimeout(timeoutId)
+        readlineInterface.close()
+
+        const isSuccessfulExit =
+          exitCode === 0 || exitCode === 1 || exitCode === null || ripgrepProcess.killed
+        if (isSuccessfulExit) {
           resolve(matches)
         } else {
-          reject(new RgSearch.RgSearchError(`ripgrep exited with code ${code}`))
+          reject(new RgSearch.RgSearchError(`ripgrep exited with code ${exitCode}`))
         }
       })
     })
   }
 
   private ensureExportDirectoryIsAccessible(): void {
-    if (!existsSync(this.config.exportDir)) {
+    const exportsExist = existsSync(this.config.exportDir)
+    if (!exportsExist) {
       throw new RgSearch.RgSearchError(
         'No exports directory found. Please run the "start" command first to export your history.'
       )
@@ -154,31 +159,35 @@ export class RgSearch {
         stdio: ['ignore', 'pipe', 'pipe'],
       })
 
-      let matchedResultsFound = false
+      let hasFoundMatches = false
 
       ripgrepProcess.stdout.on('data', (data) => {
-        matchedResultsFound = true
+        hasFoundMatches = true
         process.stdout.write(data)
       })
 
       ripgrepProcess.stderr.on('data', (data) => {
         const errorText = data.toString()
-        if (!errorText.includes('No such file or directory')) {
+        const isNotNotFoundError = !errorText.includes('No such file or directory')
+        if (isNotNotFoundError) {
           process.stderr.write(chalk.red(data))
         }
       })
 
-      ripgrepProcess.on('error', (error) => {
-        if (error.message.includes('ENOENT')) {
+      ripgrepProcess.on('error', (processError) => {
+        const isMissingBinary = processError.message.includes('ENOENT')
+        if (isMissingBinary) {
           reject(new RgSearch.RgNotFoundError(this.getRipgrepInstallationInstructions()))
         } else {
-          reject(new RgSearch.RgSearchError(`Search failed: ${error.message}`))
+          reject(new RgSearch.RgSearchError(`Search failed: ${processError.message}`))
         }
       })
 
       ripgrepProcess.on('close', (exitCode) => {
-        if (exitCode === 0 || exitCode === 1) {
-          if (!matchedResultsFound && exitCode === 1) {
+        const isSuccessStatus = exitCode === 0 || exitCode === 1
+        if (isSuccessStatus) {
+          const isEmptyResult = exitCode === 1 && !hasFoundMatches
+          if (isEmptyResult) {
             logger.info('No results found.')
           }
           resolve()

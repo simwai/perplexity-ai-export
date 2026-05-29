@@ -2,33 +2,36 @@ import chalk from 'chalk'
 import { logger } from '../utils/logger.js'
 
 export function showHelp(): void {
+  const logAction = (actionName: string, actionDescription: string) => {
+    logger.info(chalk.cyan(`  ${actionName}`))
+    logger.info(`    ${actionDescription}\n`)
+  }
+
   logger.info(chalk.bold('\n📚 Available Actions:\n'))
 
-  logger.info(chalk.cyan('  Start scraper (Library)'))
-  logger.info(
-    '    Run the scraper to export your Perplexity history. If a checkpoint exists, you can resume or restart.\n'
+  logAction(
+    'Start scraper (Library)',
+    'Run the scraper to export your Perplexity history. If a checkpoint exists, you can resume or restart.'
   )
 
-  logger.info(chalk.cyan('  Search conversations'))
-  logger.info(
-    '    Search through exported conversations using various modes: auto, semantic, RAG, or exact text.\n'
+  logAction(
+    'Search conversations',
+    'Search through exported conversations using various modes: auto, semantic, RAG, or exact text.'
   )
 
-  logger.info(chalk.cyan('  Build vector index'))
-  logger.info(
-    '    Build or update the local vector index from your exports to enable semantic search and RAG.\n'
+  logAction(
+    'Build vector index',
+    'Build or update the local vector index from your exports to enable semantic search and RAG.'
   )
 
-  logger.info(chalk.cyan('  Reset all data'))
-  logger.info(
-    '    Remove all stored checkpoints, authentication data, and the vector index to start fresh.\n'
+  logAction(
+    'Reset all data',
+    'Remove all stored checkpoints, authentication data, and the vector index to start fresh.'
   )
 
-  logger.info(chalk.cyan('  Help'))
-  logger.info('    Display this help overview.\n')
+  logAction('Help', 'Display this help overview.')
 
-  logger.info(chalk.cyan('  Exit'))
-  logger.info('    Close the application.\n')
+  logAction('Exit', 'Close the application.')
 
   logger.info(chalk.bold('💡 Search & RAG Tips:\n'))
   logger.info(

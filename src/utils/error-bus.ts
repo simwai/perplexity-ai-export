@@ -11,24 +11,27 @@ export interface AppError {
 class ErrorBus extends EventEmitter {
   constructor() {
     super()
-    this.on('error', (err: AppError) => {
-      const contextStr = err.context ? ` | Context: ${JSON.stringify(err.context)}` : ''
-      logger.error(`${err.message}${contextStr}`)
-      if (err.error) {
-        if (process.env['DEBUG'] === 'true' || process.env['DEBUG_MODE'] === 'true') {
-          console.error(err.error)
-        }
+    this.on('error', (appError: AppError) => {
+      const contextSuffix = appError.context
+        ? ` | Context: ${JSON.stringify(appError.context)}`
+        : ''
+      logger.error(`${appError.message}${contextSuffix}`)
+
+      const isDebugEnabled = process.env['DEBUG'] === 'true' || process.env['DEBUG_MODE'] === 'true'
+      if (appError.error && isDebugEnabled) {
+        console.error(appError.error)
       }
     })
   }
 
   emitError(message: string, error?: unknown, context?: Record<string, unknown>): void {
-    this.emit('error', {
+    const appError: AppError = {
       message,
       error,
       context,
       timestamp: new Date(),
-    })
+    }
+    this.emit('error', appError)
   }
 }
 

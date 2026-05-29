@@ -37,23 +37,19 @@ export class BrowserManager {
   public browserInstance: Browser | null = null
   private activeContext: BrowserContext | null = null
   private activePage: Page | null = null
-  private config: Config
 
-  constructor(config: Config) {
-    this.config = config
-  }
+  constructor(private readonly config: Config) {}
 
   async launch(): Promise<Page> {
     try {
-      const isSavedAuthValid = this.checkIfSavedAuthenticationIsFresh(this.config.authStoragePath)
+      const isSavedAuthValid = this.isSavedAuthenticationFresh(this.config.authStoragePath)
 
       if (isSavedAuthValid) {
-        // Try starting in requested headless mode directly
         await this.launchBrowser(this.config.headless)
         await this.initializeBrowserContext()
         await this.navigateToSettingsPage()
-        const isLoggedIn = await this.verifyLoginStatus(this.getActivePage())
 
+        const isLoggedIn = await this.verifyLoginStatus(this.getActivePage())
         if (isLoggedIn) {
           logger.success('Already logged in!')
           return this.getActivePage()
@@ -65,14 +61,14 @@ export class BrowserManager {
         await this.close()
       }
 
-      // Need login: launch headful
+      // Need manual login: launch headful
       await this.launchBrowser(false)
       await this.initializeBrowserContext()
       await this.navigateToSettingsPage()
       await this.ensureUserIsAuthenticated()
 
-      // If user wants headless, restart now that we are logged in
-      if (this.config.headless !== false) {
+      const shouldRestartInHeadless = this.config.headless !== false
+      if (shouldRestartInHeadless) {
         logger.info('Authentication successful. Restarting in headless mode...')
         await this.close()
         await this.launchBrowser(this.config.headless)
@@ -81,16 +77,22 @@ export class BrowserManager {
       }
 
       return this.getActivePage()
-    } catch (_error) {
-      if (_error instanceof Error) throw _error
-      throw new BrowserManager.BrowserLaunchError(`Unexpected error: ${String(_error)}`)
+    } catch (error) {
+      if (error instanceof Error) throw error
+      throw new BrowserManager.BrowserLaunchError(`Unexpected error: ${String(error)}`)
     }
   }
 
   async close(): Promise<void> {
-    if (this.activePage) await this.activePage.close().catch(() => {})
-    if (this.activeContext) await this.activeContext.close().catch(() => {})
-    if (this.browserInstance) await this.browserInstance.close().catch(() => {})
+    if (this.activePage) {
+      await this.activePage.close().catch(() => {})
+    }
+    if (this.activeContext) {
+      await this.activeContext.close().catch(() => {})
+    }
+    if (this.browserInstance) {
+      await this.browserInstance.close().catch(() => {})
+    }
     this.activePage = null
     this.activeContext = null
     this.browserInstance = null
@@ -98,53 +100,59 @@ export class BrowserManager {
 
   private async launchBrowser(headless: boolean | 'new'): Promise<void> {
     try {
+      const actualHeadlessValue = headless === 'new' ? true : headless
       this.browserInstance = await chromium.launch({
-        headless: headless === 'new' ? true : headless,
+        headless: actualHeadlessValue,
         args: ['--disable-blink-features=AutomationControlled'],
       })
-    } catch (_error) {
-      throw new BrowserManager.BrowserLaunchError(
-        `Failed to launch browser: ${_error instanceof Error ? _error.message : String(_error)}`
-      )
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      throw new BrowserManager.BrowserLaunchError(`Failed to launch browser: ${errorMessage}`)
     }
   }
 
   private async initializeBrowserContext(): Promise<void> {
-    if (!this.browserInstance) throw new BrowserManager.ContextError('Browser not initialized')
+    if (!this.browserInstance) {
+      throw new BrowserManager.ContextError('Browser not initialized')
+    }
 
-    const isSavedAuthValid = this.checkIfSavedAuthenticationIsFresh(this.config.authStoragePath)
+    const isSavedAuthValid = this.isSavedAuthenticationFresh(this.config.authStoragePath)
 
     if (isSavedAuthValid) {
       logger.info('Loading saved authentication state...')
       try {
-        const storageStateData = JSON.parse(readFileSync(this.config.authStoragePath, 'utf-8'))
+        const storageStateJson = readFileSync(this.config.authStoragePath, 'utf-8')
+        const storageStateData = JSON.parse(storageStateJson)
         this.activeContext = await this.browserInstance.newContext({
           storageState: storageStateData,
         })
-      } catch (_error) {
-        logger.warn('Failed to load saved auth state, starting fresh.', _error)
+      } catch (error) {
+        logger.warn('Failed to load saved auth state, starting fresh.', error)
         this.activeContext = await this.browserInstance.newContext()
       }
     } else {
-      if (existsSync(this.config.authStoragePath)) {
+      const authFileExists = existsSync(this.config.authStoragePath)
+      if (authFileExists) {
         logger.info('Saved authentication is older than 1 day, discarding.')
       }
       this.activeContext = await this.browserInstance.newContext()
     }
 
     if (this.config.debugMode && this.activeContext) {
-      this.activeContext.on('request', (request) => logHttpRequest(request))
-      this.activeContext.on('response', (response) => logHttpResponse(response))
+      this.activeContext.on('request', (req) => logHttpRequest(req))
+      this.activeContext.on('response', (res) => logHttpResponse(res))
     }
   }
 
-  private checkIfSavedAuthenticationIsFresh(path: string): boolean {
-    if (!existsSync(path)) return false
+  private isSavedAuthenticationFresh(filePath: string): boolean {
+    const fileExists = existsSync(filePath)
+    if (!fileExists) return false
+
     try {
-      const fileStats = statSync(path)
-      const fileAgeInMs = Date.now() - fileStats.mtimeMs
-      const twentyFourHoursInMs = 24 * 60 * 60 * 1000
-      return fileAgeInMs < twentyFourHoursInMs
+      const fileStats = statSync(filePath)
+      const fileAgeMs = Date.now() - fileStats.mtimeMs
+      const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000
+      return fileAgeMs < TWENTY_FOUR_HOURS_MS
     } catch (_error) {
       return false
     }
@@ -154,16 +162,18 @@ export class BrowserManager {
     if (!this.activeContext) {
       throw new BrowserManager.NavigationError('No browser context available')
     }
+
     this.activePage = await this.activeContext.newPage()
-    const perplexitySettingsUrl = 'https://www.perplexity.ai/settings'
+    const SETTINGS_URL = 'https://www.perplexity.ai/settings'
+    const NAVIGATION_TIMEOUT_MS = 3000
+
     try {
-      await this.activePage.goto(perplexitySettingsUrl, {
-        timeout: 3000,
+      await this.activePage.goto(SETTINGS_URL, {
+        timeout: NAVIGATION_TIMEOUT_MS,
       })
-    } catch (_error) {
-      throw new BrowserManager.NavigationError(
-        `Failed to navigate to settings: ${_error instanceof Error ? _error.message : String(_error)}`
-      )
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      throw new BrowserManager.NavigationError(`Failed to navigate to settings: ${errorMessage}`)
     }
   }
 
@@ -172,9 +182,8 @@ export class BrowserManager {
       throw new BrowserManager.AuthError('Page not initialized')
     }
 
-    const isActuallyLoggedIn = await this.verifyLoginStatus(this.activePage)
-
-    if (isActuallyLoggedIn) {
+    const isLoggedIn = await this.verifyLoginStatus(this.activePage)
+    if (isLoggedIn) {
       logger.success('Already logged in!')
       return
     }
@@ -185,16 +194,15 @@ export class BrowserManager {
       default: true,
     })
 
-    const perplexitySettingsUrl = 'https://www.perplexity.ai/settings'
-    await this.activePage.goto(perplexitySettingsUrl, {
+    const SETTINGS_URL = 'https://www.perplexity.ai/settings'
+    await this.activePage.goto(SETTINGS_URL, {
       waitUntil: 'networkidle',
     })
 
-    const isLoginSuccessfulNow = await this.verifyLoginStatus(this.activePage)
-    if (!isLoginSuccessfulNow) {
-      throw new BrowserManager.AuthError(
-        `Login verification failed. Current URL: ${this.activePage.url()}`
-      )
+    const isLoginConfirmed = await this.verifyLoginStatus(this.activePage)
+    if (!isLoginConfirmed) {
+      const currentUrl = this.activePage.url()
+      throw new BrowserManager.AuthError(`Login verification failed. Current URL: ${currentUrl}`)
     }
 
     await this.persistAuthenticationState()
@@ -202,21 +210,26 @@ export class BrowserManager {
   }
 
   private async verifyLoginStatus(page: Page): Promise<boolean> {
-    await page.waitForTimeout(1000).catch(() => {})
-    await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => {})
-    const currentUrl = page.url()
+    const INTERMEDIATE_DELAY_MS = 1000
+    const NETWORK_IDLE_TIMEOUT_MS = 5000
 
-    const authenticatedUrlPaths = ['/settings', '/library', '/collections', '/account/details']
-    if (authenticatedUrlPaths.some((path) => currentUrl.includes(path))) {
+    await page.waitForTimeout(INTERMEDIATE_DELAY_MS).catch(() => {})
+    await page.waitForLoadState('networkidle', { timeout: NETWORK_IDLE_TIMEOUT_MS }).catch(() => {})
+
+    const currentUrl = page.url()
+    const AUTHENTICATED_PATHS = ['/settings', '/library', '/collections', '/account/details']
+    const isUrlAuthenticated = AUTHENTICATED_PATHS.some((path) => currentUrl.includes(path))
+
+    if (isUrlAuthenticated) {
       return true
     }
 
-    const userMenuElementCount = await page
+    const userMenuCount = await page
       .locator('[data-testid="user-menu"]')
       .count()
       .catch(() => 0)
 
-    return userMenuElementCount > 0
+    return userMenuCount > 0
   }
 
   private async persistAuthenticationState(): Promise<void> {
@@ -224,7 +237,8 @@ export class BrowserManager {
       throw new BrowserManager.AuthError('No browser context available to save')
     }
     const currentStorageState = await this.activeContext.storageState()
-    writeFileSync(this.config.authStoragePath, JSON.stringify(currentStorageState, null, 2))
+    const serializedState = JSON.stringify(currentStorageState, null, 2)
+    writeFileSync(this.config.authStoragePath, serializedState)
   }
 
   private getActivePage(): Page {

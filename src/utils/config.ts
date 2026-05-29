@@ -21,7 +21,7 @@ const configSchema = z.object({
   enableVectorSearch: z
     .string()
     .optional()
-    .transform((v) => v === 'true'),
+    .transform((val) => val === 'true'),
   headless: z.union([z.boolean(), z.literal('new')]),
   debug: z.boolean(),
   debugMode: z.boolean(),
@@ -31,36 +31,36 @@ export type Config = z.infer<typeof configSchema>
 export type WaitMode = Config['waitMode']
 
 function parseEnvConfig(): Config {
-  const defaultOllamaUrl = 'http://localhost:11434'
-  const defaultRateLimitMs = '500'
-  const defaultParallelWorkers = '5'
-  const defaultCheckpointInterval = '10'
+  const DEFAULT_OLLAMA_URL = 'http://localhost:11434'
+  const DEFAULT_RATE_LIMIT_MS = '500'
+  const DEFAULT_PARALLEL_WORKERS = '5'
+  const DEFAULT_CHECKPOINT_INTERVAL = '10'
 
-  const rawHeadless = process.env['HEADLESS'] ?? 'false'
-  let headlessValue: boolean | 'new' = false
-  if (rawHeadless === 'true') {
-    headlessValue = true
-  } else if (rawHeadless === 'new') {
-    headlessValue = 'new'
+  const rawHeadlessValue = process.env['HEADLESS'] ?? 'false'
+  let headless: boolean | 'new' = false
+  if (rawHeadlessValue === 'true') {
+    headless = true
+  } else if (rawHeadlessValue === 'new') {
+    headless = 'new'
   }
 
   const rawConfig = {
     authStoragePath: process.env['AUTH_STORAGE_PATH'] ?? join('.storage', 'auth.json'),
     waitMode: process.env['WAIT_MODE'] ?? 'dynamic',
-    rateLimitMs: parseInt(process.env['RATE_LIMIT_MS'] ?? defaultRateLimitMs, 10),
-    parallelWorkers: parseInt(process.env['PARALLEL_WORKERS'] ?? defaultParallelWorkers, 10),
+    rateLimitMs: parseInt(process.env['RATE_LIMIT_MS'] ?? DEFAULT_RATE_LIMIT_MS, 10),
+    parallelWorkers: parseInt(process.env['PARALLEL_WORKERS'] ?? DEFAULT_PARALLEL_WORKERS, 10),
     checkpointSaveInterval: parseInt(
-      process.env['CHECKPOINT_SAVE_INTERVAL'] ?? defaultCheckpointInterval,
+      process.env['CHECKPOINT_SAVE_INTERVAL'] ?? DEFAULT_CHECKPOINT_INTERVAL,
       10
     ),
     exportDir: process.env['EXPORT_DIR'] ?? 'exports',
     checkpointPath: process.env['CHECKPOINT_PATH'] ?? join('.storage', 'checkpoint.json'),
     vectorIndexPath: process.env['VECTOR_INDEX_PATH'] ?? join('.storage', 'vector-index'),
-    ollamaUrl: process.env['OLLAMA_URL'] ?? defaultOllamaUrl,
+    ollamaUrl: process.env['OLLAMA_URL'] ?? DEFAULT_OLLAMA_URL,
     ollamaModel: process.env['OLLAMA_MODEL'] ?? 'llama3.1',
     ollamaEmbedModel: process.env['OLLAMA_EMBED_MODEL'] ?? 'nomic-embed-text',
     enableVectorSearch: process.env['ENABLE_VECTOR_SEARCH'],
-    headless: headlessValue,
+    headless: headless,
     debug: process.env['DEBUG'] === 'true',
     debugMode: process.env['DEBUG_MODE'] === 'true' || process.env['DIAGNOSIS_MODE'] === 'true',
   }
@@ -70,9 +70,9 @@ function parseEnvConfig(): Config {
   if (!result.success) {
     logger.error('Invalid configuration detected:')
     result.error.issues.forEach((issue) => {
-      const path = issue.path.join('.')
-      const envVar = camelToSnakeCase(path).toUpperCase()
-      logger.error(`  ${envVar}: ${issue.message}`)
+      const fieldPath = issue.path.join('.')
+      const envVarName = camelToSnakeCase(fieldPath).toUpperCase()
+      logger.error(`  ${envVarName}: ${issue.message}`)
     })
     logger.error('\nPlease check your .env file and fix the above errors.')
     process.exit(1)
@@ -81,22 +81,22 @@ function parseEnvConfig(): Config {
   return result.data
 }
 
-function camelToSnakeCase(str: string): string {
-  return str.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)
+function camelToSnakeCase(camelStr: string): string {
+  return camelStr.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)
 }
 
-function ensureDirectory(path: string): void {
-  const dir = dirname(path)
-  if (!existsSync(dir)) {
-    mkdirSync(dir, { recursive: true })
+function ensureDirectoryExistsForFile(filePath: string): void {
+  const dirPath = dirname(filePath)
+  if (!existsSync(dirPath)) {
+    mkdirSync(dirPath, { recursive: true })
   }
 }
 
 export const config: Config = parseEnvConfig()
 
-ensureDirectory(config.authStoragePath)
-ensureDirectory(config.checkpointPath)
-ensureDirectory(config.vectorIndexPath)
+ensureDirectoryExistsForFile(config.authStoragePath)
+ensureDirectoryExistsForFile(config.checkpointPath)
+ensureDirectoryExistsForFile(config.vectorIndexPath)
 
 if (!existsSync(config.exportDir)) {
   mkdirSync(config.exportDir, { recursive: true })

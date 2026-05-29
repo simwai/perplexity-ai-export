@@ -6,20 +6,20 @@ import { CommandHandler } from './commands.js'
 import { type Config } from '../utils/config.js'
 
 export class Repl {
-  private activeCommandHandler: CommandHandler
-  private isReplRunning = true
+  private readonly commandHandler: CommandHandler
+  private isRunning = true
 
   constructor(config: Config) {
-    this.activeCommandHandler = new CommandHandler(config)
+    this.commandHandler = new CommandHandler(config)
   }
 
   async start(): Promise<void> {
     logger.info(chalk.bold.cyan('\n🔮 Perplexity History Export Tool\n'))
     logger.info('Select commands to execute. Press Ctrl+C to exit.\n')
 
-    while (this.isReplRunning) {
+    while (this.isRunning) {
       try {
-        const selectedCommand = await select({
+        const selectedAction = await select({
           message: 'perplexity>',
           choices: [
             { name: 'Start scraper (Library)', value: 'start-library' },
@@ -31,10 +31,11 @@ export class Repl {
           ],
         })
 
-        await this.executeReplCommand(selectedCommand)
+        await this.dispatchCommand(selectedAction)
       } catch (error) {
-        if (error instanceof Error && error.name === 'ExitPromptError') {
-          this.terminateRepl()
+        const isUserExit = error instanceof Error && error.name === 'ExitPromptError'
+        if (isUserExit) {
+          this.terminate()
         } else {
           throw error
         }
@@ -42,35 +43,35 @@ export class Repl {
     }
   }
 
-  private async executeReplCommand(command: string): Promise<void> {
-    switch (command) {
+  private async dispatchCommand(actionValue: string): Promise<void> {
+    switch (actionValue) {
       case 'start-library':
-        await this.activeCommandHandler.handleScraperWizard()
+        await this.commandHandler.handleScraperWizard()
         break
       case 'search':
-        await this.activeCommandHandler.handleSearchWizard()
+        await this.commandHandler.handleSearchWizard()
         break
       case 'vectorize':
-        await this.activeCommandHandler.handleVectorizeWizard()
+        await this.commandHandler.handleVectorizeWizard()
         break
       case 'reset':
-        await this.activeCommandHandler.handleDataReset()
+        await this.commandHandler.handleDataReset()
         break
       case 'help':
-        this.activeCommandHandler.handleShowHelp()
+        this.commandHandler.handleShowHelp()
         break
       case 'exit':
-        this.terminateRepl()
+        this.terminate()
         break
       default:
-        errorBus.emitError(`Unknown command: ${command}`)
-        this.activeCommandHandler.handleShowHelp()
+        errorBus.emitError(`Unknown action: ${actionValue}`)
+        this.commandHandler.handleShowHelp()
     }
   }
 
-  private terminateRepl(): void {
-    if (!this.isReplRunning) return
-    this.isReplRunning = false
+  private terminate(): void {
+    if (!this.isRunning) return
+    this.isRunning = false
     logger.info(chalk.cyan('\n👋 Goodbye!\n'))
     process.exit(0)
   }
