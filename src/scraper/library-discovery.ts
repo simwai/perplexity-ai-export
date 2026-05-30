@@ -31,10 +31,11 @@ export class LibraryDiscovery {
     const PERPLEXITY_LIBRARY_URL = 'https://www.perplexity.ai/library'
     logger.info('Discovering threads via REST API...')
 
+    const versionPromise = this.detectCurrentApiVersion(page)
     await page.goto(PERPLEXITY_LIBRARY_URL)
     await page.waitForLoadState('domcontentloaded')
 
-    const activeApiVersion = await this.detectCurrentApiVersion(page)
+    const activeApiVersion = await versionPromise
     const discoveredConversations = await this.paginateAndFetchAllThreads(page, activeApiVersion)
 
     logger.success(`Discovered ${discoveredConversations.length} threads`)
@@ -43,26 +44,36 @@ export class LibraryDiscovery {
 
   private async detectCurrentApiVersion(page: Page): Promise<string> {
     const FALLBACK_API_VERSION = '2.18'
+    const VERSION_PARAM_REGEX = /[?&]version=([^&]+)/
+    const VERSIONED_URL_PATTERNS = [
+      '/api/auth/session', // fires on every page load — most reliable
+      '/rest/collections/list_recent',
+      '/rest/thread/list_ask_threads',
+    ]
 
     try {
       const interceptedRequest = await page.waitForRequest(
-        (request) => request.url().includes('/rest/thread/list_ask_threads'),
-        { timeout: 5000 }
+        (request) => {
+          const url = request.url()
+          return (
+            VERSIONED_URL_PATTERNS.some((pattern) => url.includes(pattern)) &&
+            VERSION_PARAM_REGEX.test(url)
+          )
+        },
+        { timeout: 8000 }
       )
 
-      const requestUrl = interceptedRequest.url()
-      const versionMatch = requestUrl.match(/[?&]version=([^&]+)/)
-
-      const detectedVersion = versionMatch?.[1]
+      const detectedVersion = interceptedRequest.url().match(VERSION_PARAM_REGEX)?.[1]
       if (detectedVersion) {
-        logger.info(`Discovered API version: ${detectedVersion}`)
+        const url = new URL(interceptedRequest.url())
+        logger.info(`Detected API version: ${detectedVersion} (from ${url.pathname})`)
         return detectedVersion
       }
 
-      logger.warn('Found list_ask_threads request but no version parameter, using fallback')
+      logger.warn('Versioned request matched but no version param found, using fallback')
       return FALLBACK_API_VERSION
     } catch (_error) {
-      logger.warn('No list_ask_threads request detected, using fallback version')
+      logger.warn('No versioned request detected within timeout, using fallback')
       return FALLBACK_API_VERSION
     }
   }
@@ -121,6 +132,9 @@ export class LibraryDiscovery {
 
           const isResponseSuccessful = apiResponse.ok
           if (!isResponseSuccessful) {
+            if (apiResponse.status === 400 || apiResponse.status === 404) {
+              return [] // signals "no more pages" — loop breaks cleanly
+            }
             throw new Error(`API responded with ${apiResponse.status}`)
           }
 
