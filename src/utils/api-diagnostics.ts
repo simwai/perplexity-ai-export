@@ -29,6 +29,7 @@ export class ApiDiagnosticsWriter {
       const diagnosticLogPath = path.join(this.DEBUG_DIRECTORY, this.DIAGNOSTICS_FILENAME)
 
       const entryAsJsonLine = JSON.stringify(diagnosticEntry) + '\n'
+      logger.debug('Writing API diagnostic entry', { errorType: entry.errorType, url: entry.url })
       await fs.appendFile(diagnosticLogPath, entryAsJsonLine, 'utf8')
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error)

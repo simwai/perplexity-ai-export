@@ -61,26 +61,26 @@ export class RagOrchestrator {
   }
 
   async answerQuestion(question: string): Promise<void> {
-    logger.info(`Mightiest Adaptive RAG processing: "${question}"`)
+    logger.info(`Mightiest Adaptive RAG processing: "${question}" `)
 
     try {
       const researchPlan = await this.developResearchPlan(question)
       const isExhaustiveMode = researchPlan.strategy === 'exhaustive'
 
-      logger.info(`Plan: ${chalk.bold.yellow(researchPlan.strategy.toUpperCase())}`)
+      logger.info(`Plan: ${chalk.bold.yellow(researchPlan.strategy.toUpperCase())} `)
       if (isExhaustiveMode) {
         logger.warn(
-          `Exhaustive mode enabled. This may take a while as I'll be doing a deep dive into your history.`
+          `Exhaustive mode enabled. This may take a while as I'll be doing a deep dive into your history. `
         )
       }
 
       const hasHardKeywords = researchPlan.hardKeywords?.length > 0
       if (hasHardKeywords) {
-        logger.info(`Hard Keywords detected: ${chalk.gray(researchPlan.hardKeywords.join(', '))}`)
+        logger.info(`Hard Keywords detected: ${chalk.gray(researchPlan.hardKeywords.join(', '))} `)
       }
 
       if (researchPlan.hydePassage) {
-        logger.debug(`HyDE passage generated: "${researchPlan.hydePassage.slice(0, 80)}..."`)
+        logger.debug(`HyDE passage generated: "${researchPlan.hydePassage.slice(0, 80)}..." `)
       }
 
       const searchResults = await this.executeAdaptiveHybridSearch(researchPlan)
@@ -91,26 +91,31 @@ export class RagOrchestrator {
         isExhaustiveMode
       )
 
-      logger.info(`Synthesizing final answer from ${contextFacts.length} verified facts...`)
+      logger.info(`Synthesizing final answer from ${contextFacts.length} verified facts... `)
       const finalAnswer = await this.generateMightiestResponse(
         question,
         contextFacts,
         researchPlan.strategy
       )
 
-      console.log(`\n${chalk.bold.green('Mightiest AI Response:')}\n`)
+      console.log(`\
+${chalk.bold.green('--- Mightiest Answer ---')}\
+ `)
       console.log(finalAnswer)
+      console.log(`\
+${chalk.bold.green('------------------------')}\
+ `)
 
       this.displaySourceProvenance(contextFacts)
 
       const feedback = await this.verifyAnswerQuality(question, finalAnswer)
       const isImprovementSuggested = feedback.status === 'improvement-needed'
       if (isImprovementSuggested) {
-        logger.warn(`Self-Correction: ${chalk.gray(feedback.suggestion)}`)
+        logger.warn(`Self-Correction: ${chalk.gray(feedback.suggestion)} `)
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error)
-      errorBus.emitError(`Mightiest RAG failed: ${errorMessage}`)
+      errorBus.emitError(`Mightiest RAG failed: ${errorMessage} `)
     }
   }
 
@@ -122,7 +127,7 @@ Analyze: "${originalQuestion}"
 3. Hard Keywords: Identify any names, IDs, or unique technical terms for exact matching.
 4. HyDE: Write 1-2 sentences that would plausibly appear in a saved answer to this question. Write as if it's content already stored, not as a reply.
 Return JSON: {"strategy": "...", "queries": [], "hardKeywords": [], "hydePassage": "...", "filters": {}}
-`
+ `
     try {
       const response = await this.ollamaClient.generate(plannerPrompt)
       const planJson = this.parseJsonFromResponse(response, {})
@@ -150,20 +155,20 @@ Return JSON: {"strategy": "...", "queries": [], "hardKeywords": [], "hydePassage
 
     for (let i = 0; i < (plan.queries || []).length; i++) {
       const searchQuery = plan.queries[i]!
-      logger.debug(`Executing semantic search [${i + 1}/${plan.queries.length}]: "${searchQuery}"`)
+      logger.debug(`Executing semantic search [${i + 1}/${plan.queries.length}]: "${searchQuery}" `)
       const vectorResults = await this.vectorStore.search(searchQuery, 40)
       searchPools.push(vectorResults)
     }
 
     if (plan.hydePassage) {
-      logger.debug(`Executing HyDE search: "${plan.hydePassage.slice(0, 60)}..."`)
+      logger.debug(`Executing HyDE search: "${plan.hydePassage.slice(0, 60)}..." `)
       const hydeResults = await this.vectorStore.search(plan.hydePassage, 40)
       searchPools.push(hydeResults)
     }
 
     const keywordMatchPool: VectorSearchResult[] = []
     for (const hardKeyword of plan.hardKeywords || []) {
-      logger.debug(`Executing keyword search: "${hardKeyword}"`)
+      logger.debug(`Executing keyword search: "${hardKeyword}" `)
       try {
         const matches = await this.ripgrep.captureSearchMatches({ pattern: hardKeyword })
         const convertedMatches: VectorSearchResult[] = matches.map((match) => ({
@@ -196,7 +201,7 @@ Return JSON: {"strategy": "...", "queries": [], "hardKeywords": [], "hydePassage
       pool.forEach((result, rank) => {
         const path = result.meta['path'] || 'unknown'
         const snippet = result.meta['snippet'] || ''
-        const uniqueId = result.meta['id'] || `${path}:${snippet}`
+        const uniqueId = result.meta['id'] || `${path}:${snippet} `
 
         const rankScore = 1 / (60 + rank)
         const existingEntry = fusionScores.get(uniqueId)
@@ -230,7 +235,7 @@ Return JSON: {"strategy": "...", "queries": [], "hardKeywords": [], "hydePassage
     }
 
     const { tokenizer, model } = crossEncoder
-    logger.info(`Cross-encoder reranking ${results.length} candidates...`)
+    logger.info(`Cross-encoder reranking ${results.length} candidates... `)
 
     const RERANK_BATCH_SIZE = 64
     const rerankScores: number[] = new Array(results.length).fill(0)
@@ -291,16 +296,25 @@ Return JSON: {"strategy": "...", "queries": [], "hardKeywords": [], "hydePassage
         batchStartIndex,
         batchStartIndex + ANALYSIS_BATCH_SIZE
       )
-      logger.info(`Analyzing history snippets... batch ${batchNumber} of ${totalBatches}`)
+      logger.info(`Analyzing history snippets... batch ${batchNumber} of ${totalBatches} `)
 
       const researchPrompt = `
 You are the Researcher. Analyze these snippets from the user's history for the question: "${question}"
 Context:
-${currentBatch.map((res, index) => `[Node ${batchStartIndex + index}] ${res.meta['title']}: ${res.meta['snippet']}`).join('\n\n')}
+${currentBatch
+  .map(
+    (res, index) =>
+      `[Node ${batchStartIndex + index}] ${res.meta['title']}: ${res.meta['snippet']} `
+  )
+  .join(
+    '\
+\
+'
+  )}
 
 Extract every specific fact, mention, date, or piece of code.
 Return JSON array: [{"fact": "...", "node_id": N, "thread": "..."}]
-`
+ `
       try {
         const response = await this.ollamaClient.generate(researchPrompt)
         const extractedFacts = this.parseJsonFromResponse(response, [])
@@ -336,7 +350,12 @@ Return JSON array: [{"fact": "...", "node_id": N, "thread": "..."}]
 You are the Narrator. Synthesize these research findings into a cohesive, mightiest answer for: "${question}"
 Strategy: ${strategy}
 Findings:
-${extractedFacts.map((fact, index) => `[Find ${index}] (${fact.source_title}): ${fact.fact}`).join('\n')}
+${extractedFacts
+  .map((fact, index) => `[Find ${index}] (${fact.source_title}): ${fact.fact} `)
+  .join(
+    '\
+'
+  )}
 
 INSTRUCTIONS:
 1. Provide a comprehensive, authoritative response.
@@ -345,7 +364,7 @@ INSTRUCTIONS:
 4. Cite everything with [Find N].
 
 ANSWER:
-`
+ `
     return this.ollamaClient.generate(synthesisPrompt)
   }
 
@@ -354,8 +373,9 @@ ANSWER:
     const hasSources = uniqueSourceTitles.size > 0
 
     if (hasSources) {
-      console.log(`\n${chalk.bold.cyan('History Sources Explored:')}`)
-      uniqueSourceTitles.forEach((title) => console.log(` - ${title}`))
+      console.log(`\
+${chalk.bold.cyan('History Sources Explored:')} `)
+      uniqueSourceTitles.forEach((title) => console.log(` - ${title} `))
     }
   }
 
@@ -369,7 +389,7 @@ Question: "${question}"
 Answer: "${answer.slice(0, 500)}..."
 Did I miss anything important?
 Return JSON: {"status": "ok" | "missed-info", "suggestion": "..."}
-`
+ `
     try {
       const verificationResponse = await this.ollamaClient.generate(verificationPrompt)
       return this.parseJsonFromResponse(verificationResponse, { status: 'ok' })
@@ -379,7 +399,7 @@ Return JSON: {"status": "ok" | "missed-info", "suggestion": "..."}
   }
 
   private parseJsonFromResponse(response: string, defaultValue: any): any {
-    const jsonMatch = response.match(/(\{[\s\S]*\}|\[[\s\S]*\])/)
+    const jsonMatch = response.match(/(\{[\\s\\S]*\}|\\[[\\s\\S]*\\])/)
     if (jsonMatch?.[0]) {
       try {
         return JSON.parse(jsonMatch[0])

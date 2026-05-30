@@ -42,23 +42,30 @@ export class SearchOrchestrator {
   }
 
   async vectorizeNow(): Promise<void> {
+    logger.debug('Starting vectorization process')
     await this.vectorStore.rebuildFromExports()
+    logger.debug('Vectorization process completed')
   }
 
   async search(query: string, mode: SearchMode, rgOptions: RgSearchOptions): Promise<void> {
+    logger.debug('Search triggered', { query, mode })
     try {
       switch (mode) {
         case 'rg':
+          logger.debug('Executing Ripgrep search')
           await this.rgSearch.search(rgOptions)
           break
         case 'vector':
+          logger.debug('Executing Vector search')
           await this.performVectorOnlySearch(query)
           break
         case 'rag':
+          logger.debug('Executing RAG search')
           await this.ragOrchestrator.answerQuestion(query)
           break
         case 'auto':
         default:
+          logger.debug('Executing Auto search')
           await this.executeAutoSearch(query, rgOptions)
           break
       }
@@ -76,6 +83,8 @@ export class SearchOrchestrator {
     const queryWordCount = query.trim().split(/\s+/).length
     const isLongQuery = queryWordCount > LONG_QUERY_WORD_COUNT_THRESHOLD
 
+    logger.debug('Auto search decision', { queryWordCount, isLongQuery })
+
     if (isLongQuery) {
       await this.performVectorOnlySearch(query)
     } else {
@@ -87,6 +96,8 @@ export class SearchOrchestrator {
     logger.info('Using vector search (Ollama + Vectra)...')
     const SEARCH_RESULT_LIMIT = 10
     const searchResults = await this.vectorStore.search(query, SEARCH_RESULT_LIMIT)
+
+    logger.debug('Vector search returned results', { count: searchResults.length })
 
     if (searchResults.length === 0) {
       logger.info('No vector search results found.')
@@ -104,7 +115,9 @@ export class SearchOrchestrator {
       const pathDisplay = chalk.gray(meta['path'] as string)
 
       logger.info(
-        `${spaceNameDisplay} ${arrowSeparator} ${titleDisplay} ${scoreDisplay}\n${pathDisplay}\n`
+        `${spaceNameDisplay} ${arrowSeparator} ${titleDisplay} ${scoreDisplay}
+${pathDisplay}
+`
       )
     }
   }

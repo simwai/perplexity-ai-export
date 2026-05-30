@@ -27,6 +27,7 @@ export class WorkerPool {
 
   async initialize(): Promise<void> {
     try {
+      logger.debug('Initializing worker pool', { workerCount: this.config.parallelWorkers })
       this.sharedBrowserContext = await this.browser.newContext()
 
       const workerCount = this.config.parallelWorkers
@@ -48,6 +49,8 @@ export class WorkerPool {
     const conversationQueue = [...conversationsToProcess]
     const activeExtractionTasks: Promise<void>[] = []
 
+    logger.debug('Starting conversation processing', { count: conversationQueue.length })
+
     while (conversationQueue.length > 0 || activeExtractionTasks.length > 0) {
       const availableWorker = this.workers.find((worker) => !worker.isBusy)
 
@@ -58,6 +61,10 @@ export class WorkerPool {
 
         const extractionTask = (async () => {
           try {
+            logger.debug('Starting extraction task', {
+              url: conversationMetadata.url,
+              workerId: availableWorker.id,
+            })
             const extractionResult = await availableWorker.extractor.extract(
               conversationMetadata.url
             )
@@ -68,21 +75,21 @@ export class WorkerPool {
             const isUpToDate =
               existingContentHash && existingContentHash === extractionResult.contentHash
             const currentProgress = this.checkpointManager.getProcessingProgress()
-            const progressLabel = `[${currentProgress.processed}/${currentProgress.total}]`
+            const progressLabel = `[${currentProgress.processed}/${currentProgress.total}] `
 
             if (isUpToDate) {
               this.checkpointManager.markAsProcessed(conversationMetadata.id)
-              logger.info(`${progressLabel} Up to date: ${extractionResult.title} (skipped write)`)
+              logger.info(`${progressLabel} Up to date: ${extractionResult.title} (skipped write) `)
             } else {
               await this.fileWriter.write(extractionResult)
               this.checkpointManager.markAsProcessed(
                 conversationMetadata.id,
                 extractionResult.contentHash
               )
-              logger.info(`${progressLabel} Processed: ${extractionResult.title}`)
+              logger.info(`${progressLabel} Processed: ${extractionResult.title} `)
             }
           } catch (error) {
-            errorBus.emitError(`Failed to process ${conversationMetadata.url}`, error)
+            errorBus.emitError(`Failed to process ${conversationMetadata.url} `, error)
 
             const isContextLostError =
               error instanceof Error && error.message.includes('context is no longer available')
@@ -114,6 +121,7 @@ export class WorkerPool {
   async close(): Promise<void> {
     const isContextOpen = !!this.sharedBrowserContext
     if (isContextOpen) {
+      logger.debug('Closing worker pool browser context')
       await this.sharedBrowserContext!.close().catch(() => {
         // Silently handle close errors
       })
@@ -122,6 +130,7 @@ export class WorkerPool {
 
   private async refreshContext(): Promise<void> {
     try {
+      logger.debug('Refreshing shared browser context')
       const isContextOpen = !!this.sharedBrowserContext
       if (isContextOpen) {
         await this.sharedBrowserContext!.close().catch(() => {})

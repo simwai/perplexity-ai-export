@@ -114,6 +114,7 @@ export class ConversationExtractor {
 
     let conversationPage: Page | null = null
     try {
+      logger.debug('Opening new page for extraction', { url: conversationUrl })
       conversationPage = await this.context.newPage()
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error)
@@ -236,6 +237,7 @@ export class ConversationExtractor {
 
   private async navigateToConversationUrl(page: Page, url: string): Promise<void> {
     const NAVIGATION_TIMEOUT_MS = 30000
+    logger.debug('Navigating to conversation URL', { url })
     const navigationResponse = await page.goto(url, {
       waitUntil: 'domcontentloaded',
       timeout: NAVIGATION_TIMEOUT_MS,

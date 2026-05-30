@@ -3,6 +3,7 @@ import { writeFileSync, existsSync, mkdirSync } from 'node:fs'
 import { type Config } from '../utils/config.js'
 import type { ExtractedConversation } from '../scraper/conversation-extractor.js'
 import { sanitizeFilename, sanitizeSpaceName } from './sanitizer.js'
+import { logger } from '../utils/logger.js'
 
 export class FileWriter {
   static readonly WriteError = class extends Error {
@@ -23,6 +24,10 @@ export class FileWriter {
 
       this.ensureSpaceDirectoryExists(conversation.spaceName)
 
+      logger.debug('Writing conversation to file', {
+        id: conversation.id,
+        path: destinationFilePath,
+      })
       writeFileSync(destinationFilePath, markdownContent, 'utf-8')
       return destinationFilePath
     } catch (error) {
@@ -35,6 +40,7 @@ export class FileWriter {
 
   private ensureRootExportDirectoryExists(): void {
     if (!existsSync(this.config.exportDir)) {
+      logger.debug('Creating root export directory', { path: this.config.exportDir })
       mkdirSync(this.config.exportDir, { recursive: true })
     }
   }
@@ -42,6 +48,7 @@ export class FileWriter {
   private ensureSpaceDirectoryExists(spaceName: string): void {
     const spaceSpecificDirectory = join(this.config.exportDir, sanitizeSpaceName(spaceName))
     if (!existsSync(spaceSpecificDirectory)) {
+      logger.debug('Creating space directory', { space: spaceName, path: spaceSpecificDirectory })
       mkdirSync(spaceSpecificDirectory, { recursive: true })
     }
   }
@@ -54,11 +61,17 @@ export class FileWriter {
   }
 
   private formatConversationAsMarkdown(conversation: ExtractedConversation): string {
-    const headerTitle = `# ${conversation.title}\n\n`
+    const headerTitle = `# ${conversation.title}
+
+`
     const metadataBlock =
-      `**Space:** ${conversation.spaceName}  \n` +
-      `**ID:** ${conversation.id}  \n` +
-      `**Date:** ${conversation.timestamp.toISOString()}  \n\n`
+      `**Space:** ${conversation.spaceName}
+` +
+      `**ID:** ${conversation.id}
+` +
+      `**Date:** ${conversation.timestamp.toISOString()}
+
+`
     return headerTitle + metadataBlock + conversation.content
   }
 }

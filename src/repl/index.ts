@@ -31,6 +31,7 @@ export class Repl {
           ],
         })
 
+        logger.debug('User selected command', { command: selectedAction })
         await this.dispatchCommand(selectedAction)
       } catch (error) {
         const isUserExit = error instanceof Error && error.name === 'ExitPromptError'
@@ -71,6 +72,7 @@ export class Repl {
 
   private terminate(): void {
     if (!this.isRunning) return
+    logger.debug('Terminating REPL session')
     this.isRunning = false
     logger.info(chalk.cyan('\n👋 Goodbye!\n'))
     process.exit(0)

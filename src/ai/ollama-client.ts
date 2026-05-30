@@ -33,6 +33,10 @@ export class OllamaClient {
       input: inputTexts,
     }
 
+    logger.debug('Ollama embedding request', {
+      count: inputTexts.length,
+      model: this.config.ollamaEmbedModel,
+    })
     const responseData = await this.performOllamaHttpRequest('/v1/embeddings', requestBody)
     return this.parseEmbeddingsFromResponse(responseData)
   }
@@ -44,6 +48,7 @@ export class OllamaClient {
       stream: false,
     }
 
+    logger.debug('Ollama generation request', { model: requestBody.model })
     const responseData = await this.performOllamaHttpRequest('/api/generate', requestBody)
     const validatedData = generationResponseSchema.parse(responseData)
     return validatedData.response

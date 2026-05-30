@@ -94,6 +94,8 @@ function ensureDirectoryExistsForFile(filePath: string): void {
 
 export const config: Config = parseEnvConfig()
 
+logger.debug('Configuration loaded successfully')
+
 ensureDirectoryExistsForFile(config.authStoragePath)
 ensureDirectoryExistsForFile(config.checkpointPath)
 ensureDirectoryExistsForFile(config.vectorIndexPath)

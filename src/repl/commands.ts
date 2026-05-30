@@ -1,8 +1,8 @@
-import { type Page } from '@playwright/test'
-import { errorBus } from '../utils/error-bus.js'
-import { input, select, confirm } from '@inquirer/prompts'
+import { confirm, input, select } from '@inquirer/prompts'
 import { rmSync } from 'node:fs'
 import { sep } from 'node:path'
+import type { Page } from '@playwright/test'
+import { errorBus } from '../utils/error-bus.js'
 import { BrowserManager } from '../scraper/browser.js'
 import { CheckpointManager } from '../scraper/checkpoint-manager.js'
 import { WorkerPool } from '../scraper/worker-pool.js'
@@ -58,6 +58,7 @@ export class CommandHandler {
 
   async handleStartLibraryExport(): Promise<void> {
     try {
+      logger.debug('Starting library export')
       await this.executeFullScrapingFlow()
     } catch (error) {
       errorBus.emitError('Scraper failed', error)
@@ -68,6 +69,7 @@ export class CommandHandler {
   }
 
   async handleScraperWizard(): Promise<void> {
+    logger.debug('Starting scraper wizard')
     const progress = this.checkpointManager.getProcessingProgress()
     const hasExistingProgress = progress.total > 0
 
@@ -79,6 +81,7 @@ export class CommandHandler {
   }
 
   async handleSearchWizard(): Promise<void> {
+    logger.debug('Starting search wizard')
     const query = await this.promptForSearchQuery()
     let mode = (await this.promptForSearchMode()) as 'auto' | 'vector' | 'rg' | 'rag'
 
@@ -119,6 +122,7 @@ export class CommandHandler {
   }
 
   async handleVectorizeWizard(): Promise<void> {
+    logger.debug('Starting vectorization wizard')
     const shouldRebuildIndex = await confirm({
       message: 'Rebuild the vector index from exports now?',
       default: true,
@@ -140,6 +144,7 @@ export class CommandHandler {
   }
 
   async handleDataReset(): Promise<void> {
+    logger.debug('Starting data reset wizard')
     const isCertainOfReset = await confirm({
       message:
         '⚠️  This will delete all stored checkpoints, authentication data, and vector index. Are you sure?',
@@ -243,8 +248,10 @@ export class CommandHandler {
     }
 
     if (selectedAction === 'restart') {
+      logger.debug('User chose to restart checkpoint')
       this.checkpointManager.resetCheckpoint()
     } else if (selectedAction === 'update') {
+      logger.debug('User chose to sync/update library')
       this.checkpointManager.prepareForUpdateRun()
     }
   }

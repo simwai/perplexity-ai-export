@@ -39,6 +39,7 @@ export class RgSearch {
   async search(options: RgSearchOptions): Promise<void> {
     this.ensureExportDirectoryIsAccessible()
     const ripgrepCommandArguments = this.constructRipgrepArguments(options)
+    logger.debug('Executing Ripgrep process', { pattern: options.pattern })
     await this.spawnRipgrepProcess(ripgrepCommandArguments)
   }
 
@@ -49,6 +50,8 @@ export class RgSearch {
     const jsonOutputArguments = baseArguments
       .filter((arg) => arg !== '--color=always')
       .concat(['--color=never', '--json', '--max-filesize', '1M', '--no-binary'])
+
+    logger.debug('Capturing search matches via Ripgrep', { pattern: options.pattern })
 
     return new Promise((resolve, reject) => {
       const MAX_MATCHES_PER_QUERY = 100
@@ -107,6 +110,7 @@ export class RgSearch {
         const isSuccessfulExit =
           exitCode === 0 || exitCode === 1 || exitCode === null || ripgrepProcess.killed
         if (isSuccessfulExit) {
+          logger.debug('Ripgrep process closed successfully', { matchCount: matches.length })
           resolve(matches)
         } else {
           reject(new RgSearch.RgSearchError(`ripgrep exited with code ${exitCode}`))

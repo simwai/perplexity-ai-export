@@ -42,9 +42,11 @@ export class BrowserManager {
 
   async launch(): Promise<Page> {
     try {
+      logger.debug('Launching browser manager')
       const isSavedAuthValid = this.isSavedAuthenticationFresh(this.config.authStoragePath)
 
       if (isSavedAuthValid) {
+        logger.debug('Found fresh saved authentication')
         await this.launchBrowser(this.config.headless)
         await this.initializeBrowserContext()
         await this.navigateToSettingsPage()
@@ -61,7 +63,7 @@ export class BrowserManager {
         await this.close()
       }
 
-      // Need manual login: launch headful
+      logger.debug('Starting manual authentication flow')
       await this.launchBrowser(false)
       await this.initializeBrowserContext()
       await this.navigateToSettingsPage()
@@ -84,6 +86,7 @@ export class BrowserManager {
   }
 
   async close(): Promise<void> {
+    logger.debug('Closing browser and cleaning up resources')
     if (this.activePage) {
       await this.activePage.close().catch(() => {})
     }
@@ -101,6 +104,7 @@ export class BrowserManager {
   private async launchBrowser(headless: boolean | 'new'): Promise<void> {
     try {
       const actualHeadlessValue = headless === 'new' ? true : headless
+      logger.debug('Launching Chromium', { headless: actualHeadlessValue })
       this.browserInstance = await chromium.launch({
         headless: actualHeadlessValue,
         args: ['--disable-blink-features=AutomationControlled'],
@@ -135,10 +139,12 @@ export class BrowserManager {
       if (authFileExists) {
         logger.info('Saved authentication is older than 1 day, discarding.')
       }
+      logger.debug('Creating fresh browser context')
       this.activeContext = await this.browserInstance.newContext()
     }
 
     if (this.config.debugMode && this.activeContext) {
+      logger.debug('Enabling HTTP logging for browser context')
       this.activeContext.on('request', (req) => logHttpRequest(req))
       this.activeContext.on('response', (res) => logHttpResponse(res))
     }
@@ -168,6 +174,7 @@ export class BrowserManager {
     const NAVIGATION_TIMEOUT_MS = 3000
 
     try {
+      logger.debug('Navigating to settings page', { url: SETTINGS_URL })
       await this.activePage.goto(SETTINGS_URL, {
         timeout: NAVIGATION_TIMEOUT_MS,
       })
@@ -195,6 +202,7 @@ export class BrowserManager {
     })
 
     const SETTINGS_URL = 'https://www.perplexity.ai/settings'
+    logger.debug('Verifying authentication status', { url: SETTINGS_URL })
     await this.activePage.goto(SETTINGS_URL, {
       waitUntil: 'networkidle',
     })
@@ -213,6 +221,7 @@ export class BrowserManager {
     const INTERMEDIATE_DELAY_MS = 1000
     const NETWORK_IDLE_TIMEOUT_MS = 5000
 
+    logger.debug('Waiting for login status indicators')
     await page.waitForTimeout(INTERMEDIATE_DELAY_MS).catch(() => {})
     await page.waitForLoadState('networkidle', { timeout: NETWORK_IDLE_TIMEOUT_MS }).catch(() => {})
 
@@ -236,6 +245,7 @@ export class BrowserManager {
     if (!this.activeContext) {
       throw new BrowserManager.AuthError('No browser context available to save')
     }
+    logger.debug('Persisting storage state', { path: this.config.authStoragePath })
     const currentStorageState = await this.activeContext.storageState()
     const serializedState = JSON.stringify(currentStorageState, null, 2)
     writeFileSync(this.config.authStoragePath, serializedState)

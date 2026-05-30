@@ -77,7 +77,9 @@ export class VectorStore {
 
   async search(query: string, limit = 10): Promise<VectorSearchResult[]> {
     try {
+      logger.debug('Generating query embedding', { query })
       const queryEmbedding = await this.generateQueryEmbedding(query)
+      logger.debug('Querying vector index')
       const rawResults = await this.queryVectorIndex(queryEmbedding, query, limit)
       return this.formatVectorSearchResults(rawResults)
     } catch (error) {
@@ -109,6 +111,7 @@ export class VectorStore {
   private async ensureIndexExists(): Promise<void> {
     const isAlreadyCreated = await this.vectorIndex.isIndexCreated()
     if (!isAlreadyCreated) {
+      logger.debug('Creating new vector index')
       await this.vectorIndex.createIndex()
     }
   }
@@ -205,6 +208,7 @@ export class VectorStore {
     batchMetas: VectorDocMeta[]
   ): Promise<void> {
     try {
+      logger.debug('Processing embedding batch', { count: batchTexts.length })
       const embeddingVectors = await this.ollamaClient.embed(batchTexts)
 
       for (let i = 0; i < embeddingVectors.length; i++) {

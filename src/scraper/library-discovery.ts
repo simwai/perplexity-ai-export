@@ -32,13 +32,14 @@ export class LibraryDiscovery {
     logger.info('Discovering threads via REST API...')
 
     const versionPromise = this.detectCurrentApiVersion(page)
+    logger.debug('Navigating to library URL for discovery', { url: PERPLEXITY_LIBRARY_URL })
     await page.goto(PERPLEXITY_LIBRARY_URL)
     await page.waitForLoadState('domcontentloaded')
 
     const activeApiVersion = await versionPromise
     const discoveredConversations = await this.paginateAndFetchAllThreads(page, activeApiVersion)
 
-    logger.success(`Discovered ${discoveredConversations.length} threads`)
+    logger.success(`Discovered ${discoveredConversations.length} threads `)
     return discoveredConversations
   }
 
@@ -46,12 +47,13 @@ export class LibraryDiscovery {
     const FALLBACK_API_VERSION = '2.18'
     const VERSION_PARAM_REGEX = /[?&]version=([^&]+)/
     const VERSIONED_URL_PATTERNS = [
-      '/api/auth/session', // fires on every page load — most reliable
+      '/api/auth/session',
       '/rest/collections/list_recent',
       '/rest/thread/list_ask_threads',
     ]
 
     try {
+      logger.debug('Attempting to detect API version from requests')
       const interceptedRequest = await page.waitForRequest(
         (request) => {
           const url = request.url()
@@ -66,7 +68,7 @@ export class LibraryDiscovery {
       const detectedVersion = interceptedRequest.url().match(VERSION_PARAM_REGEX)?.[1]
       if (detectedVersion) {
         const url = new URL(interceptedRequest.url())
-        logger.info(`Detected API version: ${detectedVersion} (from ${url.pathname})`)
+        logger.info(`Detected API version: ${detectedVersion} (from ${url.pathname}) `)
         return detectedVersion
       }
 
@@ -85,7 +87,6 @@ export class LibraryDiscovery {
     const BATCH_PAGE_SIZE = 20
     const allDiscoveredConversations: ConversationMeta[] = []
 
-    // Fetch first batch to get total threads
     const firstBatch = await this.fetchThreadBatchFromApi(page, apiVersion, 0, BATCH_PAGE_SIZE)
 
     if (firstBatch.length === 0) {
@@ -97,13 +98,12 @@ export class LibraryDiscovery {
     const totalThreads = firstItem.total_threads ?? firstBatch.length
     const totalBatches = Math.ceil(totalThreads / BATCH_PAGE_SIZE)
 
-    logger.info(`Detected ${totalThreads} total threads (${totalBatches} batches)`)
+    logger.info(`Detected ${totalThreads} total threads (${totalBatches} batches) `)
 
     const formattedFirstBatch = this.mapRawBatchToMetadata(firstBatch)
     allDiscoveredConversations.push(...formattedFirstBatch)
-    logger.info(`Fetched batch 1/${totalBatches} (offset 0)`)
+    logger.info(`Fetched batch 1/${totalBatches} (offset 0) `)
 
-    // Fetch remaining batches
     for (let batchIndex = 1; batchIndex < totalBatches; batchIndex++) {
       await page.waitForTimeout(this.config.rateLimitMs)
       const offset = batchIndex * BATCH_PAGE_SIZE
@@ -118,7 +118,7 @@ export class LibraryDiscovery {
       const formattedMetadata = this.mapRawBatchToMetadata(threadBatch)
       allDiscoveredConversations.push(...formattedMetadata)
 
-      logger.info(`Fetched batch ${batchIndex + 1}/${totalBatches} (offset ${offset})`)
+      logger.info(`Fetched batch ${batchIndex + 1}/${totalBatches} (offset ${offset}) `)
     }
 
     return allDiscoveredConversations
@@ -131,9 +131,10 @@ export class LibraryDiscovery {
     limit: number
   ): Promise<unknown[]> {
     try {
+      logger.debug('Fetching thread batch from API', { offset, limit, apiVersion })
       return await page.evaluate(
         async ({ offset, limit, version }) => {
-          const apiEndpoint = `/rest/thread/list_ask_threads?version=${version}&source=default`
+          const apiEndpoint = `/rest/thread/list_ask_threads?version=${version}&source=default `
           const apiPayload = { limit, offset }
 
           const apiResponse = await fetch(apiEndpoint, {
@@ -145,9 +146,9 @@ export class LibraryDiscovery {
           const isResponseSuccessful = apiResponse.ok
           if (!isResponseSuccessful) {
             if (apiResponse.status === 400 || apiResponse.status === 404) {
-              return [] // signals "no more pages" — loop breaks cleanly
+              return []
             }
-            throw new Error(`API responded with ${apiResponse.status}`)
+            throw new Error(`API responded with ${apiResponse.status} `)
           }
 
           const responseJson = await apiResponse.json()
@@ -159,7 +160,7 @@ export class LibraryDiscovery {
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error)
       throw new LibraryDiscovery.PaginationError(
-        `Failed to fetch batch at offset ${offset}: ${errorMessage}`
+        `Failed to fetch batch at offset ${offset}: ${errorMessage} `
       )
     }
   }
@@ -169,7 +170,7 @@ export class LibraryDiscovery {
       .filter((item): item is { slug: string } => this.isMinimumRequiredThreadDataPresent(item))
       .map((item) => ({
         id: item.slug,
-        url: `https://www.perplexity.ai/search/${item.slug}`,
+        url: `https://www.perplexity.ai/search/${item.slug} `,
       }))
   }
 

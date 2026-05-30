@@ -1,6 +1,7 @@
 import { errorBus } from '../utils/error-bus.js'
 import { readFileSync, writeFileSync, existsSync } from 'node:fs'
 import { type Config } from '../utils/config.js'
+import { logger } from '../utils/logger.js'
 
 export interface ConversationMeta {
   id: string
@@ -29,6 +30,9 @@ export class CheckpointManager {
   }
 
   setDiscoveredConversations(newlyDiscoveredConversations: ConversationMeta[]): void {
+    logger.debug('Updating discovered conversations in checkpoint', {
+      count: newlyDiscoveredConversations.length,
+    })
     // Preserve content hashes for already known conversations
     this.currentState.discoveredConversations = newlyDiscoveredConversations.map((newConv) => {
       const existingConversation = this.currentState.discoveredConversations.find(
@@ -94,12 +98,14 @@ export class CheckpointManager {
   }
 
   prepareForUpdateRun(): void {
+    logger.debug('Preparing for update run: clearing processed IDs')
     this.currentState.processedIds = []
     this.currentState.discoveryPhaseComplete = false
     this.saveCheckpoint()
   }
 
   resetCheckpoint(): void {
+    logger.debug('Resetting checkpoint completely')
     this.currentState = {
       discoveryPhaseComplete: false,
       discoveredConversations: [],

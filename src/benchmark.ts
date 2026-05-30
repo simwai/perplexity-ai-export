@@ -23,7 +23,7 @@ async function runBenchmark(): Promise<void> {
     process.exit(1)
   }
 
-  logger.info(`Starting benchmark with ${BENCHMARK_QUERIES.length} queries...`)
+  logger.info(`Starting benchmark with ${BENCHMARK_QUERIES.length} queries... `)
 
   const benchmarkVectorStore = new VectorStore(config)
   await benchmarkVectorStore.validate()
@@ -33,12 +33,13 @@ async function runBenchmark(): Promise<void> {
 
   for (let queryIndex = 0; queryIndex < BENCHMARK_QUERIES.length; queryIndex++) {
     const currentQuery = BENCHMARK_QUERIES[queryIndex]!
-    logger.info(`[${queryIndex + 1}/${BENCHMARK_QUERIES.length}] "${currentQuery}"`)
+    logger.info(`[${queryIndex + 1}/${BENCHMARK_QUERIES.length}] "${currentQuery}" `)
 
     const startTime = performance.now()
     let isFailure = false
 
     try {
+      logger.debug('Executing benchmark query', { query: currentQuery })
       await ragOrchestrator.answerQuestion(currentQuery)
     } catch (error) {
       isFailure = true
@@ -49,9 +50,9 @@ async function runBenchmark(): Promise<void> {
     benchmarkResults.push({ query: currentQuery, durationMs, isFailure })
 
     if (isFailure) {
-      logger.warn(`Query failed after ${durationMs}ms`)
+      logger.warn(`Query failed after ${durationMs}ms `)
     } else {
-      logger.success(`Done in ${durationMs}ms`)
+      logger.success(`Done in ${durationMs}ms `)
     }
   }
 
@@ -70,15 +71,15 @@ async function runBenchmark(): Promise<void> {
   logger.info('--- Benchmark Results ---')
   benchmarkResults.forEach((result, index) => {
     const statusSymbol = result.isFailure ? '✗' : '✓'
-    logger.info(`  ${statusSymbol} [${index + 1}] ${result.durationMs}ms — ${result.query}`)
+    logger.info(`  ${statusSymbol} [${index + 1}] ${result.durationMs}ms — ${result.query} `)
   })
 
-  logger.info(`Successful: ${successfulResults.length}/${benchmarkResults.length}`)
-  logger.info(`Average latency: ${averageLatencyMs}ms`)
+  logger.info(`Successful: ${successfulResults.length}/${benchmarkResults.length} `)
+  logger.info(`Average latency: ${averageLatencyMs}ms `)
 
   const hasFailures = failedResults.length > 0
   if (hasFailures) {
-    logger.warn(`${failedResults.length} queries failed — run with DEBUG=true for details`)
+    logger.warn(`${failedResults.length} queries failed — run with DEBUG=true for details `)
   }
 }
 

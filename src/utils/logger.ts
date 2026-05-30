@@ -25,25 +25,33 @@ function writeToLogFile(message: string): void {
 
 export const logger = {
   info(...args: unknown[]): void {
-    const message = args.join(' ')
+    const message = args
+      .map((arg) => (typeof arg === 'object' ? JSON.stringify(arg) : String(arg)))
+      .join(' ')
     console.log(chalk.blue('ℹ'), message)
     writeToLogFile(`INFO: ${message}`)
   },
 
   success(...args: unknown[]): void {
-    const message = args.join(' ')
+    const message = args
+      .map((arg) => (typeof arg === 'object' ? JSON.stringify(arg) : String(arg)))
+      .join(' ')
     console.log(chalk.green('✓'), message)
     writeToLogFile(`SUCCESS: ${message}`)
   },
 
   warn(...args: unknown[]): void {
-    const message = args.join(' ')
+    const message = args
+      .map((arg) => (typeof arg === 'object' ? JSON.stringify(arg) : String(arg)))
+      .join(' ')
     console.log(chalk.yellow('⚠'), message)
     writeToLogFile(`WARN: ${message}`)
   },
 
   error(...args: unknown[]): void {
-    const message = args.join(' ')
+    const message = args
+      .map((arg) => (typeof arg === 'object' ? JSON.stringify(arg) : String(arg)))
+      .join(' ')
     console.error(chalk.red('✗'), message)
     writeToLogFile(`ERROR: ${message}`)
   },
@@ -51,7 +59,9 @@ export const logger = {
   debug(...args: unknown[]): void {
     const isVerboseDebug = process.env['DEBUG'] === 'true'
     if (isVerboseDebug) {
-      const message = args.join(' ')
+      const message = args
+        .map((arg) => (typeof arg === 'object' ? JSON.stringify(arg) : String(arg)))
+        .join(' ')
       console.log(chalk.gray('›'), message)
       writeToLogFile(`DEBUG: ${message}`)
     }
