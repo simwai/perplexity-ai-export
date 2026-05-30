@@ -83,30 +83,42 @@ export class LibraryDiscovery {
     apiVersion: string
   ): Promise<ConversationMeta[]> {
     const BATCH_PAGE_SIZE = 20
-    let currentOffset = 0
     const allDiscoveredConversations: ConversationMeta[] = []
 
-    while (true) {
+    // Fetch first batch to get total threads
+    const firstBatch = await this.fetchThreadBatchFromApi(page, apiVersion, 0, BATCH_PAGE_SIZE)
+
+    if (firstBatch.length === 0) {
+      logger.info('No threads found in library')
+      return []
+    }
+
+    const firstItem = firstBatch[0] as { total_threads?: number }
+    const totalThreads = firstItem.total_threads ?? firstBatch.length
+    const totalBatches = Math.ceil(totalThreads / BATCH_PAGE_SIZE)
+
+    logger.info(`Detected ${totalThreads} total threads (${totalBatches} batches)`)
+
+    const formattedFirstBatch = this.mapRawBatchToMetadata(firstBatch)
+    allDiscoveredConversations.push(...formattedFirstBatch)
+    logger.info(`Fetched batch 1/${totalBatches} (offset 0)`)
+
+    // Fetch remaining batches
+    for (let batchIndex = 1; batchIndex < totalBatches; batchIndex++) {
+      await page.waitForTimeout(this.config.rateLimitMs)
+      const offset = batchIndex * BATCH_PAGE_SIZE
+
       const threadBatch = await this.fetchThreadBatchFromApi(
         page,
         apiVersion,
-        currentOffset,
+        offset,
         BATCH_PAGE_SIZE
       )
-
-      const isBatchEmpty = threadBatch.length === 0
-      if (isBatchEmpty) {
-        logger.info(`No more threads found at offset ${currentOffset}`)
-        break
-      }
 
       const formattedMetadata = this.mapRawBatchToMetadata(threadBatch)
       allDiscoveredConversations.push(...formattedMetadata)
 
-      logger.info(`Fetched ${threadBatch.length} threads (offset ${currentOffset})`)
-      currentOffset += BATCH_PAGE_SIZE
-
-      await page.waitForTimeout(this.config.rateLimitMs)
+      logger.info(`Fetched batch ${batchIndex + 1}/${totalBatches} (offset ${offset})`)
     }
 
     return allDiscoveredConversations
@@ -122,7 +134,7 @@ export class LibraryDiscovery {
       return await page.evaluate(
         async ({ offset, limit, version }) => {
           const apiEndpoint = `/rest/thread/list_ask_threads?version=${version}&source=default`
-          const apiPayload = { limit, ascending: false, offset, search_term: '' }
+          const apiPayload = { limit, offset }
 
           const apiResponse = await fetch(apiEndpoint, {
             method: 'POST',
