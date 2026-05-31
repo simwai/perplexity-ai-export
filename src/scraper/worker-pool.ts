@@ -75,21 +75,21 @@ export class WorkerPool {
             const isUpToDate =
               existingContentHash && existingContentHash === extractionResult.contentHash
             const currentProgress = this.checkpointManager.getProcessingProgress()
-            const progressLabel = `[${currentProgress.processed}/${currentProgress.total}] `
+            const progressLabel = `[${currentProgress.processed}/${currentProgress.total}]`
 
             if (isUpToDate) {
               this.checkpointManager.markAsProcessed(conversationMetadata.id)
-              logger.info(`${progressLabel} Up to date: ${extractionResult.title} (skipped write) `)
+              logger.info(`${progressLabel} Up to date: ${extractionResult.title} (skipped write)`)
             } else {
               await this.fileWriter.write(extractionResult)
               this.checkpointManager.markAsProcessed(
                 conversationMetadata.id,
                 extractionResult.contentHash
               )
-              logger.info(`${progressLabel} Processed: ${extractionResult.title} `)
+              logger.info(`${progressLabel} Processed: ${extractionResult.title}`)
             }
           } catch (error) {
-            errorBus.emitError(`Failed to process ${conversationMetadata.url} `, error)
+            errorBus.emitError(`Failed to process ${conversationMetadata.url}`, error)
 
             const isContextLostError =
               error instanceof Error && error.message.includes('context is no longer available')

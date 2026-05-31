@@ -61,17 +61,11 @@ export class FileWriter {
   }
 
   private formatConversationAsMarkdown(conversation: ExtractedConversation): string {
-    const headerTitle = `# ${conversation.title}
-
-`
+    const headerTitle = `# ${conversation.title}\n\n`
     const metadataBlock =
-      `**Space:** ${conversation.spaceName}
-` +
-      `**ID:** ${conversation.id}
-` +
-      `**Date:** ${conversation.timestamp.toISOString()}
-
-`
+      `**Space:** ${conversation.spaceName}  \n` +
+      `**ID:** ${conversation.id}  \n` +
+      `**Date:** ${conversation.timestamp.toISOString()}  \n\n`
     return headerTitle + metadataBlock + conversation.content
   }
 }

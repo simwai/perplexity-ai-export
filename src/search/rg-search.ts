@@ -204,8 +204,8 @@ export class RgSearch {
 
   private getRipgrepInstallationInstructions(): string {
     return (
-      'Bundled ripgrep (rg) not found or failed to execute. ' +
-      'Please ensure the application was installed correctly.'
+      'Bundled ripgrep (rg) not found or failed to execute.' +
+      ' Please ensure the application was installed correctly.'
     )
   }
 }
