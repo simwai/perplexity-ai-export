@@ -17,7 +17,7 @@ class ErrorBus extends EventEmitter {
         : ''
       logger.error(`${appError.message}${contextSuffix}`)
 
-      const isDebugEnabled = process.env['DEBUG'] === 'true' || process.env['DEBUG_MODE'] === 'true'
+      const isDebugEnabled = process.env['DEBUG'] === 'true'
       if (appError.error && isDebugEnabled) {
         console.error(appError.error)
       }

@@ -143,7 +143,7 @@ export class BrowserManager {
       this.activeContext = await this.browserInstance.newContext()
     }
 
-    if (this.config.debugMode && this.activeContext) {
+    if (this.config.debug && this.activeContext) {
       logger.debug('Enabling HTTP logging for browser context')
       this.activeContext.on('request', (req) => logHttpRequest(req))
       this.activeContext.on('response', (res) => logHttpResponse(res))

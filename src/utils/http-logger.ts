@@ -53,7 +53,7 @@ function ensureLogsDirectoryExists(): void {
 }
 
 export async function logHttpRequest(request: Request): Promise<void> {
-  if (!config.debugMode) return
+  if (!config.debug) return
 
   ensureLogsDirectoryExists()
 
@@ -79,7 +79,7 @@ export async function logHttpRequest(request: Request): Promise<void> {
 }
 
 export async function logHttpResponse(response: Response): Promise<void> {
-  if (!config.debugMode) return
+  if (!config.debug) return
 
   const originalRequest = response.request()
   const responseUrl = originalRequest.url()
