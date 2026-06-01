@@ -1,5 +1,6 @@
 import { errorBus } from '../utils/error-bus.js'
-import { readFileSync, writeFileSync, existsSync } from 'node:fs'
+import { readFileSync, existsSync } from 'node:fs'
+import writeFileAtomic from 'write-file-atomic'
 import { type Config } from '../utils/config.js'
 
 export interface ConversationMeta {
@@ -20,118 +21,89 @@ interface CheckpointData {
 }
 
 export class CheckpointManager {
-  private readonly checkpointFilePath: string
-  private currentState: CheckpointData
+  private readonly path: string
+  private state: CheckpointData
 
   constructor(config: Config) {
-    this.checkpointFilePath = config.checkpointPath
-    this.currentState = this.loadCheckpoint()
+    this.path = config.checkpointPath
+    this.state = this.load()
   }
 
-  setDiscoveredConversations(newlyDiscoveredConversations: ConversationMeta[]): void {
-    // Preserve content hashes for already known conversations
-    this.currentState.discoveredConversations = newlyDiscoveredConversations.map((newConv) => {
-      const existingConversation = this.currentState.discoveredConversations.find(
-        (existing) => existing.id === newConv.id
-      )
-      return existingConversation
-        ? { ...newConv, contentHash: existingConversation.contentHash }
-        : newConv
+  setDiscoveredConversations(newlyDiscovered: ConversationMeta[]): void {
+    this.state.discoveredConversations = newlyDiscovered.map(n => {
+      const existing = this.state.discoveredConversations.find(e => e.id === n.id)
+      return existing ? { ...n, contentHash: existing.contentHash } : n
     })
-    this.currentState.discoveryPhaseComplete = true
-    this.saveCheckpoint()
+    this.state.discoveryPhaseComplete = true
+    this.save()
   }
 
   isDiscoveryPhaseComplete(): boolean {
-    return this.currentState.discoveryPhaseComplete
+    return this.state.discoveryPhaseComplete
   }
 
   getPendingConversations(): ConversationMeta[] {
-    return this.currentState.discoveredConversations.filter(
-      (conversation) => !this.currentState.processedIds.includes(conversation.id)
-    )
+    const processedSet = new Set(this.state.processedIds)
+    return this.state.discoveredConversations.filter(c => !processedSet.has(c.id))
   }
 
-  getContentHash(conversationId: string): string | undefined {
-    const conversation = this.currentState.discoveredConversations.find(
-      (c) => c.id === conversationId
-    )
-    return conversation?.contentHash
+  getContentHash(id: string): string | undefined {
+    return this.state.discoveredConversations.find(c => c.id === id)?.contentHash
   }
 
-  markAsProcessed(conversationId: string, updatedContentHash?: string): void {
-    let hasStateChanged = false
-
-    const isAlreadyProcessed = this.currentState.processedIds.includes(conversationId)
-    if (!isAlreadyProcessed) {
-      this.currentState.processedIds.push(conversationId)
-      hasStateChanged = true
+  markAsProcessed(id: string, hash?: string): void {
+    let changed = false
+    const processedSet = new Set(this.state.processedIds)
+    if (!processedSet.has(id)) {
+      this.state.processedIds.push(id)
+      changed = true
     }
 
-    if (updatedContentHash) {
-      const targetConversation = this.currentState.discoveredConversations.find(
-        (c) => c.id === conversationId
-      )
-      const isHashDifferent =
-        targetConversation && targetConversation.contentHash !== updatedContentHash
-
-      if (isHashDifferent) {
-        targetConversation.contentHash = updatedContentHash
-        hasStateChanged = true
+    if (hash) {
+      const target = this.state.discoveredConversations.find(c => c.id === id)
+      if (target && target.contentHash !== hash) {
+        target.contentHash = hash
+        changed = true
       }
     }
 
-    if (hasStateChanged) {
-      this.saveCheckpoint()
-    }
+    if (changed) this.save()
   }
 
   getProcessingProgress(): ProgressState {
     return {
-      processed: this.currentState.processedIds.length,
-      total: this.currentState.discoveredConversations.length,
+      processed: this.state.processedIds.length,
+      total: this.state.discoveredConversations.length,
     }
   }
 
   prepareForUpdateRun(): void {
-    this.currentState.processedIds = []
-    this.currentState.discoveryPhaseComplete = false
-    this.saveCheckpoint()
+    this.state.processedIds = []
+    this.state.discoveryPhaseComplete = false
+    this.save()
   }
 
   resetCheckpoint(): void {
-    this.currentState = {
-      discoveryPhaseComplete: false,
-      discoveredConversations: [],
-      processedIds: [],
-    }
-    this.saveCheckpoint()
+    this.state = { discoveryPhaseComplete: false, discoveredConversations: [], processedIds: [] }
+    this.save()
   }
 
-  private loadCheckpoint(): CheckpointData {
-    const doesCheckpointExist = existsSync(this.checkpointFilePath)
-    if (doesCheckpointExist) {
+  private load(): CheckpointData {
+    if (existsSync(this.path)) {
       try {
-        const rawCheckpointData = readFileSync(this.checkpointFilePath, 'utf-8')
-        return JSON.parse(rawCheckpointData)
-      } catch (error) {
-        errorBus.emitError('Failed to load checkpoint file. Starting fresh.', error)
+        return JSON.parse(readFileSync(this.path, 'utf-8'))
+      } catch (e) {
+        errorBus.emitError('Failed to load checkpoint', e)
       }
     }
-
-    return {
-      discoveryPhaseComplete: false,
-      discoveredConversations: [],
-      processedIds: [],
-    }
+    return { discoveryPhaseComplete: false, discoveredConversations: [], processedIds: [] }
   }
 
-  private saveCheckpoint(): void {
+  private async save() {
     try {
-      const serializedState = JSON.stringify(this.currentState, null, 2)
-      writeFileSync(this.checkpointFilePath, serializedState)
-    } catch (error) {
-      errorBus.emitError('Failed to save checkpoint file', error)
+      await (writeFileAtomic as any)(this.path, JSON.stringify(this.state, null, 2))
+    } catch (e) {
+      errorBus.emitError('Failed to save checkpoint', e)
     }
   }
 }

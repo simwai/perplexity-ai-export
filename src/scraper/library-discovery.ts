@@ -1,4 +1,4 @@
-import type { Page } from '@playwright/test'
+import type { Page } from 'patchright'
 import { logger } from '../utils/logger.js'
 
 // ─── Constants ───────────────────────────────────────────────────────────────

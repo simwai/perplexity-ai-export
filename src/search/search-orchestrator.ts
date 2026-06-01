@@ -8,20 +8,6 @@ import chalk from 'chalk'
 export type SearchMode = 'rg' | 'vector' | 'auto' | 'rag'
 
 export class SearchOrchestrator {
-  static readonly SearchOrchestratorError = class extends Error {
-    constructor(message: string) {
-      super(message)
-      this.name = 'SearchOrchestratorError'
-    }
-  }
-
-  static readonly ValidationError = class extends Error {
-    constructor(message: string) {
-      super(message)
-      this.name = 'SearchOrchestratorValidationError'
-    }
-  }
-
   private readonly rgSearch: RgSearch
   private readonly vectorStore: VectorStore
   private readonly ragOrchestrator: RagOrchestrator
@@ -33,11 +19,7 @@ export class SearchOrchestrator {
   }
 
   async validateVectorSearch(): Promise<void> {
-    if (!this.config.enableVectorSearch) {
-      const vectorSearchDisabledErrorMessage =
-        'Vector search is disabled (ENABLE_VECTOR_SEARCH=false).'
-      throw new SearchOrchestrator.ValidationError(vectorSearchDisabledErrorMessage)
-    }
+    if (!this.config.enableVectorSearch) throw new Error('Vector search disabled')
     await this.vectorStore.validate()
   }
 
@@ -48,64 +30,35 @@ export class SearchOrchestrator {
   async search(query: string, mode: SearchMode, rgOptions: RgSearchOptions): Promise<void> {
     try {
       switch (mode) {
-        case 'rg':
-          await this.rgSearch.search(rgOptions)
-          break
-        case 'vector':
-          await this.performVectorOnlySearch(query)
-          break
-        case 'rag':
-          await this.ragOrchestrator.answerQuestion(query)
-          break
+        case 'rg': await this.rgSearch.search(rgOptions); break
+        case 'vector': await this.vectorOnly(query); break
+        case 'rag': await this.ragOrchestrator.answerQuestion(query); break
         case 'auto':
-        default:
-          await this.executeAutoSearch(query, rgOptions)
-          break
+        default: await this.auto(query, rgOptions); break
       }
-    } catch (_error) {
-      if (_error instanceof Error) {
-        const searchFailedErrorMessage = `Search failed: ${_error.message}`
-        throw new SearchOrchestrator.SearchOrchestratorError(searchFailedErrorMessage)
-      }
-      throw _error
+    } catch (e) {
+      throw new Error(`Search failed: ${e instanceof Error ? e.message : String(e)}`)
     }
   }
 
-  private async executeAutoSearch(query: string, rgOptions: RgSearchOptions): Promise<void> {
-    const LONG_QUERY_WORD_COUNT_THRESHOLD = 5
-    const queryWordCount = query.trim().split(/\s+/).length
-    const isLongQuery = queryWordCount > LONG_QUERY_WORD_COUNT_THRESHOLD
-
-    if (isLongQuery) {
-      await this.performVectorOnlySearch(query)
-    } else {
-      await this.rgSearch.search(rgOptions)
-    }
+  private async auto(q: string, opt: RgSearchOptions) {
+    if (q.trim().split(/\s+/).length > 5) await this.vectorOnly(q)
+    else await this.rgSearch.search(opt)
   }
 
-  private async performVectorOnlySearch(query: string): Promise<void> {
-    logger.info('Using vector search (Ollama + Vectra)...')
-    const SEARCH_RESULT_LIMIT = 10
-    const searchResults = await this.vectorStore.search(query, SEARCH_RESULT_LIMIT)
-
-    if (searchResults.length === 0) {
-      logger.info('No vector search results found.')
+  private async vectorOnly(q: string) {
+    logger.info('Using semantic search...')
+    const res = await this.vectorStore.search(q, 10)
+    if (res.length === 0) {
+      logger.info('No results.')
       return
     }
-
-    for (const result of searchResults) {
-      const { meta, score } = result
-      const relevanceScoreLabel = score.toFixed(3)
-
-      const spaceNameDisplay = chalk.green(meta['spaceName'] as string)
-      const arrowSeparator = chalk.gray('›')
-      const titleDisplay = chalk.cyan(meta['title'] as string)
-      const scoreDisplay = chalk.gray(`(${relevanceScoreLabel})`)
-      const pathDisplay = chalk.gray(meta['path'] as string)
-
-      logger.info(
-        `${spaceNameDisplay} ${arrowSeparator} ${titleDisplay} ${scoreDisplay}\n${pathDisplay}\n`
-      )
+    for (const r of res) {
+      const s = chalk.green(r.meta['spaceName'] as string)
+      const t = chalk.cyan(r.meta['title'] as string)
+      const score = chalk.gray(`(${r.score.toFixed(3)})`)
+      const p = chalk.gray(r.meta['path'] as string)
+      logger.info(`${s} › ${t} ${score}\n${p}\n`)
     }
   }
 }

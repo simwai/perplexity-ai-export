@@ -1,44 +1,25 @@
-export function chunkMarkdown(markdown: string, maxChars = 1500, overlapChars = 150): string[] {
-  const HEADER_OR_RULE_REGEX = /(?=^#{1,3}\s)|(?=^---)/gm
-
-  const sections = markdown.split(HEADER_OR_RULE_REGEX)
-
+export function chunkMarkdown(text: string, max = 1500, overlap = 150): string[] {
+  const MARKER = /(?=^#{1,3}\s)|(?=^---)/gm
+  const sections = text.split(MARKER)
   const chunks: string[] = []
-  let currentChunk = ''
+  let current = ''
 
-  for (const section of sections) {
-    const trimmedSection = section.trim()
-    if (!trimmedSection) continue
-
-    const wouldExceedMaxSize = currentChunk.length + trimmedSection.length > maxChars
-    const isCurrentChunkPopulated = currentChunk.length > 0
-
-    if (wouldExceedMaxSize && isCurrentChunkPopulated) {
-      chunks.push(currentChunk.trim())
-
-      const overlapText = currentChunk.slice(-overlapChars).replace(/^---\s*/, '')
-      currentChunk = overlapText + '\n\n' + trimmedSection
+  for (const s of sections) {
+    const trimmed = s.trim()
+    if (!trimmed) continue
+    if (current.length + trimmed.length > max && current.length > 0) {
+      chunks.push(current.trim())
+      current = current.slice(-overlap).replace(/^---\s*/, '') + '\n\n' + trimmed
     } else {
-      const separator = currentChunk ? '\n\n' : ''
-      currentChunk += separator + trimmedSection
+      current += (current ? '\n\n' : '') + trimmed
     }
   }
+  if (current.trim()) chunks.push(current.trim())
 
-  const trimmedRemainingChunk = currentChunk.trim()
-  if (trimmedRemainingChunk.length > 0) {
-    chunks.push(trimmedRemainingChunk)
-  }
-
-  const MAX_CHUNK_THRESHOLD = maxChars + 500
-  return chunks.flatMap((chunk) => {
-    if (chunk.length <= MAX_CHUNK_THRESHOLD) {
-      return [chunk]
-    }
-
-    const oversizedSubChunks: string[] = []
-    for (let offset = 0; offset < chunk.length; offset += maxChars) {
-      oversizedSubChunks.push(chunk.slice(offset, offset + maxChars))
-    }
-    return oversizedSubChunks
+  return chunks.flatMap(c => {
+    if (c.length <= max + 500) return [c]
+    const sub: string[] = []
+    for (let i = 0; i < c.length; i += max) sub.push(c.slice(i, i + max))
+    return sub
   })
 }

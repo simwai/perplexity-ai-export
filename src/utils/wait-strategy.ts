@@ -1,4 +1,4 @@
-import type { Page } from '@playwright/test'
+import type { Page } from 'patchright'
 import { type Config } from './config.js'
 
 export interface WaitStrategy {
@@ -7,55 +7,27 @@ export interface WaitStrategy {
   forSelector(page: Page, selector: string): Promise<void>
 }
 
-class DynamicWaitStrategy implements WaitStrategy {
-  private static readonly NETWORK_IDLE_TIMEOUT_MS = 2000
-  private static readonly SELECTOR_TIMEOUT_MS = 5000
-
+class DynamicWait implements WaitStrategy {
   async afterClick(page: Page): Promise<void> {
-    await page
-      .waitForLoadState('networkidle', { timeout: DynamicWaitStrategy.NETWORK_IDLE_TIMEOUT_MS })
-      .catch(() => {})
+    await page.waitForLoadState('networkidle', { timeout: 2000 }).catch(() => {})
   }
-
   async afterScroll(page: Page): Promise<void> {
     await page.waitForLoadState('domcontentloaded')
   }
-
-  async forSelector(page: Page, selector: string): Promise<void> {
-    await page.waitForSelector(selector, {
-      state: 'visible',
-      timeout: DynamicWaitStrategy.SELECTOR_TIMEOUT_MS,
-    })
+  async forSelector(page: Page, sel: string): Promise<void> {
+    await page.waitForSelector(sel, { state: 'visible', timeout: 5000 })
   }
 }
 
-class StaticWaitStrategy implements WaitStrategy {
-  private readonly baseDelayMs: number
-
-  constructor(delayMs: number) {
-    this.baseDelayMs = delayMs
+class StaticWait implements WaitStrategy {
+  constructor(private readonly delay: number) {}
+  private async pause(page: Page) {
+    await page.waitForTimeout(this.delay + Math.random() * this.delay * 0.5)
   }
-
-  private async randomPause(page: Page): Promise<void> {
-    const jitter = Math.floor(this.baseDelayMs * 0.5 * Math.random())
-    const totalWaitTime = this.baseDelayMs + jitter
-    await page.waitForTimeout(totalWaitTime)
-  }
-
-  async afterClick(page: Page): Promise<void> {
-    await this.randomPause(page)
-  }
-
-  async afterScroll(page: Page): Promise<void> {
-    await this.randomPause(page)
-  }
-
-  async forSelector(page: Page, _selector: string): Promise<void> {
-    await this.randomPause(page)
-  }
+  async afterClick(page: Page) { await this.pause(page) }
+  async afterScroll(page: Page) { await this.pause(page) }
+  async forSelector(page: Page) { await this.pause(page) }
 }
 
-export const waitStrategy = (config: Config): WaitStrategy => {
-  const isDynamicMode = config.waitMode === 'dynamic'
-  return isDynamicMode ? new DynamicWaitStrategy() : new StaticWaitStrategy(config.rateLimitMs)
-}
+export const waitStrategy = (cfg: Config): WaitStrategy =>
+  cfg.waitMode === 'dynamic' ? new DynamicWait() : new StaticWait(cfg.rateLimitMs)

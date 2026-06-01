@@ -11,8 +11,8 @@ export interface ApiDiagnosticEntry {
 }
 
 export class ApiDiagnosticsWriter {
-  private readonly DEBUG_DIRECTORY = 'debug'
-  private readonly DIAGNOSTICS_FILENAME = 'api-diagnostics.jsonl'
+  private static readonly DEBUG_DIRECTORY = 'debug'
+  private static readonly DIAGNOSTICS_FILENAME = 'api-diagnostics.jsonl'
 
   constructor(private readonly config: Config) {}
 
@@ -25,14 +25,13 @@ export class ApiDiagnosticsWriter {
         ...entry,
       }
 
-      await fs.mkdir(this.DEBUG_DIRECTORY, { recursive: true })
-      const diagnosticLogPath = path.join(this.DEBUG_DIRECTORY, this.DIAGNOSTICS_FILENAME)
+      await fs.mkdir(ApiDiagnosticsWriter.DEBUG_DIRECTORY, { recursive: true })
+      const diagnosticLogPath = path.join(ApiDiagnosticsWriter.DEBUG_DIRECTORY, ApiDiagnosticsWriter.DIAGNOSTICS_FILENAME)
 
       const entryAsJsonLine = JSON.stringify(diagnosticEntry) + '\n'
       await fs.appendFile(diagnosticLogPath, entryAsJsonLine, 'utf8')
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error)
-      logger.warn(`Failed to write API diagnostic: ${errorMessage}`)
+      logger.warn(`Failed to write API diagnostic: ${error instanceof Error ? error.message : String(error)}`)
     }
   }
 }
