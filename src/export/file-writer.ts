@@ -4,7 +4,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import { type Config } from '../utils/config.js'
 import type { ExtractedConversation } from '../scraper/conversation-extractor.js'
 import { sanitizeFilename, sanitizeSpaceName } from './sanitizer.js'
-import { type ConversationExporter } from '../exporters/exporter-interface.js'
+import { type ConversationExporter } from '../exporters/exporter.interface.js'
 import { logger } from '../utils/logger.js'
 
 export class FileWriter {
@@ -38,7 +38,7 @@ export class FileWriter {
     const files = readdirSync(exportersDir)
     for (const file of files) {
       if (
-        (file.endsWith('-exporter.ts') || file.endsWith('-exporter.js')) &&
+        (file.endsWith('.exporter.ts') || file.endsWith('.exporter.js')) &&
         !file.endsWith('.d.ts')
       ) {
         try {
@@ -63,7 +63,7 @@ export class FileWriter {
       logger.warn('No active exporters found. Defaulting to markdown.')
       // Manual fallback if discovery fails or nothing matches
       try {
-        const markdownExporter = (await import('../exporters/markdown-exporter.js')).default
+        const markdownExporter = (await import('../exporters/markdown.exporter.js')).default
         this.exporters.push(markdownExporter)
       } catch (e) {
         logger.error('Failed to load default markdown exporter', e)

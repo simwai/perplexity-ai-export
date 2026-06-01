@@ -1,9 +1,9 @@
-// Copy this file to src/exporters/csv-exporter.ts
+// Copy this file to src/exporters/csv.exporter.ts
 // Then add "csv" to ENABLED_EXPORTERS in your .env
 //
 // The `name` field here MUST match what you put in ENABLED_EXPORTERS.
 
-import type { ConversationExporter } from './exporter-interface.js'
+import type { ConversationExporter } from './exporter.interface.js'
 import type { ExtractedConversation } from '../scraper/conversation-extractor.js'
 import type { Config } from '../utils/config.js'
 
