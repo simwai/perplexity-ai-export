@@ -7,6 +7,11 @@ import { waitStrategy } from '../utils/wait-strategy.js'
 import { ApiDiagnosticsWriter } from '../utils/api-diagnostics.js'
 import { type Config } from '../utils/config.js'
 
+export interface ConversationMessage {
+  role: 'user' | 'assistant'
+  content: string
+}
+
 export interface ExtractedConversation {
   id: string
   contentHash: string
@@ -14,6 +19,7 @@ export interface ExtractedConversation {
   spaceName: string
   timestamp: Date
   content: string
+  messages: ConversationMessage[]
 }
 
 export class ConversationExtractor {
@@ -333,10 +339,11 @@ export class ConversationExtractor {
       const spaceName = firstEntry.collection_info?.title ?? collectionTitleFromData ?? 'General'
       const timestamp = this.extractTimestamp(firstEntry, apiData)
       const contentHash = this.hashEntries(validatedEntries)
-      const markdownContent = this.convertEntriesToMarkdown(validatedEntries, title)
+      const messages = this.parseMessages(validatedEntries, title)
+      const markdownContent = this.convertMessagesToMarkdown(messages)
 
-      if (!markdownContent) {
-        logger.warn(`Thread has empty content after formatting: ${conversationUrl}`)
+      if (!markdownContent && messages.length === 0) {
+        logger.warn(`Thread has no content or messages: ${conversationUrl}`)
         return null
       }
 
@@ -347,6 +354,7 @@ export class ConversationExtractor {
         timestamp,
         content: markdownContent,
         contentHash,
+        messages,
       }
     } catch (error) {
       errorBus.emitError('Failed to parse conversation data.', error)
@@ -376,13 +384,17 @@ export class ConversationExtractor {
     return rawTimestamp ? new Date(rawTimestamp) : new Date()
   }
 
-  private convertEntriesToMarkdown(entries: unknown[], threadTitle: string): string {
-    let markdown = ''
+  private parseMessages(entries: unknown[], threadTitle: string): ConversationMessage[] {
+    const messages: ConversationMessage[] = []
     const typedEntries = entries as any[]
 
     for (let i = 0; i < typedEntries.length; i++) {
       const entry = typedEntries[i]
-      let question = entry.query_str ?? (i === 0 ? threadTitle : 'Follow‑up')
+      const question = entry.query_str ?? (i === 0 ? threadTitle : 'Follow‑up')
+
+      if (question) {
+        messages.push({ role: 'user', content: question })
+      }
 
       let answer = ''
       for (const block of entry.blocks ?? []) {
@@ -391,11 +403,23 @@ export class ConversationExtractor {
         }
       }
 
-      if (question) markdown += `## ${question}\n\n`
-      if (answer) markdown += `${answer.trim()}\n\n`
-      markdown += '---\n\n'
+      if (answer.trim()) {
+        messages.push({ role: 'assistant', content: answer.trim() })
+      }
     }
 
+    return messages
+  }
+
+  private convertMessagesToMarkdown(messages: ConversationMessage[]): string {
+    let markdown = ''
+    for (const message of messages) {
+      if (message.role === 'user') {
+        markdown += `## ${message.content}\n\n`
+      } else {
+        markdown += `${message.content}\n\n---\n\n`
+      }
+    }
     return markdown.trim()
   }
 }

@@ -1,0 +1,30 @@
+// Copy this file to src/exporters/csv.exporter.ts
+// Then add "csv" to ENABLED_EXPORTERS in your .env
+//
+// The `name` field here MUST match what you put in ENABLED_EXPORTERS.
+
+import type { ConversationExporter } from './exporter.interface.js'
+import type { ExtractedConversation } from '../scraper/conversation-extractor.js'
+import type { Config } from '../utils/config.js'
+
+const exporter: ConversationExporter = {
+  name: 'csv',
+  fileExtension: '.csv',
+  // outputDir: where your files will be written.
+  // Return config.exportDir to share the default exports folder,
+  // or return a custom path for a separate output directory.
+  outputDir(config: Config): string {
+    return config.exportDir
+  },
+  // export: receives the fully extracted conversation, returns a string.
+  // The string will be written to: outputDir / spaceName / title (id).csv
+  export(conversation: ExtractedConversation): string {
+    const header = 'role,content'
+    const rows = conversation.messages.map(
+      (m) => `${m.role},"${m.content.replace(/"/g, '""')}"`
+    )
+    return [header, ...rows].join('\n')
+  },
+}
+
+export default exporter

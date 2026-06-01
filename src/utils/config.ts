@@ -24,6 +24,10 @@ const configSchema = z.object({
     .transform((val) => val === 'true'),
   headless: z.union([z.boolean(), z.literal('new')]),
   debug: z.boolean(),
+  enabledExporters: z
+    .string()
+    .optional()
+    .transform((val) => (val ? val.split(',').map((s) => s.trim()) : ['markdown'])),
 })
 
 export type Config = z.infer<typeof configSchema>
@@ -61,6 +65,7 @@ function parseEnvConfig(): Config {
     enableVectorSearch: process.env['ENABLE_VECTOR_SEARCH'],
     headless: headless,
     debug: process.env['DEBUG'] === 'true',
+    enabledExporters: process.env['ENABLED_EXPORTERS'],
   }
 
   const result = configSchema.safeParse(rawConfig)

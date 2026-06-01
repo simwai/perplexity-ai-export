@@ -36,6 +36,7 @@ export class WorkerPool {
 
   async initialize(): Promise<void> {
     try {
+      await this.fileWriter.initialize()
       this.sharedBrowserContext = await this.browser.newContext({
         storageState: this.config.authStoragePath,
       })
@@ -111,7 +112,7 @@ export class WorkerPool {
       this.checkpointManager.markAsProcessed(meta.id)
       logger.info(`${progressLabel} Up to date: ${result.title} (skipped write)`)
     } else {
-      this.fileWriter.write(result)
+      await this.fileWriter.write(result)
       this.checkpointManager.markAsProcessed(meta.id, result.contentHash)
       logger.info(`${progressLabel} Processed: ${result.title}`)
     }
