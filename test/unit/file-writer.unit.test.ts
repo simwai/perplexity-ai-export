@@ -3,7 +3,6 @@ import { FileWriter } from '../../src/export/file-writer.js'
 import { type Config } from '../../src/utils/config.js'
 import { type ExtractedConversation } from '../../src/scraper/conversation-extractor.js'
 import * as fs from 'node:fs'
-import * as path from 'node:path'
 
 vi.mock('node:fs')
 vi.mock('node:path', async () => {
@@ -39,11 +38,7 @@ describe('FileWriter (Unit)', () => {
 
   it('should initialize and discover exporters', async () => {
     const fileWriter = new FileWriter(mockConfig)
-
-    // We need to mock the dynamic import, but that's tricky in Vitest with ESM.
-    // Instead, let's at least verify it tries to read the directory.
     await fileWriter.initialize()
-
     expect(fs.readdirSync).toHaveBeenCalled()
   })
 })

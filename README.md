@@ -120,7 +120,7 @@ cp .env.example .env
 The system features a file-based exporter plugin system. You can easily add new output formats by adding a `.ts` file to `src/exporters/`.
 
 ### How to add a new exporter
-1.  **Drop the file:** Add your exporter implementation to `src/exporters/`. You can use `src/exporters/custom.exporter.ts.example` as a starting point.
+1.  **Drop the file:** Add your exporter implementation to `src/exporters/`. You can use `src/exporters/custom-exporter.ts-example` as a starting point.
 2.  **Define the Interface:** Your exporter must implement the `ConversationExporter` interface:
     ```typescript
     export interface ConversationExporter {

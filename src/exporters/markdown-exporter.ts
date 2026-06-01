@@ -1,4 +1,4 @@
-import type { ConversationExporter } from './exporter.interface.js'
+import type { ConversationExporter } from './exporter-interface.js'
 import type { ExtractedConversation } from '../scraper/conversation-extractor.js'
 import type { Config } from '../utils/config.js'
 
