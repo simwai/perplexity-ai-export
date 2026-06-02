@@ -2,7 +2,7 @@ import { errorBus } from '../utils/error-bus.js'
 import { type Browser, type BrowserContext } from '@playwright/test'
 import { ConversationExtractor } from './conversation-extractor.js'
 import { CheckpointManager, type ConversationMeta } from './checkpoint-manager.js'
-import { FileWriter } from '../export/file-writer.js'
+import { ExportOrchestrator } from '../export/export-orchestrator.js'
 import { logger } from '../utils/logger.js'
 import { type Config } from '../utils/config.js'
 
@@ -22,7 +22,7 @@ interface QueueItem {
 
 export class WorkerPool {
   private readonly workers: ExtractionWorker[] = []
-  private readonly fileWriter: FileWriter
+  private readonly exportOrchestrator: ExportOrchestrator
   private sharedBrowserContext: BrowserContext | null = null
   private isRefreshing = false
 
@@ -31,12 +31,12 @@ export class WorkerPool {
     private readonly checkpointManager: CheckpointManager,
     private readonly browser: Browser
   ) {
-    this.fileWriter = new FileWriter(config)
+    this.exportOrchestrator = new ExportOrchestrator(config)
   }
 
   async initialize(): Promise<void> {
     try {
-      await this.fileWriter.initialize()
+      await this.exportOrchestrator.initialize()
       this.sharedBrowserContext = await this.browser.newContext({
         storageState: this.config.authStoragePath,
       })
@@ -112,7 +112,7 @@ export class WorkerPool {
       this.checkpointManager.markAsProcessed(meta.id)
       logger.info(`${progressLabel} Up to date: ${result.title} (skipped write)`)
     } else {
-      await this.fileWriter.write(result)
+      await this.exportOrchestrator.exportConversation(result)
       this.checkpointManager.markAsProcessed(meta.id, result.contentHash)
       logger.info(`${progressLabel} Processed: ${result.title}`)
     }

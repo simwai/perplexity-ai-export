@@ -1,14 +1,14 @@
-import type { ConversationExporter } from './exporter.interface.js'
+import type { ExportStrategy } from './export.strategy.js'
 import type { ExtractedConversation } from '../scraper/conversation-extractor.js'
 import type { Config } from '../utils/config.js'
 
-const exporter: ConversationExporter = {
+const exporter: ExportStrategy = {
   name: 'markdown',
   fileExtension: '.md',
   outputDir(config: Config): string {
     return config.exportDir
   },
-  serialize(conversation: ExtractedConversation): string {
+  format(conversation: ExtractedConversation): string {
     const headerTitle = `# ${conversation.title}\n\n`
     const metadataBlock =
       `**Space:** ${conversation.spaceName}  \n` +

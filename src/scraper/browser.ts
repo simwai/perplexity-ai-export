@@ -268,8 +268,8 @@ export class BrowserManager {
       return
     }
 
-    const serializedState = JSON.stringify(currentStorageState, null, 2)
-    writeFileSync(this.config.authStoragePath, serializedState)
+    const formatdState = JSON.stringify(currentStorageState, null, 2)
+    writeFileSync(this.config.authStoragePath, formatdState)
   }
 
   private getActivePage(): Page {

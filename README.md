@@ -22,7 +22,7 @@
   * [3. Download and Prepare the Project](#3-download-and-prepare-the-project)
 - [Configuration](#configuration)
   * [Key Environment Variables](#key-environment-variables)
-- [Exporters](#exporters)
+- [Exporters](#strategies)
 - [Usage Guide](#usage-guide)
   * [Operational Directives](#operational-directives)
 - [RAG Capabilities](#rag-capabilities)
@@ -113,32 +113,32 @@ cp .env.example .env
 - **OLLAMA_MODEL**: Cognitive model for RAG synthesis (e.g., deepseek-r1).
 - **OLLAMA_EMBED_MODEL**: Model for generating vector representations (e.g., nomic-embed-text).
 - **ENABLE_VECTOR_SEARCH**: Set to `true` to activate semantic and RAG layers.
-- **ENABLED_EXPORTERS**: Comma-separated list of exporter names to enable (e.g., `markdown,csv`). Default: `markdown`.
+- **ENABLED_STRATEGIES**: Comma-separated list of exporter names to enable (e.g., `markdown,csv`). Default: `markdown`.
 
 ## Exporters
 
-The system features a file-based exporter plugin system. You can easily add new output formats by adding a `.ts` file to `src/exporters/`.
+The system features a file-based exporter plugin system. You can easily add new output formats by adding a `.ts` file to `src/strategies/`.
 
 ### How to add a new exporter
-1.  **Drop the file:** Add your exporter implementation to `src/exporters/`. You can use `src/exporters/custom.exporter.ts.example` as a starting point.
-2.  **Define the Interface:** Your exporter must implement the `ConversationExporter` interface:
+1.  **Drop the file:** Add your exporter implementation to `src/strategies/`. You can use `src/strategies/custom.strategy.ts.example` as a starting point.
+2.  **Define the Interface:** Your exporter must implement the `ExportStrategy` interface:
     ```typescript
-    export interface ConversationExporter {
+    export interface ExportStrategy {
       name: string
       fileExtension: string
       outputDir(config: Config): string
-      serialize(conversation: ExtractedConversation): string
+      format(conversation: ExtractedConversation): string
     }
     ```
-3.  **Activate:** Add the `name` of your exporter to the `ENABLED_EXPORTERS` environment variable in your `.env` file.
+3.  **Activate:** Add the `name` of your exporter to the `ENABLED_STRATEGIES` environment variable in your `.env` file.
     ```bash
-    ENABLED_EXPORTERS=markdown,csv
+    ENABLED_STRATEGIES=markdown,csv
     ```
 
 **Notes:**
-- The `name` field in your exporter must match exactly what you put in `ENABLED_EXPORTERS`.
+- The `name` field in your exporter must match exactly what you put in `ENABLED_STRATEGIES`.
 - Returning `config.exportDir` from `outputDir` is the safe default for sharing the main export folder.
-- Custom exporters in `src/exporters/` are automatically discovered at startup.
+- Custom strategies in `src/strategies/` are automatically discovered at startup.
 
 ## Usage Guide
 
@@ -188,7 +188,7 @@ For a detailed look at our RAG implementation, hybrid search strategy, and theor
 - **src/search/**: Vector storage (Vectra) and ripgrep search implementation.
 - **src/repl/**: Interactive CLI components.
 - **src/utils/**: Shared utility functions for data chunking, logging, and API diagnostics.
-- **src/exporters/**: Plugin-based conversation exporters (Markdown, JSON, CSV, etc.).
+- **src/strategies/**: Plugin-based conversation strategies (Markdown, JSON, CSV, etc.).
 
 ## Diagnostics
 

@@ -1,13 +1,13 @@
-// Copy this file to src/exporters/csv.exporter.ts
-// Then add "csv" to ENABLED_EXPORTERS in your .env
+// Copy this file to src/strategies/csv.exporter.ts
+// Then add "csv" to ENABLED_STRATEGIES in your .env
 //
-// The `name` field here MUST match what you put in ENABLED_EXPORTERS.
+// The `name` field here MUST match what you put in ENABLED_STRATEGIES.
 
-import type { ConversationExporter } from './exporter.interface.js'
+import type { ExportStrategy } from './export.strategy.js'
 import type { ExtractedConversation } from '../scraper/conversation-extractor.js'
 import type { Config } from '../utils/config.js'
 
-const exporter: ConversationExporter = {
+const exporter: ExportStrategy = {
   name: 'csv',
   fileExtension: '.csv',
   // outputDir: where your files will be written.
@@ -16,9 +16,9 @@ const exporter: ConversationExporter = {
   outputDir(config: Config): string {
     return config.exportDir
   },
-  // serialize: receives the fully extracted conversation, returns a string.
+  // format: receives the fully extracted conversation, returns a string.
   // The string will be written to: outputDir / spaceName / title (id).csv
-  serialize(conversation: ExtractedConversation): string {
+  format(conversation: ExtractedConversation): string {
     const header = 'role,content'
     const rows = conversation.messages.map(
       (m) => `${m.role},"${m.content.replace(/"/g, '""')}"`

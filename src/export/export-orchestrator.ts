@@ -4,10 +4,10 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import { type Config } from '../utils/config.js'
 import type { ExtractedConversation } from '../scraper/conversation-extractor.js'
 import { sanitizeFilename, sanitizeSpaceName } from './sanitizer.js'
-import { type ConversationExporter } from '../exporters/exporter.interface.js'
+import { type ExportStrategy } from '../exporters/export.strategy.js'
 import { logger } from '../utils/logger.js'
 
-export class FileWriter {
+export class ExportOrchestrator {
   static readonly WriteError = class extends Error {
     constructor(message: string) {
       super(message)
@@ -15,68 +15,67 @@ export class FileWriter {
     }
   }
 
-  private exporters: ConversationExporter[] = []
+  private strategies: ExportStrategy[] = []
 
   constructor(private readonly config: Config) {
     this.ensureRootExportDirectoryExists()
   }
 
   async initialize(): Promise<void> {
-    await this.discoverExporters()
+    await this.initializeStrategies()
   }
 
-  private async discoverExporters(): Promise<void> {
+  private async initializeStrategies(): Promise<void> {
     const __filename = fileURLToPath(import.meta.url)
     const __dirname = dirname(__filename)
-    const exportersDir = join(__dirname, '..', 'exporters')
+    const strategiesDir = join(__dirname, '..', 'exporters')
 
-    if (!existsSync(exportersDir)) {
-      logger.warn(`Exporters directory not found: ${exportersDir}`)
+    if (!existsSync(strategiesDir)) {
+      logger.warn(`Exporters directory not found: ${strategiesDir}`)
       return
     }
 
-    const files = readdirSync(exportersDir)
+    const files = readdirSync(strategiesDir)
     for (const file of files) {
       if (
-        (file.endsWith('.exporter.ts') || file.endsWith('.exporter.js')) &&
+        (file.endsWith('.strategy.ts') || file.endsWith('.strategy.js')) &&
         !file.endsWith('.d.ts')
       ) {
         try {
-          const filePath = join(exportersDir, file)
+          const filePath = join(strategiesDir, file)
           const moduleUrl = pathToFileURL(filePath).href
-          const exporterModule = await import(moduleUrl)
-          const exporter = exporterModule.default as ConversationExporter
+          const strategyModule = await import(moduleUrl)
+          const strategy = strategyModule.default as ExportStrategy
 
-          if (exporter && exporter.name && typeof exporter.serialize === 'function') {
-            if (this.config.enabledExporters.includes(exporter.name)) {
-              this.exporters.push(exporter)
-              logger.debug(`Registered exporter: ${exporter.name}`)
+          if (strategy && strategy.name && typeof strategy.format === 'function') {
+            if (this.config.enabledStrategies.includes(strategy.name)) {
+              this.strategies.push(strategy)
+              logger.debug(`Registered export strategy: ${strategy.name}`)
             }
           }
         } catch (error) {
-          logger.error(`Failed to load exporter ${file}: ${error}`)
+          logger.error(`Failed to load export strategy ${file}: ${error}`)
         }
       }
     }
 
-    if (this.exporters.length === 0) {
-      logger.warn('No active exporters found. Defaulting to markdown.')
-      // Manual fallback if discovery fails or nothing matches
+    if (this.strategies.length === 0) {
+      logger.warn('No active export strategies found. Defaulting to markdown.')
       try {
-        const markdownExporter = (await import('../exporters/markdown.exporter.js')).default
-        this.exporters.push(markdownExporter)
+        const markdownStrategy = (await import('../exporters/markdown.strategy.js')).default
+        this.strategies.push(markdownStrategy)
       } catch (e) {
-        logger.error('Failed to load default markdown exporter', e)
+        logger.error('Failed to load default markdown strategy', e)
       }
     }
   }
 
-  async write(conversation: ExtractedConversation): Promise<string[]> {
+  async exportConversation(conversation: ExtractedConversation): Promise<string[]> {
     const writtenFiles: string[] = []
 
-    for (const exporter of this.exporters) {
+    for (const strategy of this.strategies) {
       try {
-        const outputDir = exporter.outputDir(this.config)
+        const outputDir = strategy.outputDir(this.config)
         const safeSpaceName = sanitizeSpaceName(conversation.spaceName)
         const spaceSpecificDirectory = join(outputDir, safeSpaceName)
 
@@ -85,13 +84,12 @@ export class FileWriter {
         }
 
         const safeFileTitle = sanitizeFilename(conversation.title)
-        const fileName = `${safeFileTitle} (${conversation.id})${exporter.fileExtension}`
+        const fileName = `${safeFileTitle} (${conversation.id})${strategy.fileExtension}`
         const destinationFilePath = join(spaceSpecificDirectory, fileName)
 
-        const content = exporter.serialize(conversation)
+        const content = strategy.format(conversation)
         writeFileSync(destinationFilePath, content, 'utf-8')
 
-        // Integrity check
         if (!existsSync(destinationFilePath) || statSync(destinationFilePath).size === 0) {
           throw new Error(`Exported file is missing or empty: ${destinationFilePath}`)
         }
@@ -99,13 +97,13 @@ export class FileWriter {
         writtenFiles.push(destinationFilePath)
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error)
-        logger.error(`Failed to export with ${exporter.name} for ${conversation.id}: ${errorMessage}`)
+        logger.error(`Failed to export with ${strategy.name} for ${conversation.id}: ${errorMessage}`)
       }
     }
 
-    if (writtenFiles.length === 0 && this.exporters.length > 0) {
-      throw new FileWriter.WriteError(
-        `Failed to write conversation ${conversation.id} with any exporter.`
+    if (writtenFiles.length === 0 && this.strategies.length > 0) {
+      throw new ExportOrchestrator.WriteError(
+        `Failed to write conversation ${conversation.id} with any strategy.`
       )
     }
 
