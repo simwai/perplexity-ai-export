@@ -7,34 +7,34 @@ import { type Config } from '../../utils/config.js'
 
 export class HybridRetriever {
   constructor(
-    private readonly config: Config,
-    private readonly vectorStore: VectorStore,
-    private readonly ripgrep: RgSearch
+    private readonly applicationConfig: Config,
+    private readonly conversationVectorStore: VectorStore,
+    private readonly ripgrepSearchEngine: RgSearch
   ) {}
 
-  async retrieve(plan: ResearchPlan): Promise<VectorSearchResult[]> {
-    const searchPools: VectorSearchResult[][] = []
+  async retrieve(researchPlan: ResearchPlan): Promise<VectorSearchResult[]> {
+    const searchResultPools: VectorSearchResult[][] = []
 
-    for (const [index, searchQuery] of plan.queries.entries()) {
-      logger.debug(`Executing semantic search [${index + 1}/${plan.queries.length}]: "${searchQuery}"`)
-      const vectorResults = await this.vectorStore.search(searchQuery, 40)
-      searchPools.push(vectorResults)
+    for (const [queryIndex, searchQuery] of researchPlan.searchQueries.entries()) {
+      logger.debug(`Executing semantic search [${queryIndex + 1}/${researchPlan.searchQueries.length}]: "${searchQuery}"`)
+      const semanticVectorResults = await this.conversationVectorStore.search(searchQuery, 40)
+      searchResultPools.push(semanticVectorResults)
     }
 
-    if (plan.hydePassage) {
-      logger.debug(`Executing HyDE search: "${plan.hydePassage.slice(0, 60)}..."`)
-      const hydeResults = await this.vectorStore.search(plan.hydePassage, 40)
-      searchPools.push(hydeResults)
+    if (researchPlan.hypotheticalDocumentEmbeddingsPassage) {
+      logger.debug(`Executing HyDE search: "${researchPlan.hypotheticalDocumentEmbeddingsPassage.slice(0, 60)}..."`)
+      const hydeVectorResults = await this.conversationVectorStore.search(researchPlan.hypotheticalDocumentEmbeddingsPassage, 40)
+      searchResultPools.push(hydeVectorResults)
     }
 
     const keywordMatchPool: VectorSearchResult[] = []
-    for (const hardKeyword of plan.hardKeywords) {
+    for (const hardKeyword of researchPlan.hardKeywordsForExactMatch) {
       logger.debug(`Executing keyword search: "${hardKeyword}"`)
       try {
-        const matches = await this.ripgrep.captureSearchMatches({ pattern: hardKeyword })
-        const convertedMatches: VectorSearchResult[] = matches.map((match) => ({
+        const ripgrepMatches = await this.ripgrepSearchEngine.captureSearchMatches({ pattern: hardKeyword })
+        const convertedMatches: VectorSearchResult[] = ripgrepMatches.map((match) => ({
           meta: {
-            path: join(this.config.exportDir, match.path),
+            path: join(this.applicationConfig.exportDir, match.path),
             snippet: match.text,
             title: match.path.split('/').pop() || 'Untitled',
             id: match.path + match.line,
@@ -42,40 +42,44 @@ export class HybridRetriever {
           score: 1.0,
         }))
         keywordMatchPool.push(...convertedMatches)
-      } catch {
-        // Skip failed keyword searches
+      } catch (ripgrepError) {
+        // Skip failed keyword searches silently as per design
       }
     }
 
     if (keywordMatchPool.length > 0) {
-      searchPools.push(keywordMatchPool)
+      searchResultPools.push(keywordMatchPool)
     }
 
-    return this.mergeAndFusionRank(searchPools)
+    return this.executeReciprocalRankFusion(searchResultPools)
   }
 
-  private mergeAndFusionRank(pools: VectorSearchResult[][]): VectorSearchResult[] {
-    const fusionScores = new Map<string, { result: VectorSearchResult; totalScore: number }>()
+  private executeReciprocalRankFusion(resultPools: VectorSearchResult[][]): VectorSearchResult[] {
+    const fusionRankScores = new Map<string, { searchResult: VectorSearchResult; cumulativeFusionScore: number }>()
 
-    for (const pool of pools) {
-      for (const [rank, result] of pool.entries()) {
-        const path = result.meta['path'] || 'unknown'
-        const snippet = result.meta['snippet'] || ''
-        const uniqueId = result.meta['id'] || `${path}:${snippet}`
+    for (const individualPool of resultPools) {
+      for (const [itemRank, searchResult] of individualPool.entries()) {
+        const filePath = searchResult.meta['path'] || 'unknown'
+        const textSnippet = searchResult.meta['snippet'] || ''
+        const uniqueResultIdentifier = searchResult.meta['id'] || `${filePath}:${textSnippet}`
 
-        const rankScore = 1 / (60 + rank)
-        const existingEntry = fusionScores.get(uniqueId)
+        const rankConstant = 60
+        const itemRankScore = 1 / (rankConstant + itemRank)
+        const existingFusionEntry = fusionRankScores.get(uniqueResultIdentifier)
 
-        if (existingEntry) {
-          existingEntry.totalScore += rankScore
+        if (existingFusionEntry) {
+          existingFusionEntry.cumulativeFusionScore += itemRankScore
         } else {
-          fusionScores.set(uniqueId, { result, totalScore: rankScore })
+          fusionRankScores.set(uniqueResultIdentifier, {
+            searchResult,
+            cumulativeFusionScore: itemRankScore
+          })
         }
       }
     }
 
-    return Array.from(fusionScores.values())
-      .sort((a, b) => b.totalScore - a.totalScore)
-      .map((entry) => entry.result)
+    return Array.from(fusionRankScores.values())
+      .sort((firstEntry, secondEntry) => secondEntry.cumulativeFusionScore - firstEntry.cumulativeFusionScore)
+      .map((fusionEntry) => fusionEntry.searchResult)
   }
 }

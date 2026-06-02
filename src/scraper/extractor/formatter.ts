@@ -1,17 +1,29 @@
 export class MarkdownFormatter {
-  format(entries: any[], title: string): string {
-    let md = ''
-    for (let i = 0; i < entries.length; i++) {
-      const e = entries[i]
-      const question = e.query_str ?? (i === 0 ? title : 'Follow-up')
-      let answer = ''
-      for (const b of e.blocks ?? []) {
-        if (b.markdown_block?.answer) answer += b.markdown_block.answer + '\n\n'
+  format(conversationEntries: any[], conversationThreadTitle: string): string {
+    let resultMarkdownText = ''
+
+    for (let entryIndex = 0; entryIndex < conversationEntries.length; entryIndex++) {
+      const currentEntry = conversationEntries[entryIndex]
+      const questionText = currentEntry.query_str ?? (entryIndex === 0 ? conversationThreadTitle : 'Follow-up')
+
+      let answerContentText = ''
+      for (const contentBlock of currentEntry.blocks ?? []) {
+        if (contentBlock.markdown_block?.answer) {
+          answerContentText += contentBlock.markdown_block.answer + '\n\n'
+        }
       }
-      if (question) md += `## ${question}\n\n`
-      if (answer) md += `${answer.trim()}\n\n`
-      md += '---\n\n'
+
+      if (questionText) {
+        resultMarkdownText += `## ${questionText}\n\n`
+      }
+      if (answerContentText) {
+        resultMarkdownText += `${answerContentText.trim()}\n\n`
+      }
+
+      const horizontalRuleSeparator = '---\n\n'
+      resultMarkdownText += horizontalRuleSeparator
     }
-    return md.trim()
+
+    return resultMarkdownText.trim()
   }
 }

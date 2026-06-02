@@ -8,28 +8,32 @@ import { sep } from 'node:path'
 export class MaintenanceHandler extends BaseHandler {
   async handleDataReset(): Promise<void> {
     try {
-      const certain = await confirm({
+      const isUserCertainOfReset = await confirm({
         message: '⚠️ This will delete all stored checkpoints, authentication data, and vector index. Are you sure?',
         default: false
       })
-      if (!certain) return
 
-      this.wipeStorage()
+      if (!isUserCertainOfReset) {
+        return
+      }
+
+      this.wipeStorageDirectory()
       this.checkpointManager.resetCheckpoint()
       logger.success('✅ Storage folder deleted. All progress has been reset.')
-    } catch (error) {
-      errorBus.emitError('Reset failed', error)
+    } catch (resetError) {
+      errorBus.emitError('Reset failed', resetError)
     }
   }
 
-  private wipeStorage(): void {
-    const authPath = this.config.authStoragePath
-    const storageRoot = authPath ? authPath.split(sep)[0] : '.storage'
-    if (storageRoot && existsSync(storageRoot)) {
+  private wipeStorageDirectory(): void {
+    const authenticationStoragePath = this.applicationConfig.authStoragePath
+    const storageRootDirectory = authenticationStoragePath ? authenticationStoragePath.split(sep)[0] : '.storage'
+
+    if (storageRootDirectory && existsSync(storageRootDirectory)) {
       try {
-        rmSync(storageRoot, { recursive: true, force: true })
-      } catch (e) {
-        errorBus.raiseError(`Failed to delete storage directory: ${storageRoot}`, e)
+        rmSync(storageRootDirectory, { recursive: true, force: true })
+      } catch (deletionError) {
+        errorBus.raiseError(`Failed to delete storage directory: ${storageRootDirectory}`, deletionError)
       }
     }
   }

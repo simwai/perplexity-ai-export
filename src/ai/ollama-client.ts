@@ -15,24 +15,27 @@ const generationResponseSchema = z.object({
 })
 
 export class OllamaClient {
-  constructor(private readonly config: Config) {}
+  constructor(private readonly applicationConfig: Config) {}
 
-  async embed(inputTexts: string[]): Promise<number[][]> {
-    if (inputTexts.length === 0) return []
-    const responseData = await this.post('/v1/embeddings', {
-      model: this.config.ollamaEmbedModel,
-      input: inputTexts,
+  async embed(inputTextsToEmbed: string[]): Promise<number[][]> {
+    const isInputEmpty = inputTextsToEmbed.length === 0
+    if (isInputEmpty) return []
+
+    const responseData = await this.performPostRequest('/v1/embeddings', {
+      model: this.applicationConfig.ollamaEmbedModel,
+      input: inputTextsToEmbed,
     })
-    return this.parseEmbeds(responseData)
+    return this.parseEmbeddingsFromResponse(responseData)
   }
 
-  async generate(promptText: string, modelOverride?: string): Promise<string> {
-    const responseData = await this.post('/api/generate', {
-      model: modelOverride ?? this.config.ollamaModel,
+  async generate(promptText: string, modelNameOverride?: string): Promise<string> {
+    const responseData = await this.performPostRequest('/api/generate', {
+      model: modelNameOverride ?? this.applicationConfig.ollamaModel,
       prompt: promptText,
       stream: false,
     })
-    return generationResponseSchema.parse(responseData).response
+    const validatedGenerationData = generationResponseSchema.parse(responseData)
+    return validatedGenerationData.response
   }
 
   async validate(): Promise<void> {
@@ -40,40 +43,55 @@ export class OllamaClient {
     try {
       await this.embed(['ping'])
       logger.success('Ollama embeddings look good.')
-    } catch (error) {
-      errorBus.raiseError(`Ollama validation failed`, error)
+    } catch (validationError) {
+      errorBus.raiseError(`Ollama validation failed`, validationError)
     }
   }
 
-  private async post(endpoint: string, body: object): Promise<unknown> {
-    const url = `${this.config.ollamaUrl}${endpoint}`
+  private async performPostRequest(apiEndpoint: string, requestBody: object): Promise<unknown> {
+    const fullRequestUrl = `${this.applicationConfig.ollamaUrl}${apiEndpoint}`
     try {
-      const res = await fetch(url, {
+      const httpResponse = await fetch(fullRequestUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
+        body: JSON.stringify(requestBody),
       })
 
-      if (!res.ok) {
-        let errorBody = ''
-        try { errorBody = await res.text() } catch {}
-        errorBus.raiseError(`Ollama request failed with status ${res.status}`, undefined, {
-          body,
-          errorBody: errorBody.slice(0, 500),
+      const isRequestSuccessful = httpResponse.ok
+      if (!isRequestSuccessful) {
+        let errorBodyText = ''
+        try {
+          errorBodyText = await httpResponse.text()
+        } catch {
+          // Ignore body reading errors
+        }
+
+        errorBus.raiseError(`Ollama request failed with status ${httpResponse.status}`, undefined, {
+          body: requestBody,
+          errorBody: errorBodyText.slice(0, 500),
         })
       }
-      return await res.json()
-    } catch (e) {
-      if (e instanceof Error && e.message.includes('Ollama request failed')) throw e
-      errorBus.raiseError(`Network error while calling Ollama`, e)
+      return await httpResponse.json()
+    } catch (requestError) {
+      const isOllamaSpecificError = requestError instanceof Error && requestError.message.includes('Ollama request failed')
+      if (isOllamaSpecificError) {
+        throw requestError
+      }
+      errorBus.raiseError(`Network error while calling Ollama`, requestError)
     }
   }
 
-  private parseEmbeds(data: unknown): number[][] {
-    const openAi = openAiFormatSchema.safeParse(data)
-    if (openAi.success) return openAi.data.data.map((item) => item.embedding)
-    const legacy = legacyFormatSchema.safeParse(data)
-    if (legacy.success) return [legacy.data.embedding]
+  private parseEmbeddingsFromResponse(responseData: unknown): number[][] {
+    const openAiFormatResult = openAiFormatSchema.safeParse(responseData)
+    if (openAiFormatResult.success) {
+      return openAiFormatResult.data.data.map((item) => item.embedding)
+    }
+
+    const legacyFormatResult = legacyFormatSchema.safeParse(responseData)
+    if (legacyFormatResult.success) {
+      return [legacyFormatResult.data.embedding]
+    }
+
     return errorBus.raiseError('Unexpected response format from Ollama embeddings endpoint')
   }
 }

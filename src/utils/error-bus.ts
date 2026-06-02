@@ -14,24 +14,32 @@ class ErrorBus extends EventEmitter {
     this.on('error', () => {})
   }
 
-  emitError(message: string, error?: unknown, context?: Record<string, unknown>): void {
-    const appError: AppError = { message, error, context, timestamp: new Date() }
-    this.emit('error', appError)
-    this.logError(appError)
+  emitError(errorMessage: string, errorObject?: unknown, contextMetadata?: Record<string, unknown>): void {
+    const applicationError: AppError = {
+      message: errorMessage,
+      error: errorObject,
+      context: contextMetadata,
+      timestamp: new Date(),
+    }
+    this.emit('error', applicationError)
+    this.logApplicationError(applicationError)
   }
 
-  raiseError(message: string, error?: unknown, context?: Record<string, unknown>): never {
-    this.emitError(message, error, context)
-    if (error instanceof Error) throw error
-    throw new Error(message)
+  raiseError(errorMessage: string, errorObject?: unknown, contextMetadata?: Record<string, unknown>): never {
+    this.emitError(errorMessage, errorObject, contextMetadata)
+    if (errorObject instanceof Error) {
+      throw errorObject
+    }
+    throw new Error(errorMessage)
   }
 
-  private logError(appError: AppError): void {
-    const ctx = appError.context ? ` | Context: ${JSON.stringify(appError.context)}` : ''
-    logger.error(`${appError.message}${ctx}`)
+  private logApplicationError(applicationError: AppError): void {
+    const contextSuffix = applicationError.context ? ` | Context: ${JSON.stringify(applicationError.context)}` : ''
+    logger.error(`${applicationError.message}${contextSuffix}`)
 
-    if (appError.error && process.env['DEBUG'] === 'true') {
-      console.error(appError.error)
+    const isDebugModeActive = process.env['DEBUG'] === 'true'
+    if (applicationError.error && isDebugModeActive) {
+      console.error(applicationError.error)
     }
   }
 }

@@ -7,38 +7,40 @@ import jsonic from 'jsonic'
 export class RAGPlanner {
   constructor(private readonly ollamaClient: OllamaClient) {}
 
-  async developPlan(question: string): Promise<ResearchPlan> {
-    const prompt = RAG_PROMPTS.planner(question)
+  async developPlan(userQuestion: string): Promise<ResearchPlan> {
+    const researchPlannerPrompt = RAG_PROMPTS.researchPlanner(userQuestion)
     try {
-      const response = await this.ollamaClient.generate(prompt)
-      const planJson = this.parseJson(response)
+      const ollamaResponseText = await this.ollamaClient.generate(researchPlannerPrompt)
+      const parsedPlanJson = this.extractJsonFromResponse(ollamaResponseText)
 
       return {
-        strategy: planJson.strategy || 'precise',
-        queries: planJson.queries || [question],
-        hardKeywords: planJson.hardKeywords || [],
-        hydePassage: planJson.hydePassage || '',
-        filters: planJson.filters || {},
+        researchStrategy: parsedPlanJson.strategy || 'precise',
+        searchQueries: parsedPlanJson.queries || [userQuestion],
+        hardKeywordsForExactMatch: parsedPlanJson.hardKeywords || [],
+        hypotheticalDocumentEmbeddingsPassage: parsedPlanJson.hydePassage || '',
+        metadataFilters: parsedPlanJson.filters || {},
       }
-    } catch (e) {
-      errorBus.emitError('Research planner fallback triggered', e)
+    } catch (planningError) {
+      errorBus.emitError('Research planner fallback triggered', planningError)
       return {
-        strategy: 'precise',
-        queries: [question],
-        hardKeywords: [],
-        hydePassage: '',
-        filters: {},
+        researchStrategy: 'precise',
+        searchQueries: [userQuestion],
+        hardKeywordsForExactMatch: [],
+        hypotheticalDocumentEmbeddingsPassage: '',
+        metadataFilters: {},
       }
     }
   }
 
-  private parseJson(response: string): any {
-    const jsonMatch = response.match(/(\{[\s\S]*\}|\[[\s\S]*\])/)
-    if (jsonMatch?.[0]) {
+  private extractJsonFromResponse(responseText: string): any {
+    const jsonBlockRegex = /(\{[\s\S]*\}|\[[\s\S]*\])/
+    const regexMatchResult = responseText.match(jsonBlockRegex)
+
+    if (regexMatchResult?.[0]) {
       try {
-        return jsonic(jsonMatch[0])
-      } catch (e) {
-        errorBus.emitError('Failed to parse planner JSON', e, { response })
+        return jsonic(regexMatchResult[0])
+      } catch (parsingError) {
+        errorBus.emitError('Failed to parse planner JSON', parsingError, { response: responseText })
         return {}
       }
     }

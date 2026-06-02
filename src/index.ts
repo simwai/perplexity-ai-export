@@ -1,15 +1,15 @@
 import { errorBus } from './utils/error-bus.js'
 import { Repl } from './repl/index.js'
-import { config } from './utils/config.js'
+import { config as applicationConfiguration } from './utils/config.js'
 
-async function bootstrapApplication(): Promise<void> {
+async function bootstrapApplicationEntryPoint(): Promise<void> {
   try {
-    const interactiveRepl = new Repl(config)
-    await interactiveRepl.start()
-  } catch (err) {
-    errorBus.emitError('Application failed to start', err)
+    const interactiveApplicationRepl = new Repl(applicationConfiguration)
+    await interactiveApplicationRepl.start()
+  } catch (initializationError) {
+    errorBus.emitError('Application failed to start', initializationError)
     process.exit(1)
   }
 }
 
-bootstrapApplication()
+bootstrapApplicationEntryPoint()

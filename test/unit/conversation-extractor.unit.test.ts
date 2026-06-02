@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { ConversationExtractor } from '../../src/scraper/conversation-extractor.js'
 import { ApiDiagnosticsWriter } from '../../src/utils/api-diagnostics.js'
-import type { BrowserContext } from '@playwright/test'
+import type { BrowserContext } from 'patchright'
 
 vi.mock('../../src/utils/api-diagnostics.js', () => {
   return {
@@ -34,27 +34,27 @@ describe('ConversationExtractor (Unit)', () => {
   describe('Data Normalization (via DataParser)', () => {
     it('should return array if input is array', () => {
       const data = [{ query_str: 'test' }]
-      const result = (extractor as any).parser.normalize(data, 'http://test.com')
+      const result = (extractor as any).dataParser.normalizeApiData(data, 'http://test.com')
       expect(result).toEqual(data)
     })
 
     it('should return data.entries if input has entries array', () => {
       const data = { entries: [{ query_str: 'test' }] }
-      const result = (extractor as any).parser.normalize(data, 'http://test.com')
+      const result = (extractor as any).dataParser.normalizeApiData(data, 'http://test.com')
       expect(result).toEqual(data.entries)
     })
 
     it('should return [data] if input has query_str', () => {
       const data = { query_str: 'test' }
-      const result = (extractor as any).parser.normalize(data, 'http://test.com')
+      const result = (extractor as any).dataParser.normalizeApiData(data, 'http://test.com')
       expect(result).toEqual([data])
     })
 
     it('should return empty array and call diagnostics for unknown shape', () => {
       const data = { foo: 'bar' }
-      const result = (extractor as any).parser.normalize(data, 'http://test.com')
+      const result = (extractor as any).dataParser.normalizeApiData(data, 'http://test.com')
       expect(result).toEqual([])
-      expect((extractor as any).parser.diagnostics.writeFailure).toHaveBeenCalledWith({
+      expect((extractor as any).dataParser.apiDiagnosticsWriter.writeFailure).toHaveBeenCalledWith({
         url: 'http://test.com',
         errorType: 'unknown_shape',
       })
@@ -64,9 +64,9 @@ describe('ConversationExtractor (Unit)', () => {
   describe('Data Parsing (via DataParser)', () => {
     it('should return null and call diagnostics if entries are empty', () => {
       const data = { entries: [] }
-      const result = (extractor as any).parser.parse(data, 'http://test.com')
+      const result = (extractor as any).dataParser.parse(data, 'http://test.com')
       expect(result).toBeNull()
-      expect((extractor as any).parser.diagnostics.writeFailure).toHaveBeenCalledWith({
+      expect((extractor as any).dataParser.apiDiagnosticsWriter.writeFailure).toHaveBeenCalledWith({
         url: 'http://test.com',
         errorType: 'empty_entries',
       })
@@ -82,7 +82,7 @@ describe('ConversationExtractor (Unit)', () => {
           },
         ],
       }
-      const result = (extractor as any).parser.parse(data, 'https://perplexity.ai/search/uuid')
+      const result = (extractor as any).dataParser.parse(data, 'https://perplexity.ai/search/uuid')
       expect(result).not.toBeNull()
       expect(result?.meta.title).toBe('Test Thread')
     })

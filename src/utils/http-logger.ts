@@ -3,65 +3,88 @@ import { join } from 'node:path'
 import type { Request, Response } from 'patchright'
 import { errorBus } from './error-bus.js'
 
-const LOGS_DIRECTORY = 'logs'
-const LOG_FILE_TIMESTAMP = new Date().toISOString().replace(/[:.]/g, '-')
-const HTTP_LOG_FILENAME = `http-req-res-log-${LOG_FILE_TIMESTAMP}.txt`
-const HTTP_LOG_PATH = join(LOGS_DIRECTORY, HTTP_LOG_FILENAME)
+const LOGS_DIRECTORY_NAME = 'logs'
+const LOG_FILE_TIMESTAMP_SUFFIX = new Date().toISOString().replace(/[:.]/g, '-')
+const HTTP_REQUEST_RESPONSE_LOG_FILENAME = `http-request-response-log-${LOG_FILE_TIMESTAMP_SUFFIX}.txt`
+const HTTP_LOG_FULL_PATH = join(LOGS_DIRECTORY_NAME, HTTP_REQUEST_RESPONSE_LOG_FILENAME)
 
-const SENSITIVE_HEADERS = ['authorization', 'cookie', 'set-cookie', 'x-api-key']
-const PROMPT_KEYWORDS = ['"query"', '"prompt"', '"messages"']
+const SENSITIVE_HEADER_NAMES = ['authorization', 'cookie', 'set-cookie', 'x-api-key']
+const PROMPT_KEYWORD_INDICATORS = ['"query"', '"prompt"', '"messages"']
 
-function redact(headers: Record<string, string>): Record<string, string> {
-  const r = { ...headers }
-  for (const k of SENSITIVE_HEADERS) if (r[k]) r[k] = '[REDACTED]'
-  return r
+function redactSensitiveHeaders(headersRecord: Record<string, string>): Record<string, string> {
+  const redactedHeaders = { ...headersRecord }
+  for (const headerKey of SENSITIVE_HEADER_NAMES) {
+    if (redactedHeaders[headerKey]) {
+      redactedHeaders[headerKey] = '[REDACTED]'
+    }
+  }
+  return redactedHeaders
 }
 
-function isPrompt(url: string, data: string | null): boolean {
-  if (url.includes('/chat')) return true
-  if (data) {
+function isRequestContainingUserPrompts(requestUrl: string, requestPostData: string | null): boolean {
+  const isChatEndpoint = requestUrl.includes('/chat')
+  if (isChatEndpoint) return true
+
+  if (requestPostData) {
     try {
-      const p = JSON.parse(data)
-      return !!(p.query || p.prompt || (p.messages && Array.isArray(p.messages)))
+      const parsedPostData = JSON.parse(requestPostData)
+      const hasPromptProperties = !!(parsedPostData.query || parsedPostData.prompt || (parsedPostData.messages && Array.isArray(parsedPostData.messages)))
+      if (hasPromptProperties) return true
     } catch {
-      return PROMPT_KEYWORDS.some(k => data.includes(k))
+      return PROMPT_KEYWORD_INDICATORS.some(keyword => requestPostData.includes(keyword))
     }
   }
   return false
 }
 
-export function logHttpRequest(req: Request, debug: boolean): void {
-  if (!debug) return
-  try {
-    if (!existsSync(LOGS_DIRECTORY)) mkdirSync(LOGS_DIRECTORY, { recursive: true })
+export function logHttpRequest(webRequest: Request, isDebugModeEnabled: boolean): void {
+  if (!isDebugModeEnabled) return
 
-    const body = isPrompt(req.url(), req.postData()) ? '[PROMPT REDACTED]' : req.postData()
-    const entry = `[${new Date().toISOString()}] REQUEST: ${req.method()} ${req.url()}\n` +
-      `Headers: ${JSON.stringify(redact(req.headers()), null, 2)}\n` +
-      `Body: ${body ?? 'None'}\n` +
+  try {
+    if (!existsSync(LOGS_DIRECTORY_NAME)) {
+      mkdirSync(LOGS_DIRECTORY_NAME, { recursive: true })
+    }
+
+    const bodyDisplayContent = isRequestContainingUserPrompts(webRequest.url(), webRequest.postData())
+      ? '[PROMPT REDACTED]'
+      : webRequest.postData()
+
+    const logEntryText = `[${new Date().toISOString()}] REQUEST: ${webRequest.method()} ${webRequest.url()}\n` +
+      `Headers: ${JSON.stringify(redactSensitiveHeaders(webRequest.headers()), null, 2)}\n` +
+      `Body: ${bodyDisplayContent ?? 'None'}\n` +
       '--------------------------------------------------------------------------------\n'
-    appendFileSync(HTTP_LOG_PATH, entry)
-  } catch (e) {
-    errorBus.emitError('HTTP Request log failed', e)
+
+    appendFileSync(HTTP_LOG_FULL_PATH, logEntryText)
+  } catch (loggingError) {
+    errorBus.emitError('HTTP Request logging failed', loggingError)
   }
 }
 
-export async function logHttpResponse(res: Response, debug: boolean): Promise<void> {
-  if (!debug) return
+export async function logHttpResponse(webResponse: Response, isDebugModeEnabled: boolean): Promise<void> {
+  if (!isDebugModeEnabled) return
+
   try {
-    const req = res.request()
-    let body = '[BODY SKIPPED]'
-    const ct = res.headers()['content-type'] ?? ''
-    if (ct.includes('json') && !isPrompt(req.url(), req.postData())) {
-      try { body = JSON.stringify(await res.json(), null, 2) } catch { body = '[PARSE ERROR]' }
+    const originalRequest = webResponse.request()
+    let responseBodyDisplay = '[BODY SKIPPED]'
+    const responseContentType = webResponse.headers()['content-type'] ?? ''
+    const isJsonContent = responseContentType.includes('json')
+    const isRequestAPrompt = isRequestContainingUserPrompts(originalRequest.url(), originalRequest.postData())
+
+    if (isJsonContent && !isRequestAPrompt) {
+      try {
+        responseBodyDisplay = JSON.stringify(await webResponse.json(), null, 2)
+      } catch {
+        responseBodyDisplay = '[PARSE ERROR]'
+      }
     }
 
-    const entry = `[${new Date().toISOString()}] RESPONSE: ${res.status()} ${res.url()}\n` +
-      `Headers: ${JSON.stringify(redact(res.headers()), null, 2)}\n` +
-      `Body: ${body}\n` +
+    const logEntryText = `[${new Date().toISOString()}] RESPONSE: ${webResponse.status()} ${webResponse.url()}\n` +
+      `Headers: ${JSON.stringify(redactSensitiveHeaders(webResponse.headers()), null, 2)}\n` +
+      `Body: ${responseBodyDisplay}\n` +
       '--------------------------------------------------------------------------------\n'
-    appendFileSync(HTTP_LOG_PATH, entry)
-  } catch (e) {
-    errorBus.emitError('HTTP Response log failed', e)
+
+    appendFileSync(HTTP_LOG_FULL_PATH, logEntryText)
+  } catch (loggingError) {
+    errorBus.emitError('HTTP Response logging failed', loggingError)
   }
 }

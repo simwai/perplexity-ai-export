@@ -1,4 +1,4 @@
-import fs from 'node:fs/promises'
+import fileSystem from 'node:fs/promises'
 import path from 'node:path'
 import { errorBus } from './error-bus.js'
 import type { Config } from './config.js'
@@ -14,24 +14,24 @@ export class ApiDiagnosticsWriter {
   private static readonly DEBUG_DIRECTORY = 'debug'
   private static readonly DIAGNOSTICS_FILENAME = 'api-diagnostics.jsonl'
 
-  constructor(private readonly config: Config) {}
+  constructor(private readonly applicationConfig: Config) {}
 
-  async writeFailure(entry: Omit<ApiDiagnosticEntry, 'timestamp'>): Promise<void> {
-    if (!this.config.debug) return
+  async writeFailure(failureEntry: Omit<ApiDiagnosticEntry, 'timestamp'>): Promise<void> {
+    if (!this.applicationConfig.debug) return
 
     try {
       const diagnosticEntry: ApiDiagnosticEntry = {
         timestamp: new Date().toISOString(),
-        ...entry,
+        ...failureEntry,
       }
 
-      await fs.mkdir(ApiDiagnosticsWriter.DEBUG_DIRECTORY, { recursive: true })
+      await fileSystem.mkdir(ApiDiagnosticsWriter.DEBUG_DIRECTORY, { recursive: true })
       const diagnosticLogPath = path.join(ApiDiagnosticsWriter.DEBUG_DIRECTORY, ApiDiagnosticsWriter.DIAGNOSTICS_FILENAME)
 
-      const entryAsJsonLine = JSON.stringify(diagnosticEntry) + '\n'
-      await fs.appendFile(diagnosticLogPath, entryAsJsonLine, 'utf8')
-    } catch (error) {
-      errorBus.emitError('Failed to write API diagnostic', error)
+      const diagnosticEntryAsJsonLine = JSON.stringify(diagnosticEntry) + '\n'
+      await fileSystem.appendFile(diagnosticLogPath, diagnosticEntryAsJsonLine, 'utf8')
+    } catch (failureError) {
+      errorBus.emitError('Failed to write API diagnostic', failureError)
     }
   }
 }

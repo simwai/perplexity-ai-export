@@ -10,64 +10,70 @@ export class FactExtractor {
   constructor(private readonly ollamaClient: OllamaClient) {}
 
   async extractFacts(
-    question: string,
-    results: VectorSearchResult[],
-    isExhaustive: boolean
+    userQuestion: string,
+    searchResults: VectorSearchResult[],
+    isExhaustiveStrategy: boolean
   ): Promise<ExtractedFact[]> {
-    const poolLimit = isExhaustive ? 60 : 35
-    const processingPool = results.slice(0, poolLimit)
-    if (processingPool.length === 0) return []
+    const MAXIMUM_NODES_FOR_EXHAUSTIVE = 60
+    const MAXIMUM_NODES_FOR_PRECISE = 35
+    const poolSizeLimit = isExhaustiveStrategy ? MAXIMUM_NODES_FOR_EXHAUSTIVE : MAXIMUM_NODES_FOR_PRECISE
 
-    const extractedFindings: ExtractedFact[] = []
+    const candidateNodesPool = searchResults.slice(0, poolSizeLimit)
+    if (candidateNodesPool.length === 0) return []
+
+    const extractedResearchFindings: ExtractedFact[] = []
     const ANALYSIS_BATCH_SIZE = 10
-    const totalBatches = Math.ceil(processingPool.length / ANALYSIS_BATCH_SIZE)
+    const totalBatchesToProcess = Math.ceil(candidateNodesPool.length / ANALYSIS_BATCH_SIZE)
 
-    for (let i = 0; i < processingPool.length; i += ANALYSIS_BATCH_SIZE) {
-      const batchNumber = Math.floor(i / ANALYSIS_BATCH_SIZE) + 1
-      const currentBatch = processingPool.slice(i, i + ANALYSIS_BATCH_SIZE)
-      logger.info(`Analyzing history snippets... batch ${batchNumber} of ${totalBatches}`)
+    for (let currentBatchOffset = 0; currentBatchOffset < candidateNodesPool.length; currentBatchOffset += ANALYSIS_BATCH_SIZE) {
+      const currentBatchNumber = Math.floor(currentBatchOffset / ANALYSIS_BATCH_SIZE) + 1
+      const currentResultsBatch = candidateNodesPool.slice(currentBatchOffset, currentBatchOffset + ANALYSIS_BATCH_SIZE)
 
-      const contextText = currentBatch
-        .map((res, index) => `[Node ${i + index}] ${res.meta['title']}: ${res.meta['snippet']}`)
+      logger.info(`Analyzing history snippets... batch ${currentBatchNumber} of ${totalBatchesToProcess}`)
+
+      const batchContextText = currentResultsBatch
+        .map((result, indexWithinBatch) => `[Node ${currentBatchOffset + indexWithinBatch}] ${result.meta['title']}: ${result.meta['snippet']}`)
         .join('\n\n')
 
-      const prompt = RAG_PROMPTS.researcher(question, contextText)
+      const researcherPrompt = RAG_PROMPTS.informationResearcher(userQuestion, batchContextText)
 
       try {
-        const response = await this.ollamaClient.generate(prompt)
-        const extractedFacts = this.parseJson(response)
+        const ollamaResponseText = await this.ollamaClient.generate(researcherPrompt)
+        const extractedFactsList = this.extractJsonArrayFromResponse(ollamaResponseText)
 
-        for (const factEntry of extractedFacts) {
-          const originalSnippet = processingPool[factEntry.node_id]
-          extractedFindings.push({
-            fact: factEntry.fact,
-            source_title: originalSnippet?.meta['title'] || factEntry.thread || 'Unknown',
-            thread: factEntry.thread || originalSnippet?.meta['title'] || 'Unknown',
+        for (const factEntry of extractedFactsList) {
+          const originalSourceNode = candidateNodesPool[factEntry.node_id]
+          extractedResearchFindings.push({
+            factContent: factEntry.fact,
+            sourceDocumentTitle: originalSourceNode?.meta['title'] || factEntry.thread || 'Unknown',
+            conversationThreadTitle: factEntry.thread || originalSourceNode?.meta['title'] || 'Unknown',
           })
         }
-      } catch (e) {
-        errorBus.emitError(`Fact extraction batch ${batchNumber} failed`, e)
-        for (const res of currentBatch) {
-          extractedFindings.push({
-            fact: res.meta['snippet'] as string,
-            source_title: res.meta['title'] as string,
-            thread: res.meta['title'] as string,
+      } catch (extractionError) {
+        errorBus.emitError(`Fact extraction batch ${currentBatchNumber} failed`, extractionError)
+        for (const fallbackResult of currentResultsBatch) {
+          extractedResearchFindings.push({
+            factContent: fallbackResult.meta['snippet'] as string,
+            sourceDocumentTitle: fallbackResult.meta['title'] as string,
+            conversationThreadTitle: fallbackResult.meta['title'] as string,
           })
         }
       }
     }
 
-    return extractedFindings
+    return extractedResearchFindings
   }
 
-  private parseJson(response: string): any[] {
-    const jsonMatch = response.match(/(\{[\s\S]*\}|\[[\s\S]*\])/)
-    if (jsonMatch?.[0]) {
+  private extractJsonArrayFromResponse(responseText: string): any[] {
+    const jsonBlockRegex = /(\{[\s\S]*\}|\[[\s\S]*\])/
+    const regexMatchResult = responseText.match(jsonBlockRegex)
+
+    if (regexMatchResult?.[0]) {
       try {
-        const parsed = jsonic(jsonMatch[0])
-        return Array.isArray(parsed) ? parsed : []
-      } catch (e) {
-        errorBus.emitError('Failed to parse researcher JSON', e, { response })
+        const parsedData = jsonic(regexMatchResult[0])
+        return Array.isArray(parsedData) ? parsedData : []
+      } catch (parsingError) {
+        errorBus.emitError('Failed to parse researcher JSON', parsingError, { response: responseText })
         return []
       }
     }

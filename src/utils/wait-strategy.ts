@@ -2,32 +2,45 @@ import type { Page } from 'patchright'
 import { type Config } from './config.js'
 
 export interface WaitStrategy {
-  afterClick(page: Page): Promise<void>
-  afterScroll(page: Page): Promise<void>
-  forSelector(page: Page, selector: string): Promise<void>
+  afterClick(webPage: Page): Promise<void>
+  afterScroll(webPage: Page): Promise<void>
+  forSelector(webPage: Page, elementSelector: string): Promise<void>
 }
 
-class DynamicWait implements WaitStrategy {
-  async afterClick(page: Page): Promise<void> {
-    await page.waitForLoadState('networkidle', { timeout: 2000 }).catch(() => {})
+class DynamicNetworkWaitStrategy implements WaitStrategy {
+  async afterClick(webPage: Page): Promise<void> {
+    const NETWORK_IDLE_TIMEOUT_MILLISECONDS = 2000
+    await webPage.waitForLoadState('networkidle', { timeout: NETWORK_IDLE_TIMEOUT_MILLISECONDS }).catch(() => {})
   }
-  async afterScroll(page: Page): Promise<void> {
-    await page.waitForLoadState('domcontentloaded')
+
+  async afterScroll(webPage: Page): Promise<void> {
+    await webPage.waitForLoadState('domcontentloaded')
   }
-  async forSelector(page: Page, sel: string): Promise<void> {
-    await page.waitForSelector(sel, { state: 'visible', timeout: 5000 })
+
+  async forSelector(webPage: Page, elementSelector: string): Promise<void> {
+    const SELECTOR_VISIBILITY_TIMEOUT_MILLISECONDS = 5000
+    await webPage.waitForSelector(elementSelector, { state: 'visible', timeout: SELECTOR_VISIBILITY_TIMEOUT_MILLISECONDS })
   }
 }
 
-class StaticWait implements WaitStrategy {
-  constructor(private readonly delay: number) {}
-  private async pause(page: Page) {
-    await page.waitForTimeout(this.delay + Math.random() * this.delay * 0.5)
+class StaticDelayWaitStrategy implements WaitStrategy {
+  constructor(private readonly baseDelayMilliseconds: number) {}
+
+  private async pauseWithJitter(webPage: Page) {
+    const jitterFactor = 0.5
+    const randomJitter = Math.random() * this.baseDelayMilliseconds * jitterFactor
+    const totalWaitTime = this.baseDelayMilliseconds + randomJitter
+    await webPage.waitForTimeout(totalWaitTime)
   }
-  async afterClick(page: Page) { await this.pause(page) }
-  async afterScroll(page: Page) { await this.pause(page) }
-  async forSelector(page: Page) { await this.pause(page) }
+
+  async afterClick(webPage: Page) { await this.pauseWithJitter(webPage) }
+  async afterScroll(webPage: Page) { await this.pauseWithJitter(webPage) }
+  async forSelector(webPage: Page) { await this.pauseWithJitter(webPage) }
 }
 
-export const waitStrategy = (cfg: Config): WaitStrategy =>
-  cfg.waitMode === 'dynamic' ? new DynamicWait() : new StaticWait(cfg.rateLimitMs)
+export const createWaitStrategy = (applicationConfig: Config): WaitStrategy => {
+  const isDynamicMode = applicationConfig.waitMode === 'dynamic'
+  return isDynamicMode
+    ? new DynamicNetworkWaitStrategy()
+    : new StaticDelayWaitStrategy(applicationConfig.rateLimitMs)
+}

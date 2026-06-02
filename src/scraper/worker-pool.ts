@@ -7,149 +7,168 @@ import { logger } from '../utils/logger.js'
 import { type Config } from '../utils/config.js'
 import pLimit from 'p-limit'
 
-const MAX_RETRIES = 2
+const MAXIMUM_RETRY_ATTEMPTS = 2
 
 interface ExtractionWorker {
-  id: number
-  extractor: ConversationExtractor
-  isBusy: boolean
+  workerId: number
+  conversationExtractor: ConversationExtractor
+  isCurrentlyBusy: boolean
 }
 
-interface QueueItem {
-  meta: ConversationMeta
-  attempts: number
+interface ExtractionQueueItem {
+  conversationMetadata: ConversationMeta
+  currentAttemptCount: number
 }
 
 export class WorkerPool {
-  private readonly workers: ExtractionWorker[] = []
-  private readonly fileWriter: FileWriter
+  private readonly activeWorkers: ExtractionWorker[] = []
+  private readonly conversationFileWriter: FileWriter
   private sharedBrowserContext: BrowserContext | null = null
-  private isRefreshing = false
+  private isContextRefreshingInProgress = false
 
   constructor(
-    private readonly config: Config,
+    private readonly applicationConfig: Config,
     private readonly checkpointManager: CheckpointManager,
-    private readonly browser: Browser
+    private readonly browserInstance: Browser
   ) {
-    this.fileWriter = new FileWriter(config)
+    this.conversationFileWriter = new FileWriter(applicationConfig)
   }
 
   async initialize(): Promise<void> {
     try {
-      this.sharedBrowserContext = await this.browser.newContext({
-        storageState: this.config.authStoragePath,
+      this.sharedBrowserContext = await this.browserInstance.newContext({
+        storageState: this.applicationConfig.authStoragePath,
       })
-      for (let i = 0; i < this.config.parallelWorkers; i++) {
-        this.workers.push({
-          id: i,
-          extractor: new ConversationExtractor(this.config, this.sharedBrowserContext),
-          isBusy: false,
+      for (let workerIndex = 0; workerIndex < this.applicationConfig.parallelWorkers; workerIndex++) {
+        this.activeWorkers.push({
+          workerId: workerIndex,
+          conversationExtractor: new ConversationExtractor(this.applicationConfig, this.sharedBrowserContext),
+          isCurrentlyBusy: false,
         })
       }
-    } catch (error) {
-      errorBus.raiseError('Failed to initialize worker pool', error)
+    } catch (initializationError) {
+      errorBus.raiseError('Failed to initialize worker pool', initializationError)
     }
   }
 
   async processConversations(conversationsToProcess: ConversationMeta[]): Promise<void> {
-    const limit = pLimit(this.config.parallelWorkers)
-    const queue: QueueItem[] = conversationsToProcess.map((meta) => ({ meta, attempts: 0 }))
+    const concurrencyLimiter = pLimit(this.applicationConfig.parallelWorkers)
+    const extractionQueue: ExtractionQueueItem[] = conversationsToProcess.map((metadata) => ({
+      conversationMetadata: metadata,
+      currentAttemptCount: 0
+    }))
 
-    const tasks = queue.map((item) => limit(() => this.runWithRetry(item)))
-    await Promise.all(tasks)
+    const extractionTasks = extractionQueue.map((queueItem) =>
+      concurrencyLimiter(() => this.executeExtractionWithRetryLogic(queueItem))
+    )
 
-    const failedCount = conversationsToProcess.length - this.checkpointManager.getProcessingProgress().processed
-    if (failedCount > 0) {
-      logger.warn(`${failedCount} conversation(s) failed and will be retried on next run.`)
+    await Promise.all(extractionTasks)
+
+    const totalConversationsRequested = conversationsToProcess.length
+    const totalConversationsProcessed = this.checkpointManager.getProcessingProgress().processed
+    const failedConversationsCount = totalConversationsRequested - totalConversationsProcessed
+
+    if (failedConversationsCount > 0) {
+      logger.warn(`${failedConversationsCount} conversation(s) failed and will be retried on next run.`)
     }
   }
 
-  private async runWithRetry(item: QueueItem): Promise<void> {
-    const worker = this.getAvailableWorker()
-    worker.isBusy = true
+  private async executeExtractionWithRetryLogic(queueItem: ExtractionQueueItem): Promise<void> {
+    const availableWorker = this.findAvailableWorker()
+    availableWorker.isCurrentlyBusy = true
     try {
-      await this.runExtraction(worker, item)
+      await this.performConversationExtraction(availableWorker, queueItem)
     } finally {
-      worker.isBusy = false
+      availableWorker.isCurrentlyBusy = false
     }
   }
 
-  private getAvailableWorker(): ExtractionWorker {
-    const worker = this.workers.find(w => !w.isBusy)
+  private findAvailableWorker(): ExtractionWorker {
+    const worker = this.activeWorkers.find(w => !w.isCurrentlyBusy)
     if (worker) return worker
-    return this.workers[0]!
+    // Fallback to first worker if none are marked free (should not happen with p-limit)
+    return this.activeWorkers[0]!
   }
 
   async close(): Promise<void> {
     await this.sharedBrowserContext?.close().catch(() => {})
   }
 
-  private async runExtraction(worker: ExtractionWorker, item: QueueItem): Promise<void> {
+  private async performConversationExtraction(worker: ExtractionWorker, queueItem: ExtractionQueueItem): Promise<void> {
     try {
-      const result = await worker.extractor.extract(item.meta.url)
-      await this.handleSuccess(worker, item.meta, result)
-    } catch (error) {
-      await this.handleFailure(worker, item, error)
+      const extractionResult = await worker.conversationExtractor.extract(queueItem.conversationMetadata.url)
+      await this.handleExtractionSuccess(worker, queueItem.conversationMetadata, extractionResult)
+    } catch (extractionError) {
+      await this.handleExtractionFailure(worker, queueItem, extractionError)
     }
   }
 
-  private async handleSuccess(
+  private async handleExtractionSuccess(
     worker: ExtractionWorker,
-    meta: ConversationMeta,
-    result: any
+    conversationMetadata: ConversationMeta,
+    extractionResult: any
   ): Promise<void> {
-    const existingHash = this.checkpointManager.getContentHash(meta.id)
-    const { processed, total } = this.checkpointManager.getProcessingProgress()
-    const progressLabel = `[${processed}/${total}]`
+    const existingContentHash = this.checkpointManager.getContentHash(conversationMetadata.id)
+    const currentProgress = this.checkpointManager.getProcessingProgress()
+    const progressStatusLabel = `[${currentProgress.processed}/${currentProgress.total}]`
 
-    if (existingHash && existingHash === result.contentHash) {
-      this.checkpointManager.markAsProcessed(meta.id)
-      logger.info(`${progressLabel} Up to date: ${result.title} (skipped write)`)
+    const isContentUnchanged = existingContentHash && existingContentHash === extractionResult.contentIntegrityHash
+
+    if (isContentUnchanged) {
+      this.checkpointManager.markAsProcessed(conversationMetadata.id)
+      logger.info(`${progressStatusLabel} Up to date: ${extractionResult.conversationTitle} (skipped write)`)
     } else {
-      await this.fileWriter.write(result)
-      this.checkpointManager.markAsProcessed(meta.id, result.contentHash)
-      logger.info(`${progressLabel} Processed: ${result.title}`)
+      await this.conversationFileWriter.write(extractionResult)
+      this.checkpointManager.markAsProcessed(conversationMetadata.id, extractionResult.contentIntegrityHash)
+      logger.info(`${progressStatusLabel} Processed: ${extractionResult.conversationTitle}`)
     }
 
-    worker.extractor.recoverTimeout()
+    worker.conversationExtractor.recoverTimeout()
   }
 
-  private async handleFailure(
+  private async handleExtractionFailure(
     worker: ExtractionWorker,
-    item: QueueItem,
-    error: unknown
+    queueItem: ExtractionQueueItem,
+    errorObject: unknown
   ): Promise<void> {
-    const msg = error instanceof Error ? error.message : String(error)
-    const isTimeout = msg.includes('API response timeout')
-    const isContextLost = msg.includes('context is no longer available') || msg.includes('Target page, context or browser has been closed')
+    const errorMessage = errorObject instanceof Error ? errorObject.message : String(errorObject)
+    const isTimeoutError = errorMessage.includes('API response timeout')
+    const isBrowserContextLost = errorMessage.includes('context is no longer available') ||
+                               errorMessage.includes('Target page, context or browser has been closed')
 
-    if (isTimeout) worker.extractor.reduceTimeout()
-    if (isContextLost) await this.refreshContext()
+    if (isTimeoutError) {
+      worker.conversationExtractor.reduceTimeout()
+    }
 
-    if (item.attempts < MAX_RETRIES) {
-      item.attempts++
-      logger.warn(`Retrying ${item.meta.url} (attempt ${item.attempts}/${MAX_RETRIES})...`)
-      await this.runWithRetry(item)
+    if (isBrowserContextLost) {
+      await this.refreshSharedBrowserContext()
+    }
+
+    const canRetry = queueItem.currentAttemptCount < MAXIMUM_RETRY_ATTEMPTS
+    if (canRetry) {
+      queueItem.currentAttemptCount++
+      logger.warn(`Retrying ${queueItem.conversationMetadata.url} (attempt ${queueItem.currentAttemptCount}/${MAXIMUM_RETRY_ATTEMPTS})...`)
+      await this.executeExtractionWithRetryLogic(queueItem)
     } else {
-      errorBus.emitError(`Failed to process ${item.meta.url} after ${MAX_RETRIES} retries`, error)
+      errorBus.emitError(`Failed to process ${queueItem.conversationMetadata.url} after ${MAXIMUM_RETRY_ATTEMPTS} retries`, errorObject)
     }
   }
 
-  private async refreshContext(): Promise<void> {
-    if (this.isRefreshing) return
-    this.isRefreshing = true
+  private async refreshSharedBrowserContext(): Promise<void> {
+    if (this.isContextRefreshingInProgress) return
+    this.isContextRefreshingInProgress = true
     try {
       await this.sharedBrowserContext?.close().catch(() => {})
-      this.sharedBrowserContext = await this.browser.newContext({
-        storageState: this.config.authStoragePath,
+      this.sharedBrowserContext = await this.browserInstance.newContext({
+        storageState: this.applicationConfig.authStoragePath,
       })
-      for (const worker of this.workers) {
-        worker.extractor = new ConversationExtractor(this.config, this.sharedBrowserContext)
+      for (const worker of this.activeWorkers) {
+        worker.conversationExtractor = new ConversationExtractor(this.applicationConfig, this.sharedBrowserContext)
       }
-    } catch (error) {
-      errorBus.emitError('Failed to refresh worker context', error)
+    } catch (refreshError) {
+      errorBus.emitError('Failed to refresh worker context', refreshError)
     } finally {
-      this.isRefreshing = false
+      this.isContextRefreshingInProgress = false
     }
   }
 }

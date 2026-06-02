@@ -1,10 +1,10 @@
 import sanitize from 'sanitize-filename'
 
-export function sanitizeFilename(filename: string): string {
+export function sanitizeFilename(rawFilename: string): string {
   const ILLEGAL_CHARACTER_REPLACEMENT = '_'
   const MAXIMUM_FILENAME_LENGTH = 100
 
-  const safeFilename = sanitize(filename, {
+  const safeFilename = sanitize(rawFilename, {
     replacement: ILLEGAL_CHARACTER_REPLACEMENT,
   })
 
@@ -13,10 +13,10 @@ export function sanitizeFilename(filename: string): string {
     .substring(0, MAXIMUM_FILENAME_LENGTH)
 }
 
-export function sanitizeSpaceName(spaceName: string): string {
-  return sanitizeFilename(spaceName)
+export function sanitizeSpaceName(rawSpaceName: string): string {
+  return sanitizeFilename(rawSpaceName)
 }
 
-export function sanitizeMarkdownContent(rawMarkdown: string): string {
-  return rawMarkdown || ''
+export function sanitizeMarkdownContent(rawMarkdownText: string): string {
+  return rawMarkdownText || ''
 }

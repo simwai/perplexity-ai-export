@@ -20,89 +20,119 @@ export interface RgMatch {
 }
 
 export class RgSearch {
-  constructor(private readonly config: Config) {}
+  constructor(private readonly applicationConfig: Config) {}
 
-  async search(options: RgSearchOptions): Promise<void> {
-    this.ensureDir()
-    const args = this.getArgs(options)
-    await this.run(args)
+  async search(searchOptions: RgSearchOptions): Promise<void> {
+    this.ensureExportDirectoryExists()
+    const ripgrepArguments = this.constructRipgrepArguments(searchOptions)
+    await this.executeRipgrepProcess(ripgrepArguments)
   }
 
-  async captureSearchMatches(options: RgSearchOptions): Promise<RgMatch[]> {
-    this.ensureDir()
-    const args = this.getArgs(options).filter(a => a !== '--color=always')
+  async captureSearchMatches(searchOptions: RgSearchOptions): Promise<RgMatch[]> {
+    this.ensureExportDirectoryExists()
+    const ripgrepArguments = this.constructRipgrepArguments(searchOptions)
+      .filter(argument => argument !== '--color=always')
       .concat(['--color=never', '--json', '--max-filesize', '1M', '--no-binary'])
 
     return new Promise((resolve, reject) => {
-      const MAX = 100
-      const matches: RgMatch[] = []
-      const child = spawn(rgPath, args, { cwd: this.config.exportDir })
-      const rl = createInterface({ input: child.stdout, terminal: false })
+      const MAXIMUM_MATCHES_TO_CAPTURE = 100
+      const capturedMatches: RgMatch[] = []
 
-      rl.on('line', (line) => {
-        if (matches.length >= MAX) { child.kill(); return }
+      const ripgrepProcess = spawn(rgPath, ripgrepArguments, { cwd: this.applicationConfig.exportDir })
+      const readlineInterface = createInterface({ input: ripgrepProcess.stdout, terminal: false })
+
+      readlineInterface.on('line', (outputLine) => {
+        if (capturedMatches.length >= MAXIMUM_MATCHES_TO_CAPTURE) {
+          ripgrepProcess.kill()
+          return
+        }
+
         try {
-          const parsed = JSON.parse(line)
-          if (parsed.type === 'match') {
-            matches.push({
-              path: parsed.data.path.text,
-              line: parsed.data.line_number,
-              text: parsed.data.lines.text,
+          const parsedJsonLine = JSON.parse(outputLine)
+          if (parsedJsonLine.type === 'match') {
+            capturedMatches.push({
+              path: parsedJsonLine.data.path.text,
+              line: parsedJsonLine.data.line_number,
+              text: parsedJsonLine.data.lines.text,
             })
           }
-        } catch {}
-      })
-
-      child.on('close', (code) => {
-        if (code === 0 || code === 1 || child.killed) resolve(matches)
-        else {
-          const msg = `ripgrep exited with code ${code}`
-          errorBus.emitError(msg)
-          reject(new Error(msg))
+        } catch (parsingError) {
+          // Ignore invalid JSON lines from ripgrep
         }
       })
 
-      child.on('error', (err) => {
-        errorBus.emitError('ripgrep failed to start', err)
-        reject(err)
+      ripgrepProcess.on('close', (exitCode) => {
+        if (exitCode === 0 || exitCode === 1 || ripgrepProcess.killed) {
+          resolve(capturedMatches)
+        } else {
+          const errorMessage = `ripgrep exited with code ${exitCode}`
+          errorBus.emitError(errorMessage)
+          reject(new Error(errorMessage))
+        }
+      })
+
+      ripgrepProcess.on('error', (processError) => {
+        errorBus.emitError('ripgrep failed to start', processError)
+        reject(processError)
       })
     })
   }
 
-  private ensureDir() {
-    if (!existsSync(this.config.exportDir)) {
+  private ensureExportDirectoryExists() {
+    if (!existsSync(this.applicationConfig.exportDir)) {
       errorBus.raiseError('No exports directory found. Please run export first.')
     }
   }
 
-  private getArgs(opt: RgSearchOptions): string[] {
-    const args = ['--color=always', '--heading', '--line-number', '--no-messages', '--column', '--smart-case']
-    if (opt.caseSensitive) args.push('--case-sensitive')
-    if (opt.wholeWord) args.push('--word-regexp')
-    if (opt.regex) args.push('--regexp', opt.pattern)
-    else args.push('--fixed-strings', opt.pattern)
-    args.push('--type', 'markdown')
-    return args
+  private constructRipgrepArguments(searchOptions: RgSearchOptions): string[] {
+    const ripgrepArguments = ['--color=always', '--heading', '--line-number', '--no-messages', '--column', '--smart-case']
+
+    if (searchOptions.caseSensitive) {
+      ripgrepArguments.push('--case-sensitive')
+    }
+    if (searchOptions.wholeWord) {
+      ripgrepArguments.push('--word-regexp')
+    }
+
+    if (searchOptions.regex) {
+      ripgrepArguments.push('--regexp', searchOptions.pattern)
+    } else {
+      ripgrepArguments.push('--fixed-strings', searchOptions.pattern)
+    }
+
+    ripgrepArguments.push('--type', 'markdown')
+    return ripgrepArguments
   }
 
-  private run(args: string[]): Promise<void> {
+  private executeRipgrepProcess(ripgrepArguments: string[]): Promise<void> {
     return new Promise((resolve, reject) => {
-      const child = spawn(rgPath, args, { cwd: this.config.exportDir, stdio: ['ignore', 'pipe', 'pipe'] })
-      let found = false
-      child.stdout.on('data', d => { found = true; process.stdout.write(d) })
-      child.on('close', code => {
-        if (code === 0 || code === 1) {
-          if (code === 1 && !found) logger.info('No results found.')
+      const ripgrepProcess = spawn(rgPath, ripgrepArguments, {
+        cwd: this.applicationConfig.exportDir,
+        stdio: ['ignore', 'pipe', 'pipe']
+      })
+
+      let hasFoundAnyMatches = false
+      ripgrepProcess.stdout.on('data', (outputDataChunk) => {
+        hasFoundAnyMatches = true
+        process.stdout.write(outputDataChunk)
+      })
+
+      ripgrepProcess.on('close', (exitCode) => {
+        if (exitCode === 0 || exitCode === 1) {
+          if (exitCode === 1 && !hasFoundAnyMatches) {
+            logger.info('No results found.')
+          }
           resolve()
         } else {
-          const msg = `ripgrep exited with code ${code}`
-          errorBus.emitError(msg)
-          reject(new Error(msg))
+          const errorMessage = `ripgrep exited with code ${exitCode}`
+          errorBus.emitError(errorMessage)
+          reject(new Error(errorMessage))
         }
       })
-      child.on('error', (err) => {
-        errorBus.emitError('ripgrep failed', err)
-        reject(err)
+
+      ripgrepProcess.on('error', (processError) => {
+        errorBus.emitError('ripgrep failed', processError)
+        reject(processError)
       })
     })
   }

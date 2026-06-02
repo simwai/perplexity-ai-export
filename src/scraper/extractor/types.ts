@@ -1,8 +1,8 @@
 export interface ExtractedConversation {
-  id: string
-  title: string
-  spaceName: string
-  timestamp: Date
-  content: string
-  contentHash: string
+  conversationId: string
+  conversationTitle: string
+  conversationSpaceName: string
+  extractionTimestamp: Date
+  formattedMarkdownContent: string
+  contentIntegrityHash: string
 }

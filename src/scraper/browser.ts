@@ -9,104 +9,140 @@ import { logHttpRequest, logHttpResponse } from '../utils/http-logger.js'
 
 export class BrowserManager {
   public browserInstance: Browser | null = null
-  private context: BrowserContext | null = null
-  private page: Page | null = null
+  private browserContext: BrowserContext | null = null
+  private activePage: Page | null = null
 
-  constructor(private readonly config: Config) {}
+  constructor(private readonly applicationConfig: Config) {}
 
   async launch(): Promise<Page> {
     try {
-      const fresh = this.isFresh(this.config.authStoragePath)
-      if (fresh) {
-        await this.init(this.config.headless)
-        if (await this.isAuth()) {
+      const isSavedSessionStillFresh = this.isAuthenticationStateFresh(this.applicationConfig.authStoragePath)
+
+      if (isSavedSessionStillFresh) {
+        await this.initializeBrowserComponents(this.applicationConfig.headless)
+        if (await this.isUserAuthenticated()) {
           logger.success('Already logged in!')
-          return this.page!
+          return this.activePage!
         }
         logger.warn('Session invalid. Restarting for login...')
         await this.close()
       }
 
-      await this.init(false)
-      await this.ensureAuth()
+      const headfulModeEnabled = false
+      await this.initializeBrowserComponents(headfulModeEnabled)
+      await this.ensureUserIsAuthenticatedInBrowser()
 
-      if (this.config.headless !== false) {
+      const shouldRestartInHeadlessMode = this.applicationConfig.headless !== false
+      if (shouldRestartInHeadlessMode) {
         logger.info('Auth successful. Restarting in headless...')
         await this.close()
-        await this.init(this.config.headless)
+        await this.initializeBrowserComponents(this.applicationConfig.headless)
       }
-      return this.page!
-    } catch (e) {
-      return errorBus.raiseError('Failed to launch or authenticate browser', e)
+      return this.activePage!
+    } catch (launchError) {
+      return errorBus.raiseError('Failed to launch or authenticate browser', launchError)
     }
   }
 
   async close(): Promise<void> {
-    if (this.page) await this.page.close().catch(() => {})
-    if (this.context) await this.context.close().catch(() => {})
+    if (this.activePage) await this.activePage.close().catch(() => {})
+    if (this.browserContext) await this.browserContext.close().catch(() => {})
     if (this.browserInstance) await this.browserInstance.close().catch(() => {})
-    this.page = null; this.context = null; this.browserInstance = null
+
+    this.activePage = null
+    this.browserContext = null
+    this.browserInstance = null
   }
 
-  private async init(headless: boolean | 'new') {
-    const h = headless === 'new' ? true : headless
+  private async initializeBrowserComponents(isHeadlessMode: boolean | 'new') {
+    const headlessValueForLaunch = isHeadlessMode === 'new' ? true : isHeadlessMode
     try {
-      this.browserInstance = await chromium.launch({ headless: h })
+      this.browserInstance = await chromium.launch({ headless: headlessValueForLaunch })
 
-      const fresh = this.isFresh(this.config.authStoragePath)
-      const opts = fresh ? { storageState: JSON.parse(readFileSync(this.config.authStoragePath, 'utf8')) } : {}
-      this.context = await this.browserInstance.newContext(opts)
+      const isSessionFresh = this.isAuthenticationStateFresh(this.applicationConfig.authStoragePath)
+      const contextOptions = isSessionFresh
+        ? { storageState: JSON.parse(readFileSync(this.applicationConfig.authStoragePath, 'utf8')) }
+        : {}
 
-      if (this.config.debug) {
-        this.context.on('request', r => {
-          if (r.url().includes('perplexity.ai') && !r.url().includes('static')) logHttpRequest(r, true)
+      this.browserContext = await this.browserInstance.newContext(contextOptions)
+
+      if (this.applicationConfig.debug) {
+        this.browserContext.on('request', request => {
+          const requestUrl = request.url()
+          const isRelevantUrl = requestUrl.includes('perplexity.ai') && !requestUrl.includes('static')
+          if (isRelevantUrl) {
+            logHttpRequest(request, true)
+          }
         })
-        this.context.on('response', r => {
-          if (r.url().includes('perplexity.ai') && !r.url().includes('static')) logHttpResponse(r, true)
+        this.browserContext.on('response', response => {
+          const responseUrl = response.url()
+          const isRelevantUrl = responseUrl.includes('perplexity.ai') && !responseUrl.includes('static')
+          if (isRelevantUrl) {
+            logHttpResponse(response, true)
+          }
         })
       }
-      this.page = await this.context.newPage()
-      await this.page.goto('https://www.perplexity.ai/settings', { timeout: 15000 }).catch(() => {})
-    } catch (e) {
-      errorBus.raiseError('Browser initialization failed', e)
+
+      this.activePage = await this.browserContext.newPage()
+      const SETTINGS_PAGE_URL = 'https://www.perplexity.ai/settings'
+      await this.activePage.goto(SETTINGS_PAGE_URL, { timeout: 15000 }).catch(() => {})
+    } catch (initializationError) {
+      errorBus.raiseError('Browser initialization failed', initializationError)
     }
   }
 
-  private isFresh(p: string): boolean {
-    if (!existsSync(p)) return false
-    return (Date.now() - statSync(p).mtimeMs) < 24 * 60 * 60 * 1000
+  private isAuthenticationStateFresh(filePath: string): boolean {
+    if (!existsSync(filePath)) return false
+
+    const ONE_DAY_IN_MILLISECONDS = 24 * 60 * 60 * 1000
+    const fileLastModifiedTimeMilliseconds = statSync(filePath).mtimeMs
+    const currentTimestampMilliseconds = Date.now()
+    const fileAgeMilliseconds = currentTimestampMilliseconds - fileLastModifiedTimeMilliseconds
+
+    return fileAgeMilliseconds < ONE_DAY_IN_MILLISECONDS
   }
 
-  private async isAuth(): Promise<boolean> {
-    if (!this.page) return false
+  private async isUserAuthenticated(): Promise<boolean> {
+    if (!this.activePage) return false
     try {
-      const res = await this.page.evaluate(async () => {
+      const sessionData = await this.activePage.evaluate(async () => {
         try {
-          const r = await fetch('/api/auth/session')
-          return await r.json()
-        } catch { return {} }
+          const authSessionResponse = await fetch('/api/auth/session')
+          return await authSessionResponse.json()
+        } catch {
+          return {}
+        }
       })
-      return !!(res.user || res.expires)
+      return !!(sessionData.user || sessionData.expires)
     } catch {
       return false
     }
   }
 
-  private async ensureAuth() {
-    if (await this.isAuth()) return
+  private async ensureUserIsAuthenticatedInBrowser() {
+    if (await this.isUserAuthenticated()) return
+
     logger.info('Please log in manually...')
     await confirm({ message: 'Press Enter when logged in and on settings page' })
-    await this.page!.goto('https://www.perplexity.ai/settings', { waitUntil: 'networkidle' })
-    if (!(await this.isAuth())) errorBus.raiseError('Login verification failed')
-    await this.save()
+
+    const SETTINGS_PAGE_URL = 'https://www.perplexity.ai/settings'
+    await this.activePage!.goto(SETTINGS_PAGE_URL, { waitUntil: 'networkidle' })
+
+    if (!(await this.isUserAuthenticated())) {
+      errorBus.raiseError('Login verification failed')
+    }
+
+    await this.persistAuthenticationStateToDisk()
     logger.success('Auth saved!')
   }
 
-  private async save() {
-    if (!this.context) return
-    const state = await this.context.storageState()
-    if (state.cookies.length > 0) {
-      await (writeFileAtomic as any)(this.config.authStoragePath, JSON.stringify(state, null, 2))
+  private async persistAuthenticationStateToDisk() {
+    if (!this.browserContext) return
+    const currentStorageState = await this.browserContext.storageState()
+
+    if (currentStorageState.cookies.length > 0) {
+      const serializedStateJson = JSON.stringify(currentStorageState, null, 2)
+      await (writeFileAtomic as any)(this.applicationConfig.authStoragePath, serializedStateJson)
     }
   }
 }

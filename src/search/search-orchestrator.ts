@@ -9,18 +9,20 @@ import chalk from 'chalk'
 export type SearchMode = 'rg' | 'vector' | 'auto' | 'rag'
 
 export class SearchOrchestrator {
-  private readonly rgSearch: RgSearch
+  private readonly ripgrepSearch: RgSearch
   private readonly vectorStore: VectorStore
   private readonly ragOrchestrator: RagOrchestrator
 
-  constructor(private readonly config: Config) {
-    this.rgSearch = new RgSearch(config)
-    this.vectorStore = new VectorStore(config)
-    this.ragOrchestrator = new RagOrchestrator(config)
+  constructor(private readonly applicationConfig: Config) {
+    this.ripgrepSearch = new RgSearch(applicationConfig)
+    this.vectorStore = new VectorStore(applicationConfig)
+    this.ragOrchestrator = new RagOrchestrator(applicationConfig)
   }
 
   async validateVectorSearch(): Promise<void> {
-    if (!this.config.enableVectorSearch) errorBus.raiseError('Vector search disabled')
+    if (!this.applicationConfig.enableVectorSearch) {
+      errorBus.raiseError('Vector search disabled')
+    }
     await this.vectorStore.validate()
   }
 
@@ -28,38 +30,56 @@ export class SearchOrchestrator {
     await this.vectorStore.rebuildFromExports()
   }
 
-  async search(query: string, mode: SearchMode, rgOptions: RgSearchOptions): Promise<void> {
+  async search(searchQuery: string, searchMode: SearchMode, ripgrepOptions: RgSearchOptions): Promise<void> {
     try {
-      switch (mode) {
-        case 'rg': await this.rgSearch.search(rgOptions); break
-        case 'vector': await this.vectorOnly(query); break
-        case 'rag': await this.ragOrchestrator.answerQuestion(query); break
+      switch (searchMode) {
+        case 'rg':
+          await this.ripgrepSearch.search(ripgrepOptions)
+          break
+        case 'vector':
+          await this.executeVectorOnlySearch(searchQuery)
+          break
+        case 'rag':
+          await this.ragOrchestrator.answerQuestion(searchQuery)
+          break
         case 'auto':
-        default: await this.auto(query, rgOptions); break
+        default:
+          await this.executeAutoSearch(searchQuery, ripgrepOptions)
+          break
       }
-    } catch (e) {
-      errorBus.raiseError(`Search failed`, e)
+    } catch (searchError) {
+      errorBus.raiseError(`Search failed`, searchError)
     }
   }
 
-  private async auto(q: string, opt: RgSearchOptions) {
-    if (q.trim().split(/\s+/).length > 5) await this.vectorOnly(q)
-    else await this.rgSearch.search(opt)
+  private async executeAutoSearch(searchQuery: string, ripgrepOptions: RgSearchOptions) {
+    const LONG_QUERY_THRESHOLD_WORDS = 5
+    const isLongQuery = searchQuery.trim().split(/\s+/).length > LONG_QUERY_THRESHOLD_WORDS
+
+    if (isLongQuery) {
+      await this.executeVectorOnlySearch(searchQuery)
+    } else {
+      await this.ripgrepSearch.search(ripgrepOptions)
+    }
   }
 
-  private async vectorOnly(q: string) {
+  private async executeVectorOnlySearch(searchQuery: string) {
     logger.info('Using semantic search...')
-    const res = await this.vectorStore.search(q, 10)
-    if (res.length === 0) {
+    const MAXIMUM_VECTOR_RESULTS = 10
+    const searchResults = await this.vectorStore.search(searchQuery, MAXIMUM_VECTOR_RESULTS)
+
+    if (searchResults.length === 0) {
       logger.info('No results.')
       return
     }
-    for (const r of res) {
-      const s = chalk.green(r.meta['spaceName'] as string)
-      const t = chalk.cyan(r.meta['title'] as string)
-      const score = chalk.gray(`(${r.score.toFixed(3)})`)
-      const p = chalk.gray(r.meta['path'] as string)
-      logger.info(`${s} › ${t} ${score}\n${p}\n`)
+
+    for (const searchResult of searchResults) {
+      const spaceNameDisplay = chalk.green(searchResult.meta['spaceName'] as string)
+      const titleDisplay = chalk.cyan(searchResult.meta['title'] as string)
+      const relevanceScoreDisplay = chalk.gray(`(${searchResult.score.toFixed(3)})`)
+      const filePathDisplay = chalk.gray(searchResult.meta['path'] as string)
+
+      logger.info(`${spaceNameDisplay} › ${titleDisplay} ${relevanceScoreDisplay}\n${filePathDisplay}\n`)
     }
   }
 }

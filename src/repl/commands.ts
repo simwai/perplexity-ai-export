@@ -7,33 +7,33 @@ import { SearchHandler } from './handlers/search.js'
 import { MaintenanceHandler } from './handlers/maintenance.js'
 
 export class CommandHandler {
-  private readonly exportHandler: ExportHandler
-  private readonly searchHandler: SearchHandler
-  private readonly maintenanceHandler: MaintenanceHandler
+  private readonly libraryExportHandler: ExportHandler
+  private readonly conversationSearchHandler: SearchHandler
+  private readonly systemMaintenanceHandler: MaintenanceHandler
 
-  constructor(config: Config) {
-    const checkpointManager = new CheckpointManager(config)
-    const searchOrchestrator = new SearchOrchestrator(config)
+  constructor(applicationConfig: Config) {
+    const activeCheckpointManager = new CheckpointManager(applicationConfig)
+    const activeSearchOrchestrator = new SearchOrchestrator(applicationConfig)
 
-    this.exportHandler = new ExportHandler(config, checkpointManager, searchOrchestrator)
-    this.searchHandler = new SearchHandler(config, checkpointManager, searchOrchestrator)
-    this.maintenanceHandler = new MaintenanceHandler(config, checkpointManager, searchOrchestrator)
+    this.libraryExportHandler = new ExportHandler(applicationConfig, activeCheckpointManager, activeSearchOrchestrator)
+    this.conversationSearchHandler = new SearchHandler(applicationConfig, activeCheckpointManager, activeSearchOrchestrator)
+    this.systemMaintenanceHandler = new MaintenanceHandler(applicationConfig, activeCheckpointManager, activeSearchOrchestrator)
   }
 
   async handleScraperWizard(): Promise<void> {
-    await this.exportHandler.handleScraperWizard()
+    await this.libraryExportHandler.handleScraperWizard()
   }
 
   async handleSearchWizard(): Promise<void> {
-    await this.searchHandler.handleSearchWizard()
+    await this.conversationSearchHandler.handleSearchWizard()
   }
 
   async handleVectorizeWizard(): Promise<void> {
-    await this.searchHandler.handleVectorizeWizard()
+    await this.conversationSearchHandler.handleVectorizeWizard()
   }
 
   async handleDataReset(): Promise<void> {
-    await this.maintenanceHandler.handleDataReset()
+    await this.systemMaintenanceHandler.handleDataReset()
   }
 
   handleShowHelp(): void {

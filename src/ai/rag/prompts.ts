@@ -1,6 +1,6 @@
 export const RAG_PROMPTS = {
-  planner: (question: string) => `
-Analyze: "${question}"
+  researchPlanner: (userQuestion: string) => `
+Analyze: "${userQuestion}"
 1. Strategy: "precise" (specific facts) or "exhaustive" (broad summary/entity history).
 2. Variations: 3 semantic search phrases.
 3. Hard Keywords: Identify any names, IDs, or unique technical terms for exact matching.
@@ -8,20 +8,20 @@ Analyze: "${question}"
 Return JSON: {"strategy": "...", "queries": [], "hardKeywords": [], "hydePassage": "...", "filters": {}}
 `,
 
-  researcher: (question: string, context: string) => `
-You are the Researcher. Analyze these snippets from the user's history for the question: "${question}"
+  informationResearcher: (userQuestion: string, researchContextSnippets: string) => `
+You are the Researcher. Analyze these snippets from the user's history for the question: "${userQuestion}"
 Context:
-${context}
+${researchContextSnippets}
 
 Extract every specific fact, mention, date, or piece of code.
 Return JSON array: [{"fact": "...", "node_id": N, "thread": "..."}]
 `,
 
-  narrator: (question: string, strategy: string, findings: string) => `
-You are the Narrator. Synthesize these research findings into a cohesive, mightiest answer for: "${question}"
-Strategy: ${strategy}
+  answerNarrator: (userQuestion: string, researchStrategy: string, researchFindings: string) => `
+You are the Narrator. Synthesize these research findings into a cohesive, mightiest answer for: "${userQuestion}"
+Strategy: ${researchStrategy}
 Findings:
-${findings}
+${researchFindings}
 
 INSTRUCTIONS:
 1. Provide a comprehensive, authoritative response.
@@ -32,10 +32,10 @@ INSTRUCTIONS:
 ANSWER:
 `,
 
-  verifier: (question: string, answer: string) => `
+  answerVerifier: (userQuestion: string, generatedAnswer: string) => `
 Verify the answer.
-Question: "${question}"
-Answer: "${answer.slice(0, 500)}..."
+Question: "${userQuestion}"
+Answer: "${generatedAnswer.slice(0, 500)}..."
 Did I miss anything important?
 Return JSON: {"status": "ok" | "missed-info", "suggestion": "..."}
 `

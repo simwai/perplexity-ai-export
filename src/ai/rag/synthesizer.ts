@@ -7,41 +7,43 @@ import jsonic from 'jsonic'
 export class ResponseSynthesizer {
   constructor(private readonly ollamaClient: OllamaClient) {}
 
-  async synthesize(question: string, facts: ExtractedFact[], strategy: string): Promise<string> {
+  async synthesize(userQuestion: string, researchFacts: ExtractedFact[], researchStrategy: string): Promise<string> {
     try {
-      const findingsText = facts
-        .map((fact, index) => `[Find ${index}] (${fact.source_title}): ${fact.fact}`)
+      const researchFindingsSummaryText = researchFacts
+        .map((fact, index) => `[Find ${index}] (${fact.sourceDocumentTitle}): ${fact.factContent}`)
         .join('\n')
 
-      const prompt = RAG_PROMPTS.narrator(question, strategy, findingsText)
-      return await this.ollamaClient.generate(prompt)
-    } catch (e) {
-      return errorBus.raiseError('Response synthesis failed', e)
+      const narratorPrompt = RAG_PROMPTS.answerNarrator(userQuestion, researchStrategy, researchFindingsSummaryText)
+      return await this.ollamaClient.generate(narratorPrompt)
+    } catch (synthesisError) {
+      return errorBus.raiseError('Response synthesis failed', synthesisError)
     }
   }
 
-  async verifyQuality(question: string, answer: string): Promise<{ status: string; suggestion?: string }> {
-    const prompt = RAG_PROMPTS.verifier(question, answer)
+  async verifyQuality(userQuestion: string, generatedAnswer: string): Promise<{ verificationStatus: string; improvementSuggestion?: string }> {
+    const verifierPrompt = RAG_PROMPTS.answerVerifier(userQuestion, generatedAnswer)
     try {
-      const response = await this.ollamaClient.generate(prompt)
-      const parsed = this.parseJson(response)
+      const ollamaResponseText = await this.ollamaClient.generate(verifierPrompt)
+      const parsedVerificationJson = this.extractJsonFromResponse(ollamaResponseText)
       return {
-        status: parsed.status || 'ok',
-        suggestion: parsed.suggestion
+        verificationStatus: parsedVerificationJson.status || 'ok',
+        improvementSuggestion: parsedVerificationJson.suggestion
       }
-    } catch (e) {
-      errorBus.emitError('Answer verification failed', e)
-      return { status: 'ok' }
+    } catch (verificationError) {
+      errorBus.emitError('Answer verification failed', verificationError)
+      return { verificationStatus: 'ok' }
     }
   }
 
-  private parseJson(response: string): any {
-    const jsonMatch = response.match(/(\{[\s\S]*\}|\[[\s\S]*\])/)
-    if (jsonMatch?.[0]) {
+  private extractJsonFromResponse(responseText: string): any {
+    const jsonBlockRegex = /(\{[\s\S]*\}|\[[\s\S]*\])/
+    const regexMatchResult = responseText.match(jsonBlockRegex)
+
+    if (regexMatchResult?.[0]) {
       try {
-        return jsonic(jsonMatch[0])
-      } catch (e) {
-        errorBus.emitError('Failed to parse verifier JSON', e, { response })
+        return jsonic(regexMatchResult[0])
+      } catch (parsingError) {
+        errorBus.emitError('Failed to parse verifier JSON', parsingError, { response: responseText })
         return {}
       }
     }

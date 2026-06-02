@@ -1,23 +1,23 @@
 import { type VectorSearchResult } from '../../search/vector-store.js'
 
 export interface ResearchPlan {
-  strategy: 'precise' | 'exhaustive'
-  queries: string[]
-  hardKeywords: string[]
-  hydePassage: string
-  filters: Record<string, any>
+  researchStrategy: 'precise' | 'exhaustive'
+  searchQueries: string[]
+  hardKeywordsForExactMatch: string[]
+  hypotheticalDocumentEmbeddingsPassage: string
+  metadataFilters: Record<string, any>
 }
 
 export interface ExtractedFact {
-  fact: string
-  source_title: string
-  thread: string
+  factContent: string
+  sourceDocumentTitle: string
+  conversationThreadTitle: string
 }
 
-export interface RagStepContext {
-  question: string
-  plan?: ResearchPlan
-  searchResults?: VectorSearchResult[]
-  facts?: ExtractedFact[]
-  answer?: string
+export interface RagProcessingStepState {
+  originalUserQuestion: string
+  developedResearchPlan?: ResearchPlan
+  retrievedSearchResults?: VectorSearchResult[]
+  extractedResearchFacts?: ExtractedFact[]
+  generatedFinalAnswer?: string
 }

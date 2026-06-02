@@ -2,19 +2,19 @@ import { type Page } from 'patchright'
 import { logger } from '../utils/logger.js'
 import { errorBus } from '../utils/error-bus.js'
 
-const BASE_URL = 'https://www.perplexity.ai'
-const LIBRARY_URL = `${BASE_URL}/library`
-const BATCH_SIZE = 50
-const PAGE_READY_BUFFER_MS = 500
+const PERPLEXITY_BASE_URL = 'https://www.perplexity.ai'
+const PERPLEXITY_LIBRARY_URL = `${PERPLEXITY_BASE_URL}/library`
+const THREAD_BATCH_FETCH_LIMIT = 50
+const PAGE_READY_CONFIRMATION_BUFFER_MILLISECONDS = 500
 
-const VERSIONED_URL_PATTERNS = [
+const API_VERSION_URL_PATTERNS = [
   '/rest/userinfo',
   '/rest/thread/list_ask_threads',
   '/rest/thread/list_pinned_ask_threads',
   '/rest/sidebar',
 ]
 
-interface RawThread {
+interface RawPerplexityThread {
   uuid: string
   slug: string
   title: string
@@ -30,34 +30,43 @@ export interface ConversationMeta {
   [key: string]: unknown
 }
 
-function extractVersion(url: string): string | null {
-  const match = url.match(/[?&]version=([\d.]+)/)
-  return match?.[1] ?? null
+function extractApiVersionFromUrl(targetUrl: string): string | null {
+  const versionMatch = targetUrl.match(/[?&]version=([\d.]+)/)
+  return versionMatch?.[1] ?? null
 }
 
-async function detectVersion(page: Page): Promise<string> {
+async function detectCurrentApiVersion(webPage: Page): Promise<string> {
   try {
-    const res = await page.waitForResponse(
-      (r) => VERSIONED_URL_PATTERNS.some((p) => r.url().includes(p)) && r.status() === 200,
+    const apiResponse = await webPage.waitForResponse(
+      (response) => API_VERSION_URL_PATTERNS.some((pattern) => response.url().includes(pattern)) && response.status() === 200,
       { timeout: 15_000 }
     )
-    return extractVersion(res.url()) ?? '2.18'
-  } catch {
+    return extractApiVersionFromUrl(apiResponse.url()) ?? '2.18'
+  } catch (detectionTimeout) {
     return '2.18'
   }
 }
 
-async function waitReady(page: Page): Promise<void> {
+async function waitLibraryPageToBeReady(webPage: Page): Promise<void> {
   try {
-    await page.waitForResponse((r) => r.url().includes('/rest/userinfo') && r.status() === 200, { timeout: 12000 })
-  } catch {}
-  await page.waitForTimeout(PAGE_READY_BUFFER_MS)
+    const userInfoEndpointPattern = '/rest/userinfo'
+    await webPage.waitForResponse(
+      (response) => response.url().includes(userInfoEndpointPattern) && response.status() === 200,
+      { timeout: 12000 }
+    )
+  } catch (readyTimeout) {}
+  await webPage.waitForTimeout(PAGE_READY_CONFIRMATION_BUFFER_MILLISECONDS)
 }
 
-async function fetchBatch(page: Page, version: string, offset: number): Promise<{ threads: RawThread[], hasMore: boolean, total: number }> {
-  const url = `${BASE_URL}/rest/thread/list_ask_threads?version=${version}&source=default`
-  const raw = await page.evaluate(async ({ url, offset, batchSize }) => {
-    const res = await fetch(url, {
+async function fetchThreadBatch(
+  webPage: Page,
+  apiVersion: string,
+  itemOffset: number
+): Promise<{ threads: RawPerplexityThread[], hasMoreThreads: boolean, totalThreadsOnServer: number }> {
+  const fetchUrl = `${PERPLEXITY_BASE_URL}/rest/thread/list_ask_threads?version=${apiVersion}&source=default`
+
+  const executionResult = await webPage.evaluate(async ({ url, offset, batchSize }) => {
+    const response = await fetch(url, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
@@ -72,47 +81,74 @@ async function fetchBatch(page: Page, version: string, offset: number): Promise<
       }),
       credentials: 'include',
     })
-    return { status: res.status, body: await res.text() }
-  }, { url, offset, batchSize: BATCH_SIZE })
+    return { httpStatus: response.status, responseBodyText: await response.text() }
+  }, { url: fetchUrl, offset: itemOffset, batchSize: THREAD_BATCH_FETCH_LIMIT })
 
-  if (raw.status !== 200) errorBus.raiseError(`API error: ${raw.status}`, undefined, { body: raw.body })
+  const isSuccessfulResponse = executionResult.httpStatus === 200
+  if (!isSuccessfulResponse) {
+    errorBus.raiseError(`API error: ${executionResult.httpStatus}`, undefined, { body: executionResult.responseBodyText })
+  }
 
-  let parsed: any
-  try { parsed = JSON.parse(raw.body) } catch (e) { errorBus.raiseError('Invalid JSON from API', e) }
-  if (!Array.isArray(parsed)) errorBus.raiseError('Expected array from API')
+  let parsedResponseThreads: any
+  try {
+    parsedResponseThreads = JSON.parse(executionResult.responseBodyText)
+  } catch (jsonParsingError) {
+    errorBus.raiseError('Invalid JSON from API', jsonParsingError)
+  }
 
-  const threads = parsed as RawThread[]
-  const total = threads[0]?.total_threads ?? threads.length
-  return { threads, hasMore: offset + threads.length < total, total }
+  if (!Array.isArray(parsedResponseThreads)) {
+    errorBus.raiseError('Expected array from API')
+  }
+
+  const threadList = parsedResponseThreads as RawPerplexityThread[]
+  const totalCountFromServer = threadList[0]?.total_threads ?? threadList.length
+
+  return {
+    threads: threadList,
+    hasMoreThreads: itemOffset + threadList.length < totalCountFromServer,
+    totalThreadsOnServer: totalCountFromServer
+  }
 }
 
 export class LibraryDiscovery {
-  async discoverAllConversationsFromLibrary(page: Page): Promise<ConversationMeta[]> {
+  async discoverAllConversationsFromLibrary(webPage: Page): Promise<ConversationMeta[]> {
     try {
       logger.info('Discovering threads...')
-      const vPromise = detectVersion(page)
-      await page.goto(LIBRARY_URL, { waitUntil: 'domcontentloaded' })
-      await waitReady(page)
-      const version = await vPromise
+      const versionDetectionPromise = detectCurrentApiVersion(webPage)
 
-      let all: RawThread[] = []
-      let offset = 0
-      let hasMore = true
+      await webPage.goto(PERPLEXITY_LIBRARY_URL, { waitUntil: 'domcontentloaded' })
+      await waitLibraryPageToBeReady(webPage)
+      const currentApiVersion = await versionDetectionPromise
 
-      while (hasMore) {
-        if (offset > 0) await page.waitForTimeout(800 + Math.random() * 700)
-        const batch = await fetchBatch(page, version, offset)
-        all.push(...batch.threads)
-        offset += batch.threads.length
-        hasMore = batch.hasMore
-        logger.debug(`Fetched ${all.length} / ${batch.total} threads`)
+      let allDiscoveredThreads: RawPerplexityThread[] = []
+      let currentItemOffset = 0
+      let areMoreThreadsAvailable = true
+
+      while (areMoreThreadsAvailable) {
+        const isSubsequentBatch = currentItemOffset > 0
+        if (isSubsequentBatch) {
+          const randomizedJitterDelay = 800 + Math.random() * 700
+          await webPage.waitForTimeout(randomizedJitterDelay)
+        }
+
+        const threadBatchResult = await fetchThreadBatch(webPage, currentApiVersion, currentItemOffset)
+        allDiscoveredThreads.push(...threadBatchResult.threads)
+        currentItemOffset += threadBatchResult.threads.length
+        areMoreThreadsAvailable = threadBatchResult.hasMoreThreads
+
+        logger.debug(`Fetched ${allDiscoveredThreads.length} / ${threadBatchResult.totalThreadsOnServer} threads`)
       }
 
-      const convs = all.map(t => ({ ...t, id: t.uuid, url: `${BASE_URL}/search/${t.slug}` }))
-      logger.success(`Discovered ${convs.length} threads`)
-      return convs
-    } catch (e) {
-      return errorBus.raiseError('Discovery failed', e)
+      const conversationMetadataList = allDiscoveredThreads.map(thread => ({
+        ...thread,
+        id: thread.uuid,
+        url: `${PERPLEXITY_BASE_URL}/search/${thread.slug}`
+      }))
+
+      logger.success(`Discovered ${conversationMetadataList.length} threads`)
+      return conversationMetadataList
+    } catch (discoveryError) {
+      return errorBus.raiseError('Discovery failed', discoveryError)
     }
   }
 }

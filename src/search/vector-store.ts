@@ -1,7 +1,7 @@
 import { errorBus } from '../utils/error-bus.js'
 import { LocalIndex } from 'vectra'
 import { join } from 'node:path'
-import fs from 'node:fs/promises'
+import fileSystem from 'node:fs/promises'
 import { type Config } from '../utils/config.js'
 import { logger } from '../utils/logger.js'
 import { OllamaClient } from '../ai/ollama-client.js'
@@ -18,100 +18,143 @@ export class VectorStore {
   private readonly vectorIndex: LocalIndex
   private readonly ollamaClient: OllamaClient
 
-  constructor(private readonly config: Config) {
-    this.vectorIndex = new LocalIndex(config.vectorIndexPath)
-    this.ollamaClient = new OllamaClient(config)
+  constructor(private readonly applicationConfig: Config) {
+    this.vectorIndex = new LocalIndex(applicationConfig.vectorIndexPath)
+    this.ollamaClient = new OllamaClient(applicationConfig)
   }
 
   async validate(): Promise<void> {
     try {
       await this.ollamaClient.validate()
-    } catch (error) {
-      errorBus.raiseError(`Vector store validation failed`, error)
+    } catch (validationError) {
+      errorBus.raiseError(`Vector store validation failed`, validationError)
     }
   }
 
   async rebuildFromExports(): Promise<void> {
     logger.info('Building vector index from exports folder...')
-    const paths = await this.getMdPaths(this.config.exportDir)
-    if (paths.length === 0) {
+    const markdownFilePaths = await this.discoverMarkdownFilesRecursively(this.applicationConfig.exportDir)
+
+    if (markdownFilePaths.length === 0) {
       logger.warn('No markdown files found to index.')
       return
     }
 
-    await this.ensureIndex()
-    await this.processBatches(paths)
+    await this.ensureVectorIndexIsCreated()
+    await this.indexFilesByBatches(markdownFilePaths)
     logger.success('Vector index rebuild complete.')
   }
 
-  async search(query: string, limit = 10): Promise<VectorSearchResult[]> {
+  async search(searchQuery: string, resultLimit = 10): Promise<VectorSearchResult[]> {
     try {
-      const [embedding] = await this.ollamaClient.embed([query])
-      if (!embedding) return errorBus.raiseError('Failed to generate embedding for query')
-      const raw = await this.vectorIndex.queryItems(embedding, query, limit)
-      return raw.map(r => ({ meta: r.item.metadata as VectorDocMeta, score: r.score }))
-    } catch (e) {
-      return errorBus.raiseError('Vector search failed', e, { query })
+      const [searchQueryEmbedding] = await this.ollamaClient.embed([searchQuery])
+      if (!searchQueryEmbedding) {
+        return errorBus.raiseError('Failed to generate embedding for query')
+      }
+
+      const rawSearchResults = await this.vectorIndex.queryItems(searchQueryEmbedding, searchQuery, resultLimit)
+      return rawSearchResults.map(searchResult => ({
+        meta: searchResult.item.metadata as VectorDocMeta,
+        score: searchResult.score
+      }))
+    } catch (searchError) {
+      return errorBus.raiseError('Vector search failed', searchError, { searchQuery })
     }
   }
 
-  private async ensureIndex() {
-    if (!(await this.vectorIndex.isIndexCreated())) await this.vectorIndex.createIndex()
-  }
-
-  private async getMdPaths(dir: string): Promise<string[]> {
-    const entries = await fs.readdir(dir, { withFileTypes: true })
-    const paths: string[] = []
-    for (const e of entries) {
-      const full = join(dir, e.name)
-      if (e.isDirectory()) paths.push(...(await this.getMdPaths(full)))
-      else if (full.endsWith('.md')) paths.push(full)
+  private async ensureVectorIndexIsCreated() {
+    const isIndexAlreadyCreated = await this.vectorIndex.isIndexCreated()
+    if (!isIndexAlreadyCreated) {
+      await this.vectorIndex.createIndex()
     }
-    return paths
   }
 
-  private async processBatches(paths: string[]) {
+  private async discoverMarkdownFilesRecursively(directoryPath: string): Promise<string[]> {
+    const directoryEntries = await fileSystem.readdir(directoryPath, { withFileTypes: true })
+    const markdownFilePaths: string[] = []
+
+    for (const directoryEntry of directoryEntries) {
+      const fullEntryPath = join(directoryPath, directoryEntry.name)
+      if (directoryEntry.isDirectory()) {
+        const nestedMarkdownPaths = await this.discoverMarkdownFilesRecursively(fullEntryPath)
+        markdownFilePaths.push(...nestedMarkdownPaths)
+      } else if (fullEntryPath.endsWith('.md')) {
+        markdownFilePaths.push(fullEntryPath)
+      }
+    }
+    return markdownFilePaths
+  }
+
+  private async indexFilesByBatches(markdownFilePaths: string[]) {
     await this.vectorIndex.beginUpdate()
-    const BATCH = 10
-    let texts: string[] = []
-    let metas: VectorDocMeta[] = []
+    const EMBEDDING_BATCH_SIZE = 10
+    let pendingTextChunks: string[] = []
+    let pendingMetadataEntries: VectorDocMeta[] = []
 
-    for (let i = 0; i < paths.length; i++) {
-      const { chunks, meta } = await this.extract(paths[i]!)
-      for (const [idx, chunk] of chunks.entries()) {
-        texts.push(chunk)
-        metas.push({ ...meta, id: `${meta['id']}_p${idx}`, title: `${meta['title']} (Part ${idx + 1})`, snippet: chunk })
-        if (texts.length >= BATCH) {
-          await this.insertBatch(texts, metas)
-          texts = []; metas = []
+    for (let fileIndex = 0; fileIndex < markdownFilePaths.length; fileIndex++) {
+      const currentFilePath = markdownFilePaths[fileIndex]!
+      const { markdownChunks, fileMetadata } = await this.extractChunksAndMetadata(currentFilePath)
+
+      for (let chunkIndex = 0; chunkIndex < markdownChunks.length; chunkIndex++) {
+        const textChunk = markdownChunks[chunkIndex]!
+        pendingTextChunks.push(textChunk)
+        pendingMetadataEntries.push({
+          ...fileMetadata,
+          id: `${fileMetadata['id']}_p${chunkIndex}`,
+          title: `${fileMetadata['title']} (Part ${chunkIndex + 1})`,
+          snippet: textChunk
+        })
+
+        if (pendingTextChunks.length >= EMBEDDING_BATCH_SIZE) {
+          await this.insertEmbeddingBatchIntoIndex(pendingTextChunks, pendingMetadataEntries)
+          pendingTextChunks = []
+          pendingMetadataEntries = []
         }
       }
-      if ((i + 1) % 10 === 0) logger.debug(`Processed ${i + 1}/${paths.length} files...`)
+
+      const LOGGING_FREQUENCY = 10
+      if ((fileIndex + 1) % LOGGING_FREQUENCY === 0) {
+        logger.debug(`Processed ${fileIndex + 1}/${markdownFilePaths.length} files...`)
+      }
     }
-    if (texts.length > 0) await this.insertBatch(texts, metas)
+
+    if (pendingTextChunks.length > 0) {
+      await this.insertEmbeddingBatchIntoIndex(pendingTextChunks, pendingMetadataEntries)
+    }
     await this.vectorIndex.endUpdate()
   }
 
-  private async extract(path: string) {
-    const content = await fs.readFile(path, 'utf-8')
-    const meta = {
-      id: content.match(/^\*\*ID:\*\* (.+?)\s{2,}$/m)?.[1] ?? path,
-      path: path,
-      title: content.match(/^# (.+)$/m)?.[1] ?? 'Untitled',
-      spaceName: content.match(/^\*\*Space:\*\* (.+?)\s{2,}$/m)?.[1] ?? 'General',
-      date: content.match(/^\*\*Date:\*\* (.+?)\s{2,}$/m)?.[1] ?? new Date().toISOString(),
+  private async extractChunksAndMetadata(filePath: string) {
+    const fileContent = await fileSystem.readFile(filePath, 'utf-8')
+    const fileMetadata = {
+      id: fileContent.match(/^\*\*ID:\*\* (.+?)\s{2,}$/m)?.[1] ?? filePath,
+      path: filePath,
+      title: fileContent.match(/^# (.+)$/m)?.[1] ?? 'Untitled',
+      spaceName: fileContent.match(/^\*\*Space:\*\* (.+?)\s{2,}$/m)?.[1] ?? 'General',
+      date: fileContent.match(/^\*\*Date:\*\* (.+?)\s{2,}$/m)?.[1] ?? new Date().toISOString(),
     }
-    return { chunks: chunkMarkdown(content, 1500, 100), meta }
+    const MAXIMUM_CHARS_PER_CHUNK = 1500
+    const OVERLAP_CHARS_BETWEEN_CHUNKS = 100
+    return {
+      markdownChunks: chunkMarkdown(fileContent, MAXIMUM_CHARS_PER_CHUNK, OVERLAP_CHARS_BETWEEN_CHUNKS),
+      fileMetadata
+    }
   }
 
-  private async insertBatch(texts: string[], metas: VectorDocMeta[]) {
+  private async insertEmbeddingBatchIntoIndex(textChunks: string[], metadataEntries: VectorDocMeta[]) {
     try {
-      const vecs = await this.ollamaClient.embed(texts)
-      for (let i = 0; i < vecs.length; i++) {
-        if (vecs[i]) await this.vectorIndex.insertItem({ vector: vecs[i]!, metadata: metas[i] as any })
+      const embeddingVectors = await this.ollamaClient.embed(textChunks)
+      for (let vectorIndex = 0; vectorIndex < embeddingVectors.length; vectorIndex++) {
+        const vector = embeddingVectors[vectorIndex]
+        if (vector) {
+          await this.vectorIndex.insertItem({
+            vector: vector,
+            metadata: metadataEntries[vectorIndex] as any
+          })
+        }
       }
-    } catch (e) {
-      errorBus.emitError('Batch embedding failed', e)
+    } catch (embeddingError) {
+      errorBus.emitError('Batch embedding failed', embeddingError)
     }
   }
 }

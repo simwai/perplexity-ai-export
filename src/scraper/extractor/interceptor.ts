@@ -11,44 +11,58 @@ export class ApiInterceptor {
     }),
   ])
 
-  constructor(private readonly diagnostics: ApiDiagnosticsWriter) {}
+  constructor(private readonly apiDiagnosticsWriter: ApiDiagnosticsWriter) {}
 
-  async capture(page: Page, timeoutMs: number): Promise<unknown | null> {
-    const accumulated: any[] = []
-    let resolved = false
+  async capture(webPage: Page, captureTimeoutMilliseconds: number): Promise<unknown | null> {
+    const accumulatedApiEntries: any[] = []
+    let isRequestResolved = false
 
     return new Promise((resolve) => {
-      const timer = setTimeout(() => {
-        if (!resolved) {
-          resolved = true
-          resolve(accumulated.length > 0 ? { entries: accumulated } : null)
+      const timeoutTimerIdentifier = setTimeout(() => {
+        if (!isRequestResolved) {
+          isRequestResolved = true
+          resolve(accumulatedApiEntries.length > 0 ? { entries: accumulatedApiEntries } : null)
         }
-      }, timeoutMs)
+      }, captureTimeoutMilliseconds)
 
-      page.on('response', async (res) => {
-        if (resolved || page.isClosed()) return
-        const url = res.url()
-        if (!url.includes('/rest/thread/') || url.includes('list_')) return
+      webPage.on('response', async (webResponse) => {
+        if (isRequestResolved || webPage.isClosed()) {
+          return
+        }
+
+        const responseUrl = webResponse.url()
+        const isThreadApiRequest = responseUrl.includes('/rest/thread/')
+        const isExcludedListRequest = responseUrl.includes('list_')
+
+        if (!isThreadApiRequest || isExcludedListRequest) {
+          return
+        }
 
         try {
-          const json = await res.json()
-          const parsed = ApiInterceptor.ApiResponseSchema.safeParse(json)
-          if (!parsed.success) {
-            await this.diagnostics.writeFailure({
-              url: res.url(),
+          const jsonResponseData = await webResponse.json()
+          const validationResult = ApiInterceptor.ApiResponseSchema.safeParse(jsonResponseData)
+
+          if (!validationResult.success) {
+            await this.apiDiagnosticsWriter.writeFailure({
+              url: webResponse.url(),
               errorType: 'zod_error',
-              zodErrorPaths: parsed.error.issues.map(i => i.path.join('.'))
+              zodErrorPaths: validationResult.error.issues.map(issue => issue.path.join('.'))
             })
           } else {
-            const data = parsed.data as any
-            accumulated.push(...(Array.isArray(data) ? data : data.entries))
-            if (Array.isArray(data) || !data.collection_info?.has_next_page) {
-              clearTimeout(timer)
-              resolved = true
-              resolve({ entries: accumulated })
+            const validatedData: any = validationResult.data
+            const newEntriesToAppend = Array.isArray(validatedData) ? validatedData : validatedData.entries
+            accumulatedApiEntries.push(...newEntriesToAppend)
+
+            const hasMorePagesToCapture = !Array.isArray(validatedData) && validatedData.collection_info?.has_next_page
+            if (!hasMorePagesToCapture) {
+              clearTimeout(timeoutTimerIdentifier)
+              isRequestResolved = true
+              resolve({ entries: accumulatedApiEntries })
             }
           }
-        } catch {}
+        } catch (jsonParsingError) {
+          // Ignore responses that are not valid JSON
+        }
       })
     })
   }

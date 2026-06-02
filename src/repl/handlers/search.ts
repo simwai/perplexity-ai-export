@@ -6,12 +6,12 @@ import { errorBus } from '../../utils/error-bus.js'
 export class SearchHandler extends BaseHandler {
   async handleSearchWizard(): Promise<void> {
     try {
-      const query = await input({
+      const userSearchQuery = await input({
         message: 'Search query:',
-        validate: (v) => v.trim().length > 0 || 'Please enter a query.',
+        validate: (inputValue) => inputValue.trim().length > 0 || 'Please enter a query.',
       })
 
-      let mode = await select({
+      let selectedSearchMode = await select({
         message: 'Search mode:',
         choices: [
           { name: 'Auto (semantic for long queries, exact for short)', value: 'auto' },
@@ -22,34 +22,41 @@ export class SearchHandler extends BaseHandler {
         default: 'auto',
       }) as any
 
-      if (mode !== 'rg') {
+      const isSemanticSearchRequested = selectedSearchMode !== 'rg'
+      if (isSemanticSearchRequested) {
         try {
           await this.searchOrchestrator.validateVectorSearch()
-        } catch (error) {
-          if (mode === 'auto') {
+        } catch (validationError) {
+          if (selectedSearchMode === 'auto') {
             logger.warn('Ollama not available. Falling back to Exact Text search.')
-            mode = 'rg'
+            selectedSearchMode = 'rg'
           } else {
-            return // errorBus.raiseError was called inside validateVectorSearch
+            return
           }
         }
       }
 
-      await this.searchOrchestrator.search(query, mode, { pattern: query })
-    } catch (error) {
-      errorBus.emitError('Search wizard failed', error)
+      await this.searchOrchestrator.search(userSearchQuery, selectedSearchMode, { pattern: userSearchQuery })
+    } catch (wizardError) {
+      errorBus.emitError('Search wizard failed', wizardError)
     }
   }
 
   async handleVectorizeWizard(): Promise<void> {
     try {
-      const shouldRebuild = await confirm({ message: 'Rebuild the vector index from exports now?', default: true })
-      if (!shouldRebuild) return
+      const shouldRebuildIndexNow = await confirm({
+        message: 'Rebuild the vector index from exports now?',
+        default: true
+      })
+
+      if (!shouldRebuildIndexNow) {
+        return
+      }
 
       await this.searchOrchestrator.validateVectorSearch()
       await this.searchOrchestrator.vectorizeNow()
-    } catch (error) {
-      errorBus.emitError('Vectorization wizard failed', error)
+    } catch (vectorizationError) {
+      errorBus.emitError('Vectorization wizard failed', vectorizationError)
     }
   }
 }

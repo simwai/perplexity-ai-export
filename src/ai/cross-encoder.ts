@@ -1,23 +1,25 @@
 import { pipeline } from '@huggingface/transformers'
 
 let crossEncoderInstance: any = null
-let isInitializing = false
+let isEncoderInitializing = false
 
 export async function getCrossEncoder() {
   if (crossEncoderInstance) return crossEncoderInstance
-  if (isInitializing) return null
+  if (isEncoderInitializing) return null
 
-  isInitializing = true
+  isEncoderInitializing = true
   try {
-    const pipe = await (pipeline as any)('feature-extraction', 'Xenova/ms-marco-MiniLM-L-6-v2')
+    const CROSS_ENCODER_MODEL_IDENTIFIER = 'Xenova/ms-marco-MiniLM-L-6-v2'
+    const transformerPipeline = await (pipeline as any)('feature-extraction', CROSS_ENCODER_MODEL_IDENTIFIER)
+
     crossEncoderInstance = {
-      tokenizer: pipe.tokenizer,
-      model: pipe.model,
+      tokenizer: transformerPipeline.tokenizer,
+      model: transformerPipeline.model,
     }
     return crossEncoderInstance
   } catch {
     return null
   } finally {
-    isInitializing = false
+    isEncoderInitializing = false
   }
 }

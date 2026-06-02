@@ -8,41 +8,47 @@ import { select } from '@inquirer/prompts'
 
 export class ExportHandler extends BaseHandler {
   async handleScraperWizard(): Promise<void> {
-    const progress = this.checkpointManager.getProcessingProgress()
-    if (progress.total > 0) {
+    const processingProgress = this.checkpointManager.getProcessingProgress()
+    const hasExistingProgress = processingProgress.total > 0
+
+    if (hasExistingProgress) {
       await this.promptUserForCheckpointAction()
     }
     await this.handleStartLibraryExport()
   }
 
   async handleStartLibraryExport(): Promise<void> {
-    const browserManager = new BrowserManager(this.config)
+    const browserManager = new BrowserManager(this.applicationConfig)
     try {
-      const activePage = await browserManager.launch()
+      const activeBrowserPage = await browserManager.launch()
 
-      if (!this.checkpointManager.isDiscoveryPhaseComplete()) {
+      const isDiscoveryPhaseRequired = !this.checkpointManager.isDiscoveryPhaseComplete()
+      if (isDiscoveryPhaseRequired) {
         logger.info('\n=== Phase 1: Library Discovery ===\n')
-        const discoveryTool = new LibraryDiscovery()
-        const discovered = await discoveryTool.discoverAllConversationsFromLibrary(activePage)
-        this.checkpointManager.setDiscoveredConversations(discovered)
+        const libraryDiscoveryTool = new LibraryDiscovery()
+        const discoveredConversations = await libraryDiscoveryTool.discoverAllConversationsFromLibrary(activeBrowserPage)
+        this.checkpointManager.setDiscoveredConversations(discoveredConversations)
       }
 
-      const pending = this.checkpointManager.getPendingConversations()
-      if (pending.length === 0) {
+      const pendingConversationsToExtract = this.checkpointManager.getPendingConversations()
+      const hasPendingConversations = pendingConversationsToExtract.length > 0
+
+      if (!hasPendingConversations) {
         logger.success('All conversations already processed!')
         return
       }
 
-      logger.info(`\n=== Phase 2: Parallel Extraction (${pending.length} pending) ===\n`)
-      const activeBrowser = browserManager.browserInstance!
-      const workerPool = new WorkerPool(this.config, this.checkpointManager, activeBrowser)
-      await workerPool.initialize()
-      await workerPool.processConversations(pending)
-      await workerPool.close()
+      logger.info(`\n=== Phase 2: Parallel Extraction (${pendingConversationsToExtract.length} pending) ===\n`)
+      const launchedBrowserInstance = browserManager.browserInstance!
+      const extractionWorkerPool = new WorkerPool(this.applicationConfig, this.checkpointManager, launchedBrowserInstance)
+
+      await extractionWorkerPool.initialize()
+      await extractionWorkerPool.processConversations(pendingConversationsToExtract)
+      await extractionWorkerPool.close()
 
       logger.success('\n✨ Export complete!')
-    } catch (error) {
-      errorBus.emitError('Scraper failed', error)
+    } catch (scrapingError) {
+      errorBus.emitError('Scraper failed', scrapingError)
     } finally {
       await browserManager.close()
     }
@@ -50,7 +56,7 @@ export class ExportHandler extends BaseHandler {
 
   private async promptUserForCheckpointAction(): Promise<void> {
     const currentProgress = this.checkpointManager.getProcessingProgress()
-    const selectedAction = await select({
+    const userSelectedAction = await select({
       message: `Found checkpoint (${currentProgress.processed}/${currentProgress.total} processed). What do you want to do?`,
       choices: [
         { name: 'Resume (Continue processing known threads)', value: 'resume' },
@@ -60,11 +66,15 @@ export class ExportHandler extends BaseHandler {
       ],
     })
 
-    if (selectedAction === 'cancel') {
+    if (userSelectedAction === 'cancel') {
       logger.info('Start cancelled.')
       process.exit(0)
     }
-    if (selectedAction === 'restart') this.checkpointManager.resetCheckpoint()
-    else if (selectedAction === 'update') this.checkpointManager.prepareForUpdateRun()
+
+    if (userSelectedAction === 'restart') {
+      this.checkpointManager.resetCheckpoint()
+    } else if (userSelectedAction === 'update') {
+      this.checkpointManager.prepareForUpdateRun()
+    }
   }
 }
