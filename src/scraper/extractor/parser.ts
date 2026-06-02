@@ -2,7 +2,7 @@ import { z } from 'zod'
 import { createHash } from 'node:crypto'
 import stringify from 'fast-json-stable-stringify'
 import { type ApiDiagnosticsWriter } from '../../utils/api-diagnostics.js'
-import { logger } from '../../utils/logger.js'
+import { errorBus } from '../../utils/error-bus.js'
 
 export class DataParser {
   private static readonly EntrySchema = z.object({
@@ -21,8 +21,10 @@ export class DataParser {
     const result = z.array(DataParser.EntrySchema).nonempty().safeParse(rawEntries)
 
     if (!result.success) {
-      if (rawEntries.length === 0) this.diagnostics.writeFailure({ url, errorType: 'empty_entries' }).catch(() => {})
-      logger.warn(`Entry validation failed for ${url}: ${result.error.message}`)
+      if (rawEntries.length === 0) {
+        this.diagnostics.writeFailure({ url, errorType: 'empty_entries' }).catch(() => {})
+      }
+      errorBus.emitError(`Entry validation failed for ${url}`, result.error)
       return null
     }
 

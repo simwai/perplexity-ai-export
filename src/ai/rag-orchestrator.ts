@@ -64,8 +64,7 @@ export class RagOrchestrator {
         logger.warn(`Self-Correction: ${chalk.gray(feedback.suggestion)}`)
       }
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error)
-      errorBus.emitError(`Mightiest RAG failed: ${errorMessage}`)
+      errorBus.emitError('Mightiest RAG pipeline failed', error, { question })
     }
   }
 
@@ -77,46 +76,40 @@ export class RagOrchestrator {
 
     const crossEncoder = await getCrossEncoder()
     if (!crossEncoder) {
-      logger.debug(
-        'Cross-encoder not available. Skipping rerank.'
-      )
+      logger.debug('Cross-encoder not available. Skipping rerank.')
       return results
     }
 
-    const { tokenizer, model } = crossEncoder
-    logger.info(`Cross-encoder reranking ${results.length} candidates...`)
+    try {
+      const { tokenizer, model } = crossEncoder
+      logger.info(`Cross-encoder reranking ${results.length} candidates...`)
 
-    const RERANK_BATCH_SIZE = 64
-    const rerankScores: number[] = new Array(results.length).fill(0)
+      const RERANK_BATCH_SIZE = 64
+      const rerankScores: number[] = new Array(results.length).fill(0)
 
-    for (let i = 0; i < results.length; i += RERANK_BATCH_SIZE) {
-      const currentBatch = results.slice(i, i + RERANK_BATCH_SIZE)
-      const inputPairs = currentBatch.map((res) => [
-        question,
-        (res.meta['snippet'] as string) || '',
-      ])
+      for (let i = 0; i < results.length; i += RERANK_BATCH_SIZE) {
+        const currentBatch = results.slice(i, i + RERANK_BATCH_SIZE)
+        const inputPairs = currentBatch.map((res) => [question, (res.meta['snippet'] as string) || ''])
 
-      const tokenizedInputs = await tokenizer(
-        inputPairs.map((pair) => pair[0]),
-        {
-          text_pair: inputPairs.map((pair) => pair[1]),
+        const tokenizedInputs = await tokenizer(inputPairs.map((p) => p[0]), {
+          text_pair: inputPairs.map((p) => p[1]),
           padding: true,
           truncation: true,
-        }
-      )
+        })
 
-      const modelOutput = await model(tokenizedInputs)
-      const batchLogits: number[] = Array.from(modelOutput.logits.data as Float32Array)
+        const modelOutput = await model(tokenizedInputs)
+        const batchLogits: number[] = Array.from(modelOutput.logits.data as Float32Array)
+        batchLogits.forEach((logit, offset) => { rerankScores[i + offset] = logit })
+      }
 
-      batchLogits.forEach((logit, offset) => {
-        rerankScores[i + offset] = logit
-      })
+      return results
+        .map((result, index) => ({ result, rerankScore: rerankScores[index]! }))
+        .sort((a, b) => b.rerankScore - a.rerankScore)
+        .map((entry) => entry.result)
+    } catch (e) {
+      errorBus.emitError('Cross-encoder reranking failed', e)
+      return results
     }
-
-    return results
-      .map((result, index) => ({ result, rerankScore: rerankScores[index]! }))
-      .sort((a, b) => b.rerankScore - a.rerankScore)
-      .map((entry) => entry.result)
   }
 
   private displaySourceProvenance(extractedFacts: ExtractedFact[]): void {

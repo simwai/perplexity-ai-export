@@ -1,6 +1,6 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
-import { logger } from './logger.js'
+import { errorBus } from './error-bus.js'
 import type { Config } from './config.js'
 
 export interface ApiDiagnosticEntry {
@@ -31,7 +31,7 @@ export class ApiDiagnosticsWriter {
       const entryAsJsonLine = JSON.stringify(diagnosticEntry) + '\n'
       await fs.appendFile(diagnosticLogPath, entryAsJsonLine, 'utf8')
     } catch (error) {
-      logger.warn(`Failed to write API diagnostic: ${error instanceof Error ? error.message : String(error)}`)
+      errorBus.emitError('Failed to write API diagnostic', error)
     }
   }
 }

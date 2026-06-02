@@ -17,10 +17,8 @@ const BENCHMARK_QUERIES = [
 
 async function runBenchmark(): Promise<void> {
   const indexJsonPath = join(config.vectorIndexPath, 'index.json')
-  const isIndexPresent = existsSync(indexJsonPath)
-  if (!isIndexPresent) {
-    logger.error('No vector index found. Build the index first via the main menu.')
-    process.exit(1)
+  if (!existsSync(indexJsonPath)) {
+    errorBus.raiseError('No vector index found. Build the index first via the main menu.')
   }
 
   logger.info(`Starting benchmark with ${BENCHMARK_QUERIES.length} queries...`)
@@ -56,16 +54,8 @@ async function runBenchmark(): Promise<void> {
   }
 
   const successfulResults = benchmarkResults.filter((result) => !result.isFailure)
-  const failedResults = benchmarkResults.filter((result) => result.isFailure)
-
-  const totalSuccessfulDuration = successfulResults.reduce(
-    (accumulator, result) => accumulator + result.durationMs,
-    0
-  )
-  const averageLatencyMs =
-    successfulResults.length > 0
-      ? Math.round(totalSuccessfulDuration / successfulResults.length)
-      : 0
+  const totalSuccessfulDuration = successfulResults.reduce((acc, res) => acc + res.durationMs, 0)
+  const averageLatencyMs = successfulResults.length > 0 ? Math.round(totalSuccessfulDuration / successfulResults.length) : 0
 
   logger.info('--- Benchmark Results ---')
   benchmarkResults.forEach((result, index) => {
@@ -76,9 +66,8 @@ async function runBenchmark(): Promise<void> {
   logger.info(`Successful: ${successfulResults.length}/${benchmarkResults.length}`)
   logger.info(`Average latency: ${averageLatencyMs}ms`)
 
-  const hasFailures = failedResults.length > 0
-  if (hasFailures) {
-    logger.warn(`${failedResults.length} queries failed — run with DEBUG=true for details`)
+  if (benchmarkResults.some(r => r.isFailure)) {
+    logger.warn(`Some queries failed — run with DEBUG=true for details`)
   }
 }
 

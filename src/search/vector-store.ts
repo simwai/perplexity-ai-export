@@ -27,7 +27,7 @@ export class VectorStore {
     try {
       await this.ollamaClient.validate()
     } catch (error) {
-      throw new Error(`Vector store validation failed: ${error instanceof Error ? error.message : String(error)}`)
+      errorBus.raiseError(`Vector store validation failed`, error)
     }
   }
 
@@ -45,10 +45,14 @@ export class VectorStore {
   }
 
   async search(query: string, limit = 10): Promise<VectorSearchResult[]> {
-    const [embedding] = await this.ollamaClient.embed([query])
-    if (!embedding) throw new Error('Failed to generate embedding for query')
-    const raw = await this.vectorIndex.queryItems(embedding, query, limit)
-    return raw.map(r => ({ meta: r.item.metadata as VectorDocMeta, score: r.score }))
+    try {
+      const [embedding] = await this.ollamaClient.embed([query])
+      if (!embedding) return errorBus.raiseError('Failed to generate embedding for query')
+      const raw = await this.vectorIndex.queryItems(embedding, query, limit)
+      return raw.map(r => ({ meta: r.item.metadata as VectorDocMeta, score: r.score }))
+    } catch (e) {
+      return errorBus.raiseError('Vector search failed', e, { query })
+    }
   }
 
   private async ensureIndex() {

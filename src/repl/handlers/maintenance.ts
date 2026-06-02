@@ -7,18 +7,18 @@ import { sep } from 'node:path'
 
 export class MaintenanceHandler extends BaseHandler {
   async handleDataReset(): Promise<void> {
-    const certain = await confirm({
-      message: '⚠️ This will delete all stored checkpoints, authentication data, and vector index. Are you sure?',
-      default: false
-    })
-    if (!certain) return
-
     try {
+      const certain = await confirm({
+        message: '⚠️ This will delete all stored checkpoints, authentication data, and vector index. Are you sure?',
+        default: false
+      })
+      if (!certain) return
+
       this.wipeStorage()
       this.checkpointManager.resetCheckpoint()
       logger.success('✅ Storage folder deleted. All progress has been reset.')
     } catch (error) {
-      errorBus.emitError('Failed to reset', error)
+      errorBus.emitError('Reset failed', error)
     }
   }
 
@@ -26,7 +26,11 @@ export class MaintenanceHandler extends BaseHandler {
     const authPath = this.config.authStoragePath
     const storageRoot = authPath ? authPath.split(sep)[0] : '.storage'
     if (storageRoot && existsSync(storageRoot)) {
-      rmSync(storageRoot, { recursive: true, force: true })
+      try {
+        rmSync(storageRoot, { recursive: true, force: true })
+      } catch (e) {
+        errorBus.raiseError(`Failed to delete storage directory: ${storageRoot}`, e)
+      }
     }
   }
 }

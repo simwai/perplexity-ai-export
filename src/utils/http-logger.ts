@@ -1,6 +1,7 @@
 import { appendFileSync, existsSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import type { Request, Response } from 'patchright'
+import { errorBus } from './error-bus.js'
 
 const LOGS_DIRECTORY = 'logs'
 const LOG_FILE_TIMESTAMP = new Date().toISOString().replace(/[:.]/g, '-')
@@ -31,28 +32,36 @@ function isPrompt(url: string, data: string | null): boolean {
 
 export function logHttpRequest(req: Request, debug: boolean): void {
   if (!debug) return
-  if (!existsSync(LOGS_DIRECTORY)) mkdirSync(LOGS_DIRECTORY, { recursive: true })
+  try {
+    if (!existsSync(LOGS_DIRECTORY)) mkdirSync(LOGS_DIRECTORY, { recursive: true })
 
-  const body = isPrompt(req.url(), req.postData()) ? '[PROMPT REDACTED]' : req.postData()
-  const entry = `[${new Date().toISOString()}] REQUEST: ${req.method()} ${req.url()}\n` +
-    `Headers: ${JSON.stringify(redact(req.headers()), null, 2)}\n` +
-    `Body: ${body ?? 'None'}\n` +
-    '--------------------------------------------------------------------------------\n'
-  appendFileSync(HTTP_LOG_PATH, entry)
+    const body = isPrompt(req.url(), req.postData()) ? '[PROMPT REDACTED]' : req.postData()
+    const entry = `[${new Date().toISOString()}] REQUEST: ${req.method()} ${req.url()}\n` +
+      `Headers: ${JSON.stringify(redact(req.headers()), null, 2)}\n` +
+      `Body: ${body ?? 'None'}\n` +
+      '--------------------------------------------------------------------------------\n'
+    appendFileSync(HTTP_LOG_PATH, entry)
+  } catch (e) {
+    errorBus.emitError('HTTP Request log failed', e)
+  }
 }
 
 export async function logHttpResponse(res: Response, debug: boolean): Promise<void> {
   if (!debug) return
-  const req = res.request()
-  let body = '[BODY SKIPPED]'
-  const ct = res.headers()['content-type'] ?? ''
-  if (ct.includes('json') && !isPrompt(req.url(), req.postData())) {
-    try { body = JSON.stringify(await res.json(), null, 2) } catch { body = '[PARSE ERROR]' }
-  }
+  try {
+    const req = res.request()
+    let body = '[BODY SKIPPED]'
+    const ct = res.headers()['content-type'] ?? ''
+    if (ct.includes('json') && !isPrompt(req.url(), req.postData())) {
+      try { body = JSON.stringify(await res.json(), null, 2) } catch { body = '[PARSE ERROR]' }
+    }
 
-  const entry = `[${new Date().toISOString()}] RESPONSE: ${res.status()} ${res.url()}\n` +
-    `Headers: ${JSON.stringify(redact(res.headers()), null, 2)}\n` +
-    `Body: ${body}\n` +
-    '--------------------------------------------------------------------------------\n'
-  appendFileSync(HTTP_LOG_PATH, entry)
+    const entry = `[${new Date().toISOString()}] RESPONSE: ${res.status()} ${res.url()}\n` +
+      `Headers: ${JSON.stringify(redact(res.headers()), null, 2)}\n` +
+      `Body: ${body}\n` +
+      '--------------------------------------------------------------------------------\n'
+    appendFileSync(HTTP_LOG_PATH, entry)
+  } catch (e) {
+    errorBus.emitError('HTTP Response log failed', e)
+  }
 }

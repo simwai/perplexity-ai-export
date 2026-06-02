@@ -3,6 +3,7 @@ import { type VectorSearchResult } from '../../search/vector-store.js'
 import { type ExtractedFact } from './types.js'
 import { RAG_PROMPTS } from './prompts.js'
 import { logger } from '../../utils/logger.js'
+import { errorBus } from '../../utils/error-bus.js'
 import jsonic from 'jsonic'
 
 export class FactExtractor {
@@ -44,7 +45,8 @@ export class FactExtractor {
             thread: factEntry.thread || originalSnippet?.meta['title'] || 'Unknown',
           })
         }
-      } catch {
+      } catch (e) {
+        errorBus.emitError(`Fact extraction batch ${batchNumber} failed`, e)
         for (const res of currentBatch) {
           extractedFindings.push({
             fact: res.meta['snippet'] as string,
@@ -64,7 +66,8 @@ export class FactExtractor {
       try {
         const parsed = jsonic(jsonMatch[0])
         return Array.isArray(parsed) ? parsed : []
-      } catch {
+      } catch (e) {
+        errorBus.emitError('Failed to parse researcher JSON', e, { response })
         return []
       }
     }

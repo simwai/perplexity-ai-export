@@ -11,28 +11,26 @@ export interface AppError {
 class ErrorBus extends EventEmitter {
   constructor() {
     super()
-    // Register a no-op listener for 'error' to prevent Node from throwing
-    // when no external listeners are attached.
     this.on('error', () => {})
   }
 
   emitError(message: string, error?: unknown, context?: Record<string, unknown>): void {
-    const appError: AppError = {
-      message,
-      error,
-      context,
-      timestamp: new Date(),
-    }
+    const appError: AppError = { message, error, context, timestamp: new Date() }
     this.emit('error', appError)
     this.logError(appError)
+  }
+
+  raiseError(message: string, error?: unknown, context?: Record<string, unknown>): never {
+    this.emitError(message, error, context)
+    if (error instanceof Error) throw error
+    throw new Error(message)
   }
 
   private logError(appError: AppError): void {
     const ctx = appError.context ? ` | Context: ${JSON.stringify(appError.context)}` : ''
     logger.error(`${appError.message}${ctx}`)
 
-    const isDebug = process.env['DEBUG'] === 'true'
-    if (appError.error && isDebug) {
+    if (appError.error && process.env['DEBUG'] === 'true') {
       console.error(appError.error)
     }
   }

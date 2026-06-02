@@ -2,7 +2,7 @@ import { config as loadEnv } from 'dotenv'
 import { existsSync, mkdirSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { z } from 'zod'
-import { logger } from './logger.js'
+import { errorBus } from './error-bus.js'
 
 loadEnv()
 
@@ -49,11 +49,10 @@ function parseEnvConfig(): Config {
 
   const result = configSchema.safeParse(raw)
   if (!result.success) {
-    logger.error('Invalid configuration:')
     result.error.issues.forEach((i) => {
       const field = i.path.join('.')
       const env = field.replace(/[A-Z]/g, (l) => `_${l.toLowerCase()}`).toUpperCase()
-      logger.error(`  ${env}: ${i.message}`)
+      errorBus.emitError(`Config error: ${env} - ${i.message}`)
     })
     process.exit(1)
   }
@@ -64,10 +63,18 @@ export const config: Config = parseEnvConfig()
 
 function ensureDir(p: string) {
   const d = dirname(p)
-  if (!existsSync(d)) mkdirSync(d, { recursive: true })
+  try {
+    if (!existsSync(d)) mkdirSync(d, { recursive: true })
+  } catch (e) {
+    errorBus.emitError(`Failed to create directory for ${p}`, e)
+  }
 }
 
 ensureDir(config.authStoragePath)
 ensureDir(config.checkpointPath)
 ensureDir(config.vectorIndexPath)
-if (!existsSync(config.exportDir)) mkdirSync(config.exportDir, { recursive: true })
+try {
+  if (!existsSync(config.exportDir)) mkdirSync(config.exportDir, { recursive: true })
+} catch (e) {
+  errorBus.emitError(`Failed to create export directory`, e)
+}

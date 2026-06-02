@@ -3,6 +3,7 @@ import { existsSync } from 'node:fs'
 import { createInterface } from 'node:readline'
 import { type Config } from '../utils/config.js'
 import { logger } from '../utils/logger.js'
+import { errorBus } from '../utils/error-bus.js'
 import { rgPath } from '@vscode/ripgrep'
 
 export interface RgSearchOptions {
@@ -54,14 +55,23 @@ export class RgSearch {
 
       child.on('close', (code) => {
         if (code === 0 || code === 1 || child.killed) resolve(matches)
-        else reject(new Error(`ripgrep exited with code ${code}`))
+        else {
+          const msg = `ripgrep exited with code ${code}`
+          errorBus.emitError(msg)
+          reject(new Error(msg))
+        }
+      })
+
+      child.on('error', (err) => {
+        errorBus.emitError('ripgrep failed to start', err)
+        reject(err)
       })
     })
   }
 
   private ensureDir() {
     if (!existsSync(this.config.exportDir)) {
-      throw new Error('No exports directory found. Please run export first.')
+      errorBus.raiseError('No exports directory found. Please run export first.')
     }
   }
 
@@ -84,7 +94,15 @@ export class RgSearch {
         if (code === 0 || code === 1) {
           if (code === 1 && !found) logger.info('No results found.')
           resolve()
-        } else reject(new Error(`ripgrep exited with code ${code}`))
+        } else {
+          const msg = `ripgrep exited with code ${code}`
+          errorBus.emitError(msg)
+          reject(new Error(msg))
+        }
+      })
+      child.on('error', (err) => {
+        errorBus.emitError('ripgrep failed', err)
+        reject(err)
       })
     })
   }

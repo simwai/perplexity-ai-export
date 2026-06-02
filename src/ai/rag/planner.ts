@@ -1,6 +1,7 @@
 import { type OllamaClient } from '../ollama-client.js'
 import { type ResearchPlan } from './types.js'
 import { RAG_PROMPTS } from './prompts.js'
+import { errorBus } from '../../utils/error-bus.js'
 import jsonic from 'jsonic'
 
 export class RAGPlanner {
@@ -19,7 +20,8 @@ export class RAGPlanner {
         hydePassage: planJson.hydePassage || '',
         filters: planJson.filters || {},
       }
-    } catch {
+    } catch (e) {
+      errorBus.emitError('Research planner fallback triggered', e)
       return {
         strategy: 'precise',
         queries: [question],
@@ -35,7 +37,8 @@ export class RAGPlanner {
     if (jsonMatch?.[0]) {
       try {
         return jsonic(jsonMatch[0])
-      } catch {
+      } catch (e) {
+        errorBus.emitError('Failed to parse planner JSON', e, { response })
         return {}
       }
     }

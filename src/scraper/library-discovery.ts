@@ -1,21 +1,12 @@
-import type { Page } from 'patchright'
+import { type Page } from 'patchright'
 import { logger } from '../utils/logger.js'
-
-// ─── Constants ───────────────────────────────────────────────────────────────
+import { errorBus } from '../utils/error-bus.js'
 
 const BASE_URL = 'https://www.perplexity.ai'
 const LIBRARY_URL = `${BASE_URL}/library`
 const BATCH_SIZE = 50
-const MAX_RETRIES = 3
-const RETRY_DELAY_MS = 1500
 const PAGE_READY_BUFFER_MS = 500
 
-/**
- * Only capture API version from endpoints that fire AFTER the library page
- * is fully initialized. /api/auth/session is intentionally excluded — it fires
- * too early (before cookies/CSRF are hydrated) and causes list_ask_threads
- * to return [].
- */
 const VERSIONED_URL_PATTERNS = [
   '/rest/userinfo',
   '/rest/thread/list_ask_threads',
@@ -23,247 +14,105 @@ const VERSIONED_URL_PATTERNS = [
   '/rest/sidebar',
 ]
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-
 interface RawThread {
   uuid: string
   slug: string
   title: string
   query_str: string
-  first_answer: string
-  answer_preview: string
-  last_query_datetime: string
-  mode: string
-  status: string
-  display_model: string
-  thread_access: number
-  has_next_page: boolean
   total_threads: number
-  collection: Collection | null
-  sources: string[]
-  query_count: number
-  search_focus: string
+  collection: { title: string } | null
   [key: string]: unknown
-}
-
-interface Collection {
-  uuid: string
-  title: string
-  emoji: string
-  slug: string
 }
 
 export interface ConversationMeta {
   id: string
   url: string
-  uuid: string
-  slug: string
-  title: string
-  query_str: string
-  first_answer: string
-  answer_preview: string
-  last_query_datetime: string
-  mode: string
-  status: string
-  display_model: string
-  thread_access: number
-  collection: Collection | null
-  sources: string[]
-  query_count: number
-  search_focus: string
   [key: string]: unknown
 }
 
-interface ThreadBatchResponse {
-  threads: RawThread[]
-  hasMore: boolean
-  total: number
-}
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function extractVersionFromUrl(url: string): string | null {
+function extractVersion(url: string): string | null {
   const match = url.match(/[?&]version=([\d.]+)/)
   return match?.[1] ?? null
 }
 
-function rawThreadToConversationMeta(thread: RawThread): ConversationMeta {
-  return {
-    ...thread,
-    id: thread.uuid,
-    url: `${BASE_URL}/search/${thread.slug}`,
-  }
-}
-
-// ─── Version Detection ────────────────────────────────────────────────────────
-
-async function detectApiVersion(page: Page): Promise<string> {
+async function detectVersion(page: Page): Promise<string> {
   try {
-    const response = await page.waitForResponse(
-      (res) => VERSIONED_URL_PATTERNS.some((p) => res.url().includes(p)) && res.status() === 200,
+    const res = await page.waitForResponse(
+      (r) => VERSIONED_URL_PATTERNS.some((p) => r.url().includes(p)) && r.status() === 200,
       { timeout: 15_000 }
     )
-    const version = extractVersionFromUrl(response.url()) ?? '2.18'
-    logger.debug(`Detected API version: ${version} (from ${new URL(response.url()).pathname})`)
-    return version
+    return extractVersion(res.url()) ?? '2.18'
   } catch {
-    logger.debug('Version detection timeout — using fallback 2.18')
     return '2.18'
   }
 }
 
-// ─── Page Readiness ───────────────────────────────────────────────────────────
-
-/**
- * Wait until the library page has finished its initialization network burst.
- * /rest/userinfo fires at library load, well after /api/auth/session, ensuring
- * cookies/CSRF are fully hydrated before we call list_ask_threads.
- */
-async function waitForLibraryReady(page: Page, timeout = 12_000): Promise<void> {
+async function waitReady(page: Page): Promise<void> {
   try {
-    await page.waitForResponse(
-      (res) => res.url().includes('/rest/userinfo') && res.status() === 200,
-      { timeout }
-    )
-    logger.debug('Library page ready (userinfo confirmed)')
-  } catch {
-    logger.debug('waitForLibraryReady: timeout — proceeding anyway')
-  }
-
+    await page.waitForResponse((r) => r.url().includes('/rest/userinfo') && r.status() === 200, { timeout: 12000 })
+  } catch {}
   await page.waitForTimeout(PAGE_READY_BUFFER_MS)
 }
 
-// ─── API Fetching ─────────────────────────────────────────────────────────────
-
-async function fetchThreadBatch(
-  page: Page,
-  version: string,
-  offset: number
-): Promise<ThreadBatchResponse> {
+async function fetchBatch(page: Page, version: string, offset: number): Promise<{ threads: RawThread[], hasMore: boolean, total: number }> {
   const url = `${BASE_URL}/rest/thread/list_ask_threads?version=${version}&source=default`
+  const raw = await page.evaluate(async ({ url, offset, batchSize }) => {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        limit: batchSize,
+        offset,
+        ascending: false,
+        include_assets: true,
+        search_term: '',
+        send_last_entry: true,
+        thread_type_filter: null,
+        with_temporary_threads: false,
+      }),
+      credentials: 'include',
+    })
+    return { status: res.status, body: await res.text() }
+  }, { url, offset, batchSize: BATCH_SIZE })
 
-  const raw = await page.evaluate(
-    async ({ url, offset, batchSize }: { url: string; offset: number; batchSize: number }) => {
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          limit: batchSize,
-          offset,
-          ascending: false,
-          include_assets: true,
-          search_term: '',
-          send_last_entry: true,
-          thread_type_filter: null,
-          with_temporary_threads: false,
-        }),
-        credentials: 'include',
-      })
-      const text = await res.text()
-      return { status: res.status, body: text }
-    },
-    { url, offset, batchSize: BATCH_SIZE }
-  )
+  if (raw.status !== 200) errorBus.raiseError(`API error: ${raw.status}`, undefined, { body: raw.body })
 
-  logger.debug(`list_ask_threads offset=${offset}: status=${raw.status}`)
-  logger.debug(`list_ask_threads offset=${offset}: body=${raw.body.slice(0, 500)}`)
-
-  if (raw.status !== 200) {
-    throw new Error(`list_ask_threads returned HTTP ${raw.status}`)
-  }
-
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(raw.body)
-  } catch {
-    throw new Error(`list_ask_threads: invalid JSON — body: ${raw.body.slice(0, 200)}`)
-  }
-
-  if (!Array.isArray(parsed)) {
-    throw new Error(`list_ask_threads: expected array, got ${typeof parsed}`)
-  }
+  let parsed: any
+  try { parsed = JSON.parse(raw.body) } catch (e) { errorBus.raiseError('Invalid JSON from API', e) }
+  if (!Array.isArray(parsed)) errorBus.raiseError('Expected array from API')
 
   const threads = parsed as RawThread[]
   const total = threads[0]?.total_threads ?? threads.length
-
-  return {
-    threads,
-    hasMore: offset + threads.length < total,
-    total,
-  }
+  return { threads, hasMore: offset + threads.length < total, total }
 }
-
-async function fetchFirstBatch(page: Page, version: string): Promise<ThreadBatchResponse> {
-  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-    const result = await fetchThreadBatch(page, version, 0)
-
-    if (result.threads.length > 0) {
-      logger.debug(`First batch OK — ${result.threads.length} threads (total: ${result.total})`)
-      return result
-    }
-
-    if (attempt < MAX_RETRIES) {
-      logger.debug(`Attempt ${attempt}: empty batch, retrying in ${RETRY_DELAY_MS}ms…`)
-      await page.waitForTimeout(RETRY_DELAY_MS)
-    }
-  }
-
-  logger.info('No threads found in library')
-  return { threads: [], hasMore: false, total: 0 }
-}
-
-// ─── Main Discovery ───────────────────────────────────────────────────────────
 
 export class LibraryDiscovery {
-  constructor() {}
-
   async discoverAllConversationsFromLibrary(page: Page): Promise<ConversationMeta[]> {
-    logger.info('Discovering threads via REST API...')
+    try {
+      logger.info('Discovering threads...')
+      const vPromise = detectVersion(page)
+      await page.goto(LIBRARY_URL, { waitUntil: 'domcontentloaded' })
+      await waitReady(page)
+      const version = await vPromise
 
-    // Start version detection BEFORE navigation so we catch the first matching response
-    const versionPromise = detectApiVersion(page)
+      let all: RawThread[] = []
+      let offset = 0
+      let hasMore = true
 
-    // Navigate to library
-    await page.goto(LIBRARY_URL, { waitUntil: 'domcontentloaded' })
+      while (hasMore) {
+        if (offset > 0) await page.waitForTimeout(800 + Math.random() * 700)
+        const batch = await fetchBatch(page, version, offset)
+        all.push(...batch.threads)
+        offset += batch.threads.length
+        hasMore = batch.hasMore
+        logger.debug(`Fetched ${all.length} / ${batch.total} threads`)
+      }
 
-    // Wait for page to be fully ready (userinfo fired + hydration buffer)
-    await waitForLibraryReady(page)
-
-    // Resolve detected version (fallback to 2.18 on timeout)
-    const version = await versionPromise
-    logger.info(`Detected API version: ${version} (from /rest/thread/list_ask_threads)`)
-
-    // First batch with retry logic
-    const allThreads: RawThread[] = []
-    const firstBatch = await fetchFirstBatch(page, version)
-    allThreads.push(...firstBatch.threads)
-
-    if (firstBatch.threads.length === 0) {
-      logger.success(`Discovered 0 threads`)
-      return []
+      const convs = all.map(t => ({ ...t, id: t.uuid, url: `${BASE_URL}/search/${t.slug}` }))
+      logger.success(`Discovered ${convs.length} threads`)
+      return convs
+    } catch (e) {
+      return errorBus.raiseError('Discovery failed', e)
     }
-
-    logger.debug(`Total threads on server: ${firstBatch.total}`)
-
-    // Paginate remaining batches
-    let offset = firstBatch.threads.length
-    let hasMore = firstBatch.hasMore
-
-    while (hasMore) {
-      // Randomized delay to avoid Cloudflare triggers (from PR #12)
-      const delay = 800 + Math.random() * 700
-      await page.waitForTimeout(delay)
-
-      const batch = await fetchThreadBatch(page, version, offset)
-      allThreads.push(...batch.threads)
-      offset += batch.threads.length
-      hasMore = batch.hasMore
-
-      logger.debug(`Fetched ${allThreads.length} / ${batch.total} threads`)
-    }
-
-    const conversations = allThreads.map(rawThreadToConversationMeta)
-    logger.success(`Discovered ${conversations.length} threads`)
-    return conversations
   }
 }

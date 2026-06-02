@@ -1,6 +1,7 @@
 import { RgSearch, type RgSearchOptions } from './rg-search.js'
 import { VectorStore } from './vector-store.js'
 import { logger } from '../utils/logger.js'
+import { errorBus } from '../utils/error-bus.js'
 import { type Config } from '../utils/config.js'
 import { RagOrchestrator } from '../ai/rag-orchestrator.js'
 import chalk from 'chalk'
@@ -19,7 +20,7 @@ export class SearchOrchestrator {
   }
 
   async validateVectorSearch(): Promise<void> {
-    if (!this.config.enableVectorSearch) throw new Error('Vector search disabled')
+    if (!this.config.enableVectorSearch) errorBus.raiseError('Vector search disabled')
     await this.vectorStore.validate()
   }
 
@@ -37,7 +38,7 @@ export class SearchOrchestrator {
         default: await this.auto(query, rgOptions); break
       }
     } catch (e) {
-      throw new Error(`Search failed: ${e instanceof Error ? e.message : String(e)}`)
+      errorBus.raiseError(`Search failed`, e)
     }
   }
 

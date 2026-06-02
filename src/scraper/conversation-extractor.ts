@@ -3,13 +3,13 @@ import { type Config } from '../utils/config.js'
 import { ApiDiagnosticsWriter } from '../utils/api-diagnostics.js'
 import { waitStrategy } from '../utils/wait-strategy.js'
 import { logger } from '../utils/logger.js'
+import { errorBus } from '../utils/error-bus.js'
 
 import { PageNavigator } from './extractor/navigator.js'
 import { ApiInterceptor } from './extractor/interceptor.js'
 import { DataParser } from './extractor/parser.js'
 import { MarkdownFormatter } from './extractor/formatter.js'
 import { type ExtractedConversation } from './extractor/types.js'
-import * as Errors from './extractor/errors.js'
 
 export class ConversationExtractor {
   private static readonly TIMEOUT_MIN_MS = 3000
@@ -40,13 +40,13 @@ export class ConversationExtractor {
   }
 
   async extract(url: string): Promise<ExtractedConversation> {
-    if (!this.context) throw new Errors.ExtractionError('Context missing')
+    if (!this.context) return errorBus.raiseError('Browser context missing')
 
     let page: Page | null = null
     try {
       page = await this.context.newPage()
     } catch (e) {
-      throw new Errors.ExtractionError(`Failed to create page: ${String(e)}`)
+      return errorBus.raiseError(`Failed to create new page for ${url}`, e)
     }
 
     const capturePromise = this.interceptor.capture(page, this.currentTimeoutMs)
@@ -56,16 +56,19 @@ export class ConversationExtractor {
       await waitStrategy(this.config).afterScroll(page)
 
       const apiData = await capturePromise
-      if (!apiData) throw new Errors.NoDataError('API response timeout')
+      if (!apiData) errorBus.raiseError('API response timeout (no data captured)')
 
       const parsed = this.parser.parse(apiData, url)
-      if (!parsed) throw new Errors.ParsingError('Failed to parse data')
+      if (!parsed) errorBus.raiseError('Failed to parse API data')
 
       return {
-        ...parsed.meta,
-        contentHash: parsed.hash,
-        content: this.formatter.format(parsed.entries, parsed.meta.title)
+        ...parsed!.meta,
+        contentHash: parsed!.hash,
+        content: this.formatter.format(parsed!.entries, parsed!.meta.title)
       }
+    } catch (e) {
+      if (e instanceof Error && (e.message.includes('timeout') || e.message.includes('parse'))) throw e
+      return errorBus.raiseError(`Extraction failed for ${url}`, e)
     } finally {
       if (page) await page.close().catch(e => logger.warn(`Failed to close page: ${e}`))
     }

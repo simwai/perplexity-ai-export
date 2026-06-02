@@ -4,17 +4,22 @@ import writeFileAtomic from 'write-file-atomic'
 import { type Config } from '../utils/config.js'
 import { type ExtractedConversation } from '../scraper/extractor/types.js'
 import { sanitizeFilename, sanitizeSpaceName } from './sanitizer.js'
+import { errorBus } from '../utils/error-bus.js'
 
 export class FileWriter {
   constructor(private readonly config: Config) {}
 
   async write(conversation: ExtractedConversation): Promise<string> {
-    const dest = this.constructPath(conversation)
-    const content = this.formatMd(conversation)
+    try {
+      const dest = this.constructPath(conversation)
+      const content = this.formatMd(conversation)
 
-    await fs.mkdir(dirname(dest), { recursive: true })
-    await (writeFileAtomic as any)(dest, content, 'utf8')
-    return dest
+      await fs.mkdir(dirname(dest), { recursive: true })
+      await (writeFileAtomic as any)(dest, content, 'utf8')
+      return dest
+    } catch (e) {
+      return errorBus.raiseError(`Failed to write conversation ${conversation.id}`, e)
+    }
   }
 
   private constructPath(c: ExtractedConversation): string {

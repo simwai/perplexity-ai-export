@@ -41,7 +41,7 @@ export class OllamaClient {
       await this.embed(['ping'])
       logger.success('Ollama embeddings look good.')
     } catch (error) {
-      throw new Error(`Ollama validation failed: ${error instanceof Error ? error.message : String(error)}`)
+      errorBus.raiseError(`Ollama validation failed`, error)
     }
   }
 
@@ -57,16 +57,15 @@ export class OllamaClient {
       if (!res.ok) {
         let errorBody = ''
         try { errorBody = await res.text() } catch {}
-        errorBus.emitError(`Ollama HTTP ${res.status}`, undefined, {
+        errorBus.raiseError(`Ollama request failed with status ${res.status}`, undefined, {
           body,
           errorBody: errorBody.slice(0, 500),
         })
-        throw new Error(`Ollama request failed with status ${res.status} – ${errorBody.slice(0, 200)}`)
       }
       return await res.json()
     } catch (e) {
-      if (e instanceof Error && e.message.includes('Ollama request failed with status')) throw e
-      throw new Error(`Network error while calling Ollama: ${e instanceof Error ? e.message : String(e)}`)
+      if (e instanceof Error && e.message.includes('Ollama request failed')) throw e
+      errorBus.raiseError(`Network error while calling Ollama`, e)
     }
   }
 
@@ -75,6 +74,6 @@ export class OllamaClient {
     if (openAi.success) return openAi.data.data.map((item) => item.embedding)
     const legacy = legacyFormatSchema.safeParse(data)
     if (legacy.success) return [legacy.data.embedding]
-    throw new Error('Unexpected response format from Ollama embeddings endpoint')
+    return errorBus.raiseError('Unexpected response format from Ollama embeddings endpoint')
   }
 }

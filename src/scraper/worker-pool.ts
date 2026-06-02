@@ -47,8 +47,7 @@ export class WorkerPool {
         })
       }
     } catch (error) {
-      errorBus.emitError('Failed to initialize worker pool', error)
-      throw error
+      errorBus.raiseError('Failed to initialize worker pool', error)
     }
   }
 
@@ -78,7 +77,6 @@ export class WorkerPool {
   private getAvailableWorker(): ExtractionWorker {
     const worker = this.workers.find(w => !w.isBusy)
     if (worker) return worker
-    // Should not happen with p-limit, but fallback
     return this.workers[0]!
   }
 
@@ -108,7 +106,7 @@ export class WorkerPool {
       this.checkpointManager.markAsProcessed(meta.id)
       logger.info(`${progressLabel} Up to date: ${result.title} (skipped write)`)
     } else {
-      this.fileWriter.write(result)
+      await this.fileWriter.write(result)
       this.checkpointManager.markAsProcessed(meta.id, result.contentHash)
       logger.info(`${progressLabel} Processed: ${result.title}`)
     }
