@@ -113,7 +113,7 @@ cp .env.example .env
 - **OLLAMA_MODEL**: Cognitive model for RAG synthesis (e.g., deepseek-r1).
 - **OLLAMA_EMBED_MODEL**: Model for generating vector representations (e.g., nomic-embed-text).
 - **ENABLE_VECTOR_SEARCH**: Set to `true` to activate semantic and RAG layers.
-- **ENABLED_STRATEGIES**: Comma-separated list of exporter names to enable (e.g., `markdown,csv`). Default: `markdown`.
+- **EXPORT_STRATEGIES**: Comma-separated list of exporter names to enable (e.g., `markdown,csv`). Default: `markdown`.
 
 ## Exporters
 
@@ -130,13 +130,13 @@ The system features a file-based exporter plugin system. You can easily add new 
       format(conversation: ExtractedConversation): string
     }
     ```
-3.  **Activate:** Add the `name` of your exporter to the `ENABLED_STRATEGIES` environment variable in your `.env` file.
+3.  **Activate:** Add the `name` of your exporter to the `EXPORT_STRATEGIES` environment variable in your `.env` file.
     ```bash
-    ENABLED_STRATEGIES=markdown,csv
+    EXPORT_STRATEGIES=markdown,csv
     ```
 
 **Notes:**
-- The `name` field in your exporter must match exactly what you put in `ENABLED_STRATEGIES`.
+- The `name` field in your exporter must match exactly what you put in `EXPORT_STRATEGIES`.
 - Returning `config.exportDir` from `outputDir` is the safe default for sharing the main export folder.
 - Custom strategies in `src/strategies/` are automatically discovered at startup.
 

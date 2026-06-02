@@ -48,7 +48,7 @@ export class ExportOrchestrator {
           const strategy = strategyModule.default as ExportStrategy
 
           if (strategy && strategy.name && typeof strategy.format === 'function') {
-            if (this.config.enabledStrategies.includes(strategy.name)) {
+            if (this.config.exportStrategies.includes(strategy.name)) {
               this.strategies.push(strategy)
               logger.debug(`Registered export strategy: ${strategy.name}`)
             }

@@ -15,7 +15,7 @@ describe('WorkerPool Skip Logic (Unit)', () => {
     mockConfig = {
       parallelWorkers: 1,
       exportDir: 'exports',
-      enabledStrategies: ['markdown']
+      exportStrategies: ['markdown']
     }
     mockCheckpoint = {
       getContentHash: vi.fn(),

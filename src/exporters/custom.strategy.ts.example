@@ -1,7 +1,7 @@
 // Copy this file to src/strategies/csv.exporter.ts
-// Then add "csv" to ENABLED_STRATEGIES in your .env
+// Then add "csv" to EXPORT_STRATEGIES in your .env
 //
-// The `name` field here MUST match what you put in ENABLED_STRATEGIES.
+// The `name` field here MUST match what you put in EXPORT_STRATEGIES.
 
 import type { ExportStrategy } from './export.strategy.js'
 import type { ExtractedConversation } from '../scraper/conversation-extractor.js'

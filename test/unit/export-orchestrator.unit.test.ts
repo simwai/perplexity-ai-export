@@ -17,7 +17,7 @@ vi.mock('node:path', async () => {
 describe('ExportOrchestrator (Unit)', () => {
   const mockConfig: Config = {
     exportDir: 'exports',
-    enabledStrategies: ['markdown'],
+    exportStrategies: ['markdown'],
   } as any
 
   const mockConversation: ExtractedConversation = {
