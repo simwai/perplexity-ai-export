@@ -1,6 +1,6 @@
 import { errorBus } from '../utils/error-bus.js'
 import { LocalIndex } from 'vectra'
-import path from 'node:path'
+import { join } from 'node:path'
 import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { type Config } from '../utils/config.js'
 import { logger } from '../utils/logger.js'
@@ -118,7 +118,7 @@ export class VectorStore {
     const markdownFilePaths: string[] = []
 
     for (const entryName of directoryEntries) {
-      const fullPath = path.join(directoryPath, entryName)
+      const fullPath = join(directoryPath, entryName)
       const pathStatus = statSync(fullPath)
 
       if (pathStatus.isDirectory()) {

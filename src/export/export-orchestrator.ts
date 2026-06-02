@@ -1,4 +1,4 @@
-import path from 'node:path'
+import { join } from 'node:path'
 import { writeFileSync, existsSync, mkdirSync, readdirSync, statSync } from 'node:fs'
 import { pathToFileURL } from 'node:url'
 import { type Config } from '../utils/config.js'
@@ -26,7 +26,7 @@ export class ExportOrchestrator {
   }
 
   private async initializeStrategies(): Promise<void> {
-    const strategiesDir = path.join(import.meta.dirname, '..', 'exporters')
+    const strategiesDir = join(import.meta.dirname, '..', 'exporters')
 
     if (!existsSync(strategiesDir)) {
       logger.warn(`Exporters directory not found: ${strategiesDir}`)
@@ -40,7 +40,7 @@ export class ExportOrchestrator {
         !file.endsWith('.d.ts')
       ) {
         try {
-          const filePath = path.join(strategiesDir, file)
+          const filePath = join(strategiesDir, file)
           const moduleUrl = pathToFileURL(filePath).href
           const strategyModule = await import(moduleUrl)
           const strategy = strategyModule.default as ExportStrategy
@@ -75,7 +75,7 @@ export class ExportOrchestrator {
       try {
         const outputDir = strategy.outputDir(this.config)
         const safeSpaceName = sanitizeSpaceName(conversation.spaceName)
-        const spaceSpecificDirectory = path.join(outputDir, safeSpaceName)
+        const spaceSpecificDirectory = join(outputDir, safeSpaceName)
 
         if (!existsSync(spaceSpecificDirectory)) {
           mkdirSync(spaceSpecificDirectory, { recursive: true })
@@ -83,7 +83,7 @@ export class ExportOrchestrator {
 
         const safeFileTitle = sanitizeFilename(conversation.title)
         const fileName = `${safeFileTitle} (${conversation.id})${strategy.fileExtension}`
-        const destinationFilePath = path.join(spaceSpecificDirectory, fileName)
+        const destinationFilePath = join(spaceSpecificDirectory, fileName)
 
         const content = strategy.format(conversation)
         writeFileSync(destinationFilePath, content, 'utf-8')

@@ -1,5 +1,5 @@
 import fs from 'node:fs/promises'
-import path from 'node:path'
+import { join } from 'node:path'
 import { logger } from './logger.js'
 import type { Config } from './config.js'
 
@@ -26,7 +26,7 @@ export class ApiDiagnosticsWriter {
       }
 
       await fs.mkdir(this.DEBUG_DIRECTORY, { recursive: true })
-      const diagnosticLogPath = path.join(this.DEBUG_DIRECTORY, this.DIAGNOSTICS_FILENAME)
+      const diagnosticLogPath = join(this.DEBUG_DIRECTORY, this.DIAGNOSTICS_FILENAME)
 
       const entryAsJsonLine = JSON.stringify(diagnosticEntry) + '\n'
       await fs.appendFile(diagnosticLogPath, entryAsJsonLine, 'utf8')

@@ -1,12 +1,12 @@
 import { appendFileSync, existsSync, mkdirSync } from 'node:fs'
-import path from 'node:path'
+import { join } from 'node:path'
 import type { Request, Response } from '@playwright/test'
 import { config } from './config.js'
 
 const LOGS_DIRECTORY = 'logs'
 const LOG_FILE_TIMESTAMP = new Date().toISOString().replace(/[:.]/g, '-')
 const HTTP_LOG_FILENAME = `http-req-res-log-${LOG_FILE_TIMESTAMP}.txt`
-const HTTP_LOG_PATH = path.join(LOGS_DIRECTORY, HTTP_LOG_FILENAME)
+const HTTP_LOG_PATH = join(LOGS_DIRECTORY, HTTP_LOG_FILENAME)
 
 const SENSITIVE_HEADERS = ['authorization', 'cookie', 'set-cookie', 'x-api-key']
 const PROMPT_KEYWORDS = ['"query"', '"prompt"', '"messages"']

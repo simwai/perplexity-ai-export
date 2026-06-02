@@ -1,13 +1,13 @@
 import chalk from 'chalk'
 import { appendFileSync, mkdirSync, existsSync } from 'node:fs'
-import path from 'node:path'
+import { join } from 'node:path'
 
 const IS_DEBUG_MODE =
   process.env['DEBUG_MODE'] === 'true' || process.env['DIAGNOSIS_MODE'] === 'true'
 const LOGS_DIRECTORY = 'logs'
 const LOG_FILE_TIMESTAMP = new Date().toISOString().replace(/[:.]/g, '-')
 const MAIN_LOG_FILENAME = `main-log-${LOG_FILE_TIMESTAMP}.txt`
-const MAIN_LOG_PATH = path.join(LOGS_DIRECTORY, MAIN_LOG_FILENAME)
+const MAIN_LOG_PATH = join(LOGS_DIRECTORY, MAIN_LOG_FILENAME)
 
 function writeToLogFile(message: string): void {
   if (!IS_DEBUG_MODE) return

@@ -1,6 +1,6 @@
 import { execSync } from 'node:child_process'
 import { readdirSync, readFileSync, statSync } from 'node:fs'
-import path from 'node:path'
+import { join } from 'node:path'
 
 /**
  * Recursively finds all markdown files in a directory, excluding node_modules and .git.
@@ -9,7 +9,7 @@ function getMarkdownFiles(dir, allFiles = []) {
   const files = readdirSync(dir)
   for (const file of files) {
     if (file === 'node_modules' || file === '.git') continue
-    const name = path.join(dir, file)
+    const name = join(dir, file)
     try {
       if (statSync(name).isDirectory()) {
         getMarkdownFiles(name, allFiles)

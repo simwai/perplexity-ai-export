@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { ApiDiagnosticsWriter } from '../../src/utils/api-diagnostics.js'
 import fs from 'node:fs/promises'
-import path from 'node:path'
+import { join } from 'node:path'
 
 vi.mock('node:fs/promises')
 
@@ -25,7 +25,7 @@ describe('ApiDiagnosticsWriter (Unit)', () => {
 
     expect(fs.mkdir).toHaveBeenCalledWith('debug', { recursive: true })
     expect(fs.appendFile).toHaveBeenCalledWith(
-      path.join('debug', 'api-diagnostics.jsonl'),
+      join('debug', 'api-diagnostics.jsonl'),
       expect.stringContaining('"url":"http://test.com"'),
       'utf8'
     )
@@ -42,7 +42,7 @@ describe('ApiDiagnosticsWriter (Unit)', () => {
     await writer.writeFailure(entry)
 
     expect(fs.appendFile).toHaveBeenCalledWith(
-      path.join('debug', 'api-diagnostics.jsonl'),
+      join('debug', 'api-diagnostics.jsonl'),
       expect.stringContaining('"zodErrorPaths":["entries.0.title"]'),
       'utf8'
     )
