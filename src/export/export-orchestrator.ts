@@ -1,6 +1,6 @@
-import { join, dirname } from 'node:path'
+import path from 'node:path'
 import { writeFileSync, existsSync, mkdirSync, readdirSync, statSync } from 'node:fs'
-import { fileURLToPath, pathToFileURL } from 'node:url'
+import { pathToFileURL } from 'node:url'
 import { type Config } from '../utils/config.js'
 import type { ExtractedConversation } from '../scraper/conversation-extractor.js'
 import { sanitizeFilename, sanitizeSpaceName } from './sanitizer.js'
@@ -26,9 +26,7 @@ export class ExportOrchestrator {
   }
 
   private async initializeStrategies(): Promise<void> {
-    const __filename = fileURLToPath(import.meta.url)
-    const __dirname = dirname(__filename)
-    const strategiesDir = join(__dirname, '..', 'exporters')
+    const strategiesDir = path.join(import.meta.dirname, '..', 'exporters')
 
     if (!existsSync(strategiesDir)) {
       logger.warn(`Exporters directory not found: ${strategiesDir}`)
@@ -42,7 +40,7 @@ export class ExportOrchestrator {
         !file.endsWith('.d.ts')
       ) {
         try {
-          const filePath = join(strategiesDir, file)
+          const filePath = path.join(strategiesDir, file)
           const moduleUrl = pathToFileURL(filePath).href
           const strategyModule = await import(moduleUrl)
           const strategy = strategyModule.default as ExportStrategy
@@ -77,7 +75,7 @@ export class ExportOrchestrator {
       try {
         const outputDir = strategy.outputDir(this.config)
         const safeSpaceName = sanitizeSpaceName(conversation.spaceName)
-        const spaceSpecificDirectory = join(outputDir, safeSpaceName)
+        const spaceSpecificDirectory = path.join(outputDir, safeSpaceName)
 
         if (!existsSync(spaceSpecificDirectory)) {
           mkdirSync(spaceSpecificDirectory, { recursive: true })
@@ -85,7 +83,7 @@ export class ExportOrchestrator {
 
         const safeFileTitle = sanitizeFilename(conversation.title)
         const fileName = `${safeFileTitle} (${conversation.id})${strategy.fileExtension}`
-        const destinationFilePath = join(spaceSpecificDirectory, fileName)
+        const destinationFilePath = path.join(spaceSpecificDirectory, fileName)
 
         const content = strategy.format(conversation)
         writeFileSync(destinationFilePath, content, 'utf-8')

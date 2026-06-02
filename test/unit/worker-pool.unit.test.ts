@@ -3,7 +3,7 @@ import { WorkerPool } from '../../src/scraper/worker-pool.js'
 
 vi.mock('../../src/scraper/conversation-extractor.js')
 vi.mock('../../src/scraper/checkpoint-manager.js')
-vi.mock('../../src/export/export-orchestrator.js')
+vi.mock('../../src/export/file-writer.js')
 
 describe('WorkerPool Skip Logic (Unit)', () => {
   let pool: WorkerPool
@@ -12,11 +12,7 @@ describe('WorkerPool Skip Logic (Unit)', () => {
   let mockConfig: any
 
   beforeEach(() => {
-    mockConfig = {
-      parallelWorkers: 1,
-      exportDir: 'exports',
-      exportStrategies: ['markdown']
-    }
+    mockConfig = { parallelWorkers: 1 }
     mockCheckpoint = {
       getContentHash: vi.fn(),
       markAsProcessed: vi.fn(),
@@ -42,7 +38,7 @@ describe('WorkerPool Skip Logic (Unit)', () => {
 
     await pool.processConversations([{ id: 'thread-1', url: 'http://url' }])
 
-    expect((pool as any).exportOrchestrator.exportConversation).not.toHaveBeenCalled()
+    expect((pool as any).fileWriter.write).not.toHaveBeenCalled()
     expect(mockCheckpoint.markAsProcessed).toHaveBeenCalledWith('thread-1')
   })
 
@@ -58,7 +54,7 @@ describe('WorkerPool Skip Logic (Unit)', () => {
 
     await pool.processConversations([{ id: 'thread-1', url: 'http://url' }])
 
-    expect((pool as any).exportOrchestrator.exportConversation).toHaveBeenCalled()
+    expect((pool as any).fileWriter.write).toHaveBeenCalled()
     expect(mockCheckpoint.markAsProcessed).toHaveBeenCalledWith('thread-1', 'hash-new')
   })
 })

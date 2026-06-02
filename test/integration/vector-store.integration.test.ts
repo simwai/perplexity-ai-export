@@ -1,11 +1,11 @@
 import { config } from '../../src/utils/config.js'
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest'
 import { rmSync, existsSync, mkdirSync, writeFileSync, readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import path from 'node:path'
 import { isOllamaAvailable } from '../ollama-available.js'
 
-const TEST_EXPORTS = join(process.cwd(), 'test-fixtures', 'exports')
-const TEST_INDEX = join(process.cwd(), 'test-fixtures', 'vector-index')
+const TEST_EXPORTS = path.join(process.cwd(), 'test-fixtures', 'exports')
+const TEST_INDEX = path.join(process.cwd(), 'test-fixtures', 'vector-index')
 
 // Import and patch config before loading VectorStore
 let VectorStore: any
@@ -45,13 +45,13 @@ describe.runIf(await isOllamaAvailable())('VectorStore Integration', () => {
 
   beforeEach(() => {
     // Clean between tests
-    ;[join(TEST_EXPORTS, '*.md'), join(TEST_INDEX, '*')].forEach((pattern) => {
+    ;[path.join(TEST_EXPORTS, '*.md'), path.join(TEST_INDEX, '*')].forEach((pattern) => {
       const dir = pattern.replace('/*', '').replace('/*.md', '')
       if (existsSync(dir)) {
         const files = require('fs').readdirSync(dir)
         for (const file of files) {
           const isFileMdOrJson = file.endsWith('.md') || file.endsWith('.json')
-          if (isFileMdOrJson) rmSync(join(dir, file))
+          if (isFileMdOrJson) rmSync(path.join(dir, file))
         }
       }
     })
@@ -61,16 +61,16 @@ describe.runIf(await isOllamaAvailable())('VectorStore Integration', () => {
     const store = new VectorStore(config)
 
     writeFileSync(
-      join(TEST_EXPORTS, 'test-conv.md'),
+      path.join(TEST_EXPORTS, 'test-conv.md'),
       `# Test Conversation\n\n**Space:** General\n**ID:** test-123\n\n## Question\n\nWhat is testing?\n\n---\n\n## Answer\n\nTesting verifies software behavior.`
     )
 
     await store.rebuildFromExports()
 
-    expect(existsSync(join(TEST_INDEX, 'index.json'))).toBe(true)
+    expect(existsSync(path.join(TEST_INDEX, 'index.json'))).toBe(true)
 
     // Verify index has content
-    const indexContent = readFileSync(join(TEST_INDEX, 'index.json'), 'utf-8')
+    const indexContent = readFileSync(path.join(TEST_INDEX, 'index.json'), 'utf-8')
     expect(indexContent.length).toBeGreaterThan(100)
   }, 30000)
 
@@ -78,18 +78,18 @@ describe.runIf(await isOllamaAvailable())('VectorStore Integration', () => {
     const store = new VectorStore(config)
 
     const largeContent = `# Large File\n\n**Space:** Test\n**ID:** large-1\n\n${'Lorem ipsum dolor sit amet consectetur adipiscing elit. '.repeat(100)}`
-    writeFileSync(join(TEST_EXPORTS, 'large.md'), largeContent)
+    writeFileSync(path.join(TEST_EXPORTS, 'large.md'), largeContent)
 
     await store.rebuildFromExports()
 
-    expect(existsSync(join(TEST_INDEX, 'index.json'))).toBe(true)
+    expect(existsSync(path.join(TEST_INDEX, 'index.json'))).toBe(true)
   }, 30000)
 
   it('should search and return relevant results with scores', async () => {
     const store = new VectorStore(config)
 
     writeFileSync(
-      join(TEST_EXPORTS, 'typescript.md'),
+      path.join(TEST_EXPORTS, 'typescript.md'),
       `# TypeScript Guide\n\n**Space:** Dev\n**ID:** ts-123\n\nTypeScript adds static typing to JavaScript for safer code.`
     )
 

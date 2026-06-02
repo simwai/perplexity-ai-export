@@ -128,8 +128,8 @@ export class CheckpointManager {
 
   private saveCheckpoint(): void {
     try {
-      const formatdState = JSON.stringify(this.currentState, null, 2)
-      writeFileSync(this.checkpointFilePath, formatdState)
+      const serializedState = JSON.stringify(this.currentState, null, 2)
+      writeFileSync(this.checkpointFilePath, serializedState)
     } catch (error) {
       errorBus.emitError('Failed to save checkpoint file', error)
     }

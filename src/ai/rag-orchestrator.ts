@@ -4,7 +4,7 @@ import { OllamaClient } from './ollama-client.js'
 import { RgSearch } from '../search/rg-search.js'
 import { logger } from '../utils/logger.js'
 import chalk from 'chalk'
-import { join } from 'node:path'
+import path from 'node:path'
 import { type Config } from '../utils/config.js'
 
 let crossEncoderTokenizer: any = null
@@ -168,7 +168,7 @@ Return JSON: {"strategy": "...", "queries": [], "hardKeywords": [], "hydePassage
         const matches = await this.ripgrep.captureSearchMatches({ pattern: hardKeyword })
         const convertedMatches: VectorSearchResult[] = matches.map((match) => ({
           meta: {
-            path: join(this.config.exportDir, match.path),
+            path: path.join(this.config.exportDir, match.path),
             snippet: match.text,
             title: match.path.split('/').pop() || 'Untitled',
             id: match.path + match.line,

@@ -1,6 +1,6 @@
 import { performance } from 'node:perf_hooks'
 import { existsSync } from 'node:fs'
-import { join } from 'node:path'
+import path from 'node:path'
 import { config } from './utils/config.js'
 import { errorBus } from './utils/error-bus.js'
 import { logger } from './utils/logger.js'
@@ -16,7 +16,7 @@ const BENCHMARK_QUERIES = [
 ]
 
 async function runBenchmark(): Promise<void> {
-  const indexJsonPath = join(config.vectorIndexPath, 'index.json')
+  const indexJsonPath = path.join(config.vectorIndexPath, 'index.json')
   const isIndexPresent = existsSync(indexJsonPath)
   if (!isIndexPresent) {
     logger.error('No vector index found. Build the index first via the main menu.')

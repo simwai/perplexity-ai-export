@@ -1,6 +1,6 @@
 import { config as loadEnv } from 'dotenv'
 import { existsSync, mkdirSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import path from 'node:path'
 import { z } from 'zod'
 import { logger } from './logger.js'
 
@@ -48,7 +48,7 @@ function parseEnvConfig(): Config {
   }
 
   const rawConfig = {
-    authStoragePath: process.env['AUTH_STORAGE_PATH'] ?? join('.storage', 'auth.json'),
+    authStoragePath: process.env['AUTH_STORAGE_PATH'] ?? path.join('.storage', 'auth.json'),
     waitMode: process.env['WAIT_MODE'] ?? 'dynamic',
     rateLimitMs: parseInt(process.env['RATE_LIMIT_MS'] ?? DEFAULT_RATE_LIMIT_MS, 10),
     parallelWorkers: parseInt(process.env['PARALLEL_WORKERS'] ?? DEFAULT_PARALLEL_WORKERS, 10),
@@ -57,8 +57,8 @@ function parseEnvConfig(): Config {
       10
     ),
     exportDir: process.env['EXPORT_DIR'] ?? 'exports',
-    checkpointPath: process.env['CHECKPOINT_PATH'] ?? join('.storage', 'checkpoint.json'),
-    vectorIndexPath: process.env['VECTOR_INDEX_PATH'] ?? join('.storage', 'vector-index'),
+    checkpointPath: process.env['CHECKPOINT_PATH'] ?? path.join('.storage', 'checkpoint.json'),
+    vectorIndexPath: process.env['VECTOR_INDEX_PATH'] ?? path.join('.storage', 'vector-index'),
     ollamaUrl: process.env['OLLAMA_URL'] ?? DEFAULT_OLLAMA_URL,
     ollamaModel: process.env['OLLAMA_MODEL'] ?? 'llama3.1',
     ollamaEmbedModel: process.env['OLLAMA_EMBED_MODEL'] ?? 'nomic-embed-text',
@@ -89,7 +89,7 @@ function camelToSnakeCase(camelStr: string): string {
 }
 
 function ensureDirectoryExistsForFile(filePath: string): void {
-  const dirPath = dirname(filePath)
+  const dirPath = path.dirname(filePath)
   if (!existsSync(dirPath)) {
     mkdirSync(dirPath, { recursive: true })
   }
