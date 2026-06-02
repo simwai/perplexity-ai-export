@@ -127,7 +127,7 @@ The system features a file-based exporter plugin system. You can easily add new 
       name: string
       fileExtension: string
       outputDir(config: Config): string
-      export(conversation: ExtractedConversation): string
+      serialize(conversation: ExtractedConversation): string
     }
     ```
 3.  **Activate:** Add the `name` of your exporter to the `ENABLED_EXPORTERS` environment variable in your `.env` file.

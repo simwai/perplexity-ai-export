@@ -44,10 +44,10 @@ export class FileWriter {
         try {
           const filePath = join(exportersDir, file)
           const moduleUrl = pathToFileURL(filePath).href
-          const module = await import(moduleUrl)
-          const exporter = module.default as ConversationExporter
+          const exporterModule = await import(moduleUrl)
+          const exporter = exporterModule.default as ConversationExporter
 
-          if (exporter && exporter.name && typeof exporter.export === 'function') {
+          if (exporter && exporter.name && typeof exporter.serialize === 'function') {
             if (this.config.enabledExporters.includes(exporter.name)) {
               this.exporters.push(exporter)
               logger.debug(`Registered exporter: ${exporter.name}`)
@@ -88,7 +88,7 @@ export class FileWriter {
         const fileName = `${safeFileTitle} (${conversation.id})${exporter.fileExtension}`
         const destinationFilePath = join(spaceSpecificDirectory, fileName)
 
-        const content = exporter.export(conversation)
+        const content = exporter.serialize(conversation)
         writeFileSync(destinationFilePath, content, 'utf-8')
 
         // Integrity check

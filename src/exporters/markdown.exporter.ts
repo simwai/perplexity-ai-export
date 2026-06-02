@@ -8,7 +8,7 @@ const exporter: ConversationExporter = {
   outputDir(config: Config): string {
     return config.exportDir
   },
-  export(conversation: ExtractedConversation): string {
+  serialize(conversation: ExtractedConversation): string {
     const headerTitle = `# ${conversation.title}\n\n`
     const metadataBlock =
       `**Space:** ${conversation.spaceName}  \n` +

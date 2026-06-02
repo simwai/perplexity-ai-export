@@ -16,9 +16,9 @@ const exporter: ConversationExporter = {
   outputDir(config: Config): string {
     return config.exportDir
   },
-  // export: receives the fully extracted conversation, returns a string.
+  // serialize: receives the fully extracted conversation, returns a string.
   // The string will be written to: outputDir / spaceName / title (id).csv
-  export(conversation: ExtractedConversation): string {
+  serialize(conversation: ExtractedConversation): string {
     const header = 'role,content'
     const rows = conversation.messages.map(
       (m) => `${m.role},"${m.content.replace(/"/g, '""')}"`

@@ -8,5 +8,5 @@ export interface ConversationExporter {
   /** Where to write output files. Return config.exportDir as the safe default. */
   outputDir(config: Config): string
   /** Serialize the conversation. Return a string (UTF-8). */
-  export(conversation: ExtractedConversation): string
+  serialize(conversation: ExtractedConversation): string
 }
