@@ -41,6 +41,12 @@ export class RgSearch {
       const ripgrepProcess = spawn(rgPath, ripgrepArguments, { cwd: this.applicationConfig.exportDir })
       const readlineInterface = createInterface({ input: ripgrepProcess.stdout, terminal: false })
 
+      const SEARCH_TIMEOUT_MILLISECONDS = 30000
+      const timeoutId = setTimeout(() => {
+        ripgrepProcess.kill()
+        reject(new Error('ripgrep search timed out after 30 seconds'))
+      }, SEARCH_TIMEOUT_MILLISECONDS)
+
       readlineInterface.on('line', (outputLine) => {
         if (capturedMatches.length >= MAXIMUM_MATCHES_TO_CAPTURE) {
           ripgrepProcess.kill()
@@ -48,6 +54,7 @@ export class RgSearch {
         }
 
         try {
+          if (!outputLine.trim()) return
           const parsedJsonLine = JSON.parse(outputLine)
           if (parsedJsonLine.type === 'match') {
             capturedMatches.push({
@@ -62,6 +69,7 @@ export class RgSearch {
       })
 
       ripgrepProcess.on('close', (exitCode) => {
+        clearTimeout(timeoutId)
         if (exitCode === 0 || exitCode === 1 || ripgrepProcess.killed) {
           resolve(capturedMatches)
         } else {
@@ -72,6 +80,7 @@ export class RgSearch {
       })
 
       ripgrepProcess.on('error', (processError) => {
+        clearTimeout(timeoutId)
         errorBus.emitError('ripgrep failed to start', processError)
         reject(processError)
       })
@@ -85,7 +94,7 @@ export class RgSearch {
   }
 
   private constructRipgrepArguments(searchOptions: RgSearchOptions): string[] {
-    const ripgrepArguments = ['--color=always', '--heading', '--line-number', '--no-messages', '--column', '--smart-case']
+    const ripgrepArguments = ['--color=never', '--heading', '--line-number', '--no-messages', '--column', '--smart-case']
 
     if (searchOptions.caseSensitive) {
       ripgrepArguments.push('--case-sensitive')
@@ -101,6 +110,9 @@ export class RgSearch {
     }
 
     ripgrepArguments.push('--type', 'markdown')
+    // Search only in Markdown files within the current directory and its subdirectories
+    ripgrepArguments.push('.')
+
     return ripgrepArguments
   }
 
