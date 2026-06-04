@@ -42,11 +42,23 @@ export class BrowserManager {
 
   async launch(): Promise<Page> {
     try {
-      const isSavedAuthValid = this.isSavedAuthenticationFresh(this.config.authStoragePath)
+      const authPath = this.config.authStoragePath
+      const authExists = existsSync(authPath)
+      const isFresh = authExists && this.isSavedAuthenticationFresh(authPath)
 
-      if (isSavedAuthValid) {
+      let wantRefresh = false
+      if (authExists && !isFresh) {
+        wantRefresh = await confirm({
+          message: 'Saved authentication is older than 1 day. Do you want to refresh it now?',
+          default: true,
+        })
+      }
+
+      const shouldTrySavedState = authExists && !wantRefresh
+
+      if (shouldTrySavedState) {
         await this.launchBrowser(this.config.headless)
-        await this.initializeBrowserContext()
+        await this.initializeBrowserContext(true)
         await this.navigateToSettingsPage()
 
         const isLoggedIn = await this.verifyLoginStatus(this.getActivePage())
@@ -63,7 +75,7 @@ export class BrowserManager {
 
       // Need manual login: launch headful
       await this.launchBrowser(false)
-      await this.initializeBrowserContext()
+      await this.initializeBrowserContext(false)
       await this.navigateToSettingsPage()
       await this.ensureUserIsAuthenticated()
 
@@ -72,7 +84,7 @@ export class BrowserManager {
         logger.info('Authentication successful. Restarting in headless mode...')
         await this.close()
         await this.launchBrowser(this.config.headless)
-        await this.initializeBrowserContext()
+        await this.initializeBrowserContext(true)
         await this.navigateToSettingsPage()
       }
 
@@ -111,14 +123,12 @@ export class BrowserManager {
     }
   }
 
-  private async initializeBrowserContext(): Promise<void> {
+  private async initializeBrowserContext(loadState: boolean = false): Promise<void> {
     if (!this.browserInstance) {
       throw new BrowserManager.ContextError('Browser not initialized')
     }
 
-    const isSavedAuthValid = this.isSavedAuthenticationFresh(this.config.authStoragePath)
-
-    if (isSavedAuthValid) {
+    if (loadState && existsSync(this.config.authStoragePath)) {
       logger.info('Loading saved authentication state...')
       try {
         const storageStateJson = readFileSync(this.config.authStoragePath, 'utf-8')
@@ -131,10 +141,6 @@ export class BrowserManager {
         this.activeContext = await this.browserInstance.newContext()
       }
     } else {
-      const authFileExists = existsSync(this.config.authStoragePath)
-      if (authFileExists) {
-        logger.info('Saved authentication is older than 1 day, discarding.')
-      }
       this.activeContext = await this.browserInstance.newContext()
     }
 
@@ -195,31 +201,43 @@ export class BrowserManager {
       throw new BrowserManager.AuthError('Page not initialized')
     }
 
-    const isLoggedIn = await this.verifyLoginStatus(this.activePage)
-    if (isLoggedIn) {
-      logger.success('Already logged in!')
-      return
-    }
+    while (true) {
+      const isLoggedIn = await this.verifyLoginStatus(this.activePage)
+      if (isLoggedIn) {
+        logger.success('Already logged in!')
+        break
+      }
 
-    logger.info('Please log in manually in the browser window...')
-    await confirm({
-      message: 'Press Enter when you are logged in and on the settings page',
-      default: true,
-    })
+      logger.info('Please log in manually in the browser window...')
+      await confirm({
+        message: 'Press Enter when you are logged in and on the settings page',
+        default: true,
+      })
 
-    const SETTINGS_URL = 'https://www.perplexity.ai/settings'
-    await this.activePage.goto(SETTINGS_URL, {
-      waitUntil: 'networkidle',
-    })
+      const SETTINGS_URL = 'https://www.perplexity.ai/settings'
+      await this.activePage.goto(SETTINGS_URL, {
+        waitUntil: 'networkidle',
+      })
 
-    const isLoginConfirmed = await this.verifyLoginStatus(this.activePage)
-    if (!isLoginConfirmed) {
+      const isLoginConfirmed = await this.verifyLoginStatus(this.activePage)
+      if (isLoginConfirmed) {
+        await this.persistAuthenticationState()
+        logger.success('Authentication state saved!')
+        break
+      }
+
       const currentUrl = this.activePage.url()
-      throw new BrowserManager.AuthError(`Login verification failed. Current URL: ${currentUrl}`)
-    }
+      logger.warn(`Login verification failed. Current URL: ${currentUrl}`)
 
-    await this.persistAuthenticationState()
-    logger.success('Authentication state saved!')
+      const retry = await confirm({
+        message: 'Login verification failed. Do you want to try again?',
+        default: true,
+      })
+
+      if (!retry) {
+        throw new BrowserManager.AuthError(`Login verification failed. Current URL: ${currentUrl}`)
+      }
+    }
   }
 
   private async verifyLoginStatus(page: Page): Promise<boolean> {

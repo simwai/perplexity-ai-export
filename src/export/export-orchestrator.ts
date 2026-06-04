@@ -95,7 +95,9 @@ export class ExportOrchestrator {
         writtenFiles.push(destinationFilePath)
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error)
-        logger.error(`Failed to export with ${strategy.name} for ${conversation.id}: ${errorMessage}`)
+        logger.error(
+          `Failed to export with ${strategy.name} for ${conversation.id}: ${errorMessage}`
+        )
       }
     }
 
