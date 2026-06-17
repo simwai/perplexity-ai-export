@@ -36,7 +36,7 @@ The goal is to give you a single command that answers: _"Is the pipeline fast an
 
 ```bash
 # Requires: built vector index + running Ollama instance
-npm run benchmark
+pnpm run benchmark
 ```
 
 The benchmark will fail early with a clear error if the vector index has not been built yet. Run **Build vector index** from the main menu first.

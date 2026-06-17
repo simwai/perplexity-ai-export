@@ -17,6 +17,15 @@ importers:
       '@vscode/ripgrep':
         specifier: ^1.17.1
         version: 1.18.0
+      '@vscode/ripgrep-darwin-arm64':
+        specifier: ^1.18.0
+        version: 1.18.0
+      '@vscode/ripgrep-darwin-x64':
+        specifier: ^1.18.0
+        version: 1.18.0
+      '@vscode/ripgrep-linux-x64':
+        specifier: ^1.18.0
+        version: 1.18.0
       '@vscode/ripgrep-win32-x64':
         specifier: ^1.18.0
         version: 1.18.0
@@ -5521,11 +5530,9 @@ snapshots:
       convert-source-map: 2.0.0
       tinyrainbow: 3.1.0
 
-  '@vscode/ripgrep-darwin-arm64@1.18.0':
-    optional: true
+  '@vscode/ripgrep-darwin-arm64@1.18.0': {}
 
-  '@vscode/ripgrep-darwin-x64@1.18.0':
-    optional: true
+  '@vscode/ripgrep-darwin-x64@1.18.0': {}
 
   '@vscode/ripgrep-linux-arm64@1.18.0':
     optional: true
@@ -5545,8 +5552,7 @@ snapshots:
   '@vscode/ripgrep-linux-s390x@1.18.0':
     optional: true
 
-  '@vscode/ripgrep-linux-x64@1.18.0':
-    optional: true
+  '@vscode/ripgrep-linux-x64@1.18.0': {}
 
   '@vscode/ripgrep-win32-arm64@1.18.0':
     optional: true
