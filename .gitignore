@@ -1,18 +1,23 @@
+# node
 node_modules/
+tsconfig.tsbuildinfo
+
+# build
 dist/
-.storage/
-exports/
-coverage/
+out/
 
 # debug
 debug/
 logs/*.txt
 *.log
 
+# misc
 .env
-
 *.old
+exports/
 exports*
+.storage/
+coverage/
 
 # AI
 .aider*

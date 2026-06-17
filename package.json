@@ -7,6 +7,10 @@
   "packageManager": "pnpm@10.33.0",
   "main": "dist/src/index.js",
   "bin": "dist/src/index.js",
+  "engines": {
+    "node": ">=20.19.0 && <=23"
+  },
+  "os": ["win32"],
   "scripts": {
     "dev": "tsx src/index.ts",
     "start": "node dist/index.js",

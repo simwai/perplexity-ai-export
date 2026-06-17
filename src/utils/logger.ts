@@ -16,6 +16,7 @@ function writeToLogFile(message: string): void {
     mkdirSync(LOGS_DIRECTORY, { recursive: true })
   }
 
+  // oxlint-disable-next-line no-control-regex
   const ANSI_ESCAPE_REGEX = /\x1b\[[0-9;]*m/g
   const plainTextLines = message.replace(ANSI_ESCAPE_REGEX, '')
   const logTimestamp = new Date().toISOString()
