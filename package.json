@@ -5,6 +5,8 @@
   "type": "module",
   "author": "simwai",
   "packageManager": "pnpm@10.33.0",
+  "main": "dist/src/index.js",
+  "bin": "dist/src/index.js",
   "scripts": {
     "dev": "tsx src/index.ts",
     "start": "node dist/index.js",
@@ -50,6 +52,7 @@
     "@types/sanitize-filename": "^1.1.28",
     "@vitest/coverage-v8": "^4.0.18",
     "@vitest/ui": "^4.0.18",
+    "caxa": "^3.0.1",
     "concurrently": "^10.0.0",
     "esbuild": "^0.27.4",
     "husky": "^9.1.7",

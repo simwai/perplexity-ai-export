@@ -1,34 +1,36 @@
 import { build } from 'esbuild'
-import { execSync } from 'child_process'
-import { copyFileSync, existsSync, mkdirSync, writeFileSync } from 'fs'
-import { join } from 'path'
-import process from 'process'
+import { existsSync, mkdirSync, copyFileSync, rmSync, cpSync, readdirSync, writeFileSync } from 'fs'
+import { join, dirname } from 'path'
+import { fileURLToPath } from 'url'
+import caxa from 'caxa'
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = dirname(__filename)
+const projectRoot = join(__dirname, '..')
 
 async function main() {
   const isWindows = process.platform === 'win32'
-  const outDir = 'dist'
+  const outDir = join(projectRoot, 'dist')
   const bundleFile = join(outDir, 'bundle.cjs')
-  const blobFile = join(outDir, 'sea-prep.blob')
-  const nodeExe = process.execPath
+  const stagingDir = join(outDir, 'staging')
   const outputExeName = 'perplexity-history-export' + (isWindows ? '.exe' : '')
   const outputExePath = join(outDir, outputExeName)
 
-  if (!existsSync(outDir)) {
-    mkdirSync(outDir)
+  if (existsSync(outDir)) {
+    rmSync(outDir, { recursive: true, force: true })
   }
+  mkdirSync(outDir, { recursive: true })
 
-  console.log('--- Bundling with esbuild (CJS for SEA) ---')
+  // ── 1. Bundle with esbuild ────────────────────────────────
+  console.log('--- Bundling with esbuild (CJS) ---')
   await build({
-    entryPoints: ['src/index.ts'],
+    entryPoints: [join(projectRoot, 'src/index.ts')],
     bundle: true,
     platform: 'node',
     target: 'node22',
     outfile: bundleFile,
     format: 'cjs',
-    alias: {
-      '@playwright/test': 'playwright-core',
-    },
-    // Mocking require.resolve to avoid playwright-core looking for internal files that aren't bundled
+    alias: { '@playwright/test': 'playwright-core' },
     banner: {
       js: `
 const { createRequire } = require('module');
@@ -51,34 +53,49 @@ require.resolve = (id, options) => {
 };
 `,
     },
-    external: ['fsevents'],
-    logOverride: {
-      'require-resolve-not-external': 'silent',
-    },
+    external: ['fsevents', 'onnxruntime-node', 'onnxruntime-common'],
+    logOverride: { 'require-resolve-not-external': 'silent' },
   })
 
-  console.log('--- Generating SEA preparation blob ---')
-  const seaConfig = {
-    main: bundleFile,
-    output: blobFile,
-    disableSentinel: false,
+  // ── 2. Prepare staging directory ──────────────────────────
+  console.log('--- Preparing staging directory ---')
+  mkdirSync(stagingDir, { recursive: true })
+  copyFileSync(bundleFile, join(stagingDir, 'bundle.cjs'))
+
+  // Assets
+  for (const asset of ['appIcon.png', 'loader.js']) {
+    const src = join(projectRoot, asset)
+    if (existsSync(src)) copyFileSync(src, join(stagingDir, asset))
   }
-  writeFileSync('sea-config.json', JSON.stringify(seaConfig, null, 2))
 
-  execSync(`node --experimental-sea-config sea-config.json`, { stdio: 'inherit' })
+  // Copy native modules from pnpm store (symlink‑proof)
+  const pnpmDir = join(projectRoot, 'node_modules', '.pnpm')
+  for (const mod of ['onnxruntime-node', 'onnxruntime-common']) {
+    try {
+      const entries = readdirSync(pnpmDir)
+      const pkgDir = entries.find((d) => d.startsWith(mod + '@'))
+      if (!pkgDir) continue
+      const realPath = join(pnpmDir, pkgDir, 'node_modules', mod)
+      const dest = join(stagingDir, 'node_modules', mod)
+      cpSync(realPath, dest, { recursive: true, dereference: true })
+      console.log(`Copied ${mod}`)
+    } catch (e) {
+      console.warn(`Warning: could not copy ${mod}:`, e.message)
+    }
+  }
 
-  console.log('--- Creating executable ---')
-  copyFileSync(nodeExe, outputExePath)
+  // ── 3. Package with caxa ──────────────────────────────────
+  console.log('--- Packaging with caxa ---')
+  await caxa({
+    input: stagingDir,
+    output: outputExePath,
+    command: ['node', 'bundle.cjs'],
+  })
 
-  console.log('--- Injecting blob into executable ---')
-  const postjectCmd = `npx postject ${outputExePath} NODE_SEA_BLOB ${blobFile} --sentinel-fuse NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2`
-
-  execSync(postjectCmd, { stdio: 'inherit' })
-
-  console.log(`Successfully created ${outputExePath}`)
+  console.log(`\n✅ Successfully created ${outputExePath}`)
 }
 
 main().catch((err) => {
-  console.error(err)
+  console.error('Build failed:', err)
   process.exit(1)
 })
