@@ -24,17 +24,17 @@ To effectively interact with the codebase, your local environment must support t
 
 Clone the repository and instantiate the dependencies:
 
-```bash
-npm install
-npx playwright install chromium
+```powershell
+pnpm install
+pnpm exec playwright install chromium
 ```
 
 ### 2. Environment Configuration
 
 Establish your local parameters:
 
-```bash
-cp .env.example .env
+```powershell
+bash -c "cp .env.example .env"
 # Refine the variables to align with your local Ollama setup.
 ```
 
@@ -42,30 +42,30 @@ cp .env.example .env
 
 Launch the interactive environment to observe the system in action:
 
-```bash
-npm run dev
+```powershell
+pnpm run dev
 ```
 
 ### 4. Integrity Verification (Testing)
 
 We adhere to a "Testing Trophy" philosophy, prioritizing integration tests that verify the emergent behavior of system components.
 
-- **Unit Tests**: `npm run test:unit`
-- **Integration Tests**: `npm run test:integration` (Uses MSW to simulate Ollama interactions)
-- **End-to-End**: `npm run test:e2e`
+- **Unit Tests**: `pnpm run test:unit`
+- **Integration Tests**: `pnpm run test:integration` (Uses MSW to simulate Ollama interactions)
+- **End-to-End**: `pnpm run test:e2e`
 
 Always ensure the full suite passes before proposing a merger:
 
-```bash
-npm run test
+```powershell
+pnpm run test
 ```
 
 ### 5. Syntactic Harmony (Formatting)
 
 We utilize `oxlint` and `oxfmt` for rapid, high-performance code analysis and formatting. Maintain the aesthetic and structural consistency of the codebase:
 
-```bash
-npm run format
+```powershell
+pnpm run format
 ```
 
 ---
@@ -94,8 +94,8 @@ To ensure syntactic harmony and cognitive consistency, we utilize Git hooks via 
 
 Should the pre-commit process appear to reach a cognitive deadlock (hanging or appearing stuck), consider these resolutions:
 
-1. **Interrupt and Inspect**: Cancel the process (`Ctrl+C`) and run \`npm run format\` manually to identify if a specific file is causing a processing bottleneck.
-2. **Environmental Reset**: Ensure your dependencies are correctly instantiated (\`npm install\`).
+1. **Interrupt and Inspect**: Cancel the process (`Ctrl+C`) and run \`pnpm run format\` manually to identify if a specific file is causing a processing bottleneck.
+2. **Environmental Reset**: Ensure your dependencies are correctly instantiated (\`pnpm install\`).
 3. **Emergency Bypass**: If a stall persists and you have verified your changes manually, you may bypass the hooks using the \`--no-verify\` flag (e.g., \`git commit -m "..." --no-verify\`). Use this sparingly, as it bypasses the validation of our shared standards.
 
 ---
