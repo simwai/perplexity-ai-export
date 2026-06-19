@@ -7,8 +7,10 @@ import chalk from 'chalk'
 import { join } from 'node:path'
 import { type Config } from '../utils/config.js'
 
-let crossEncoderTokenizer: any = null
-let crossEncoderModel: any = null
+import type { PreTrainedTokenizer, PreTrainedModel } from '@huggingface/transformers'
+
+let crossEncoderTokenizer: PreTrainedTokenizer | null = null
+let crossEncoderModel: PreTrainedModel | null = null
 
 async function getCrossEncoder() {
   const isAlreadyLoaded = crossEncoderTokenizer && crossEncoderModel
@@ -17,16 +19,11 @@ async function getCrossEncoder() {
   }
 
   const transformers = await import('@huggingface/transformers').catch(() => null)
-  const isTransformersInstalled =
-    transformers &&
-    (transformers as any).AutoTokenizer &&
-    (transformers as any).AutoModelForSequenceClassification
-
-  if (!isTransformersInstalled) {
+  if (!transformers) {
     return null
   }
 
-  const { AutoTokenizer, AutoModelForSequenceClassification } = transformers as any
+  const { AutoTokenizer, AutoModelForSequenceClassification } = transformers
 
   crossEncoderTokenizer = await AutoTokenizer.from_pretrained('Xenova/ms-marco-MiniLM-L-6-v2')
   crossEncoderModel = await AutoModelForSequenceClassification.from_pretrained(
@@ -288,7 +285,7 @@ Return JSON: {"strategy": "...", "queries": [], "hardKeywords": [], "hydePassage
       return results
     }
 
-    const { tokenizer, model } = crossEncoder
+    const { tokenizer, model } = crossEncoder as { tokenizer: PreTrainedTokenizer; model: PreTrainedModel }
     logger.info(`Cross-encoder reranking ${results.length} candidates...`)
 
     const RERANK_BATCH_SIZE = 64
