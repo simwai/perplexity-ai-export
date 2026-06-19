@@ -16,7 +16,6 @@
 
 - [Introduction](#introduction)
 - [Key Features](#key-features)
-- [System Requirements](#system-requirements)
 - [Environment Setup Guide](#environment-setup-guide)
   * [1. Install Node.js (The Engine)](#1-install-nodejs-the-engine)
   * [2. Install Ollama (Optional - For AI Intelligence)](#2-install-ollama-optional---for-ai-intelligence)
@@ -52,13 +51,6 @@ This tool is designed to externalize your Perplexity.ai conversation history int
 - **Interactive Synthesis (REPL)**: A streamlined command-line interface for human-system synergy.
 - **Smart Content Hashing**: The scraper now computes a SHA-256 hash of thread content. Subsequent runs will skip unchanged threads, significantly reducing execution time and API overhead while ensuring your local history stays up to date when new messages are added.
 
-## System Requirements
-
-- **Operating System**: Developed and tested on **Windows**. Linux and macOS are currently untested.
-- **Shell**: **PowerShell 7.6** is highly recommended for running this project.
-- **WSL (Windows Subsystem for Linux)**: Must be pre-installed. The system utilizes `bash -c` for certain internal operations and setup commands.
-- **Ripgrep**: Platform-specific `rg` binaries are bundled. However, if you encounter issues where search results do not appear, please try installing [ripgrep](https://github.com/BurntSushi/ripgrep) manually on your system as a troubleshooting step.
-
 ## Environment Setup Guide
 
 If you are new to development or don't have the necessary tools installed, follow these steps to set up your environment.
@@ -69,8 +61,8 @@ We recommend using a version manager to install Node.js. This allows you to easi
 
 - **Windows**:
   1. Download and run the latest installer from [nvm-windows](https://github.com/coreybutler/nvm-windows/releases).
-  2. Open a new PowerShell (v7.6 recommended) and run:
-     ```powershell
+  2. Open a new Command Prompt or PowerShell and run:
+     ```cmd
      nvm install 20
      nvm use 20
      ```
@@ -88,7 +80,7 @@ Ollama is **optional**. It is only required if you want to use the Semantic Sear
 
 1. Download and install Ollama from [ollama.ai](https://ollama.ai).
 2. Open your terminal and pull the required models:
-   ```powershell
+   ```bash
    ollama pull nomic-embed-text
    ollama pull deepseek-r1
    ```
@@ -99,17 +91,17 @@ If you don't have the `git` command installed, you can simply download this proj
 
 Once extracted, open your terminal in the project folder and run:
 
-```powershell
-pnpm install
-pnpm exec playwright install chromium
+```bash
+npm install
+npx playwright install chromium
 ```
 
 ## Configuration
 
 Establish your environment by duplicating the template:
 
-```powershell
-bash -c "cp .env.example .env"
+```bash
+cp .env.example .env
 ```
 
 ### Key Environment Variables
@@ -124,9 +116,9 @@ bash -c "cp .env.example .env"
 
 Launch the system:
 
-```powershell
+```bash
 # Start the development environment
-pnpm run dev
+npm run dev
 ```
 
 ### Operational Directives
@@ -153,13 +145,13 @@ The pipeline runs three enhancement stages automatically:
 
 1. **HyDE**: The planner writes a hypothetical answer passage and uses it as an extra search vector alongside your query variations, improving recall when question wording diverges from stored content.
 2. **Expanded pool**: Precise mode retrieves 35 candidates (up from 20), exhaustive mode retrieves 60.
-3. **Cross-encoder reranking**: A local ONNX model (`Xenova/ms-marco-MiniLM-L-6-v2`) jointly scores each (query, passage) pair and reorders before synthesis. Activates automatically after `pnpm install`. First run downloads ~85MB model, cached thereafter.
+3. **Cross-encoder reranking**: A local ONNX model (`Xenova/ms-marco-MiniLM-L-6-v2`) jointly scores each (query, passage) pair and reorders before synthesis. Activates automatically after `npm install`. First run downloads ~85MB model, cached thereafter.
 
 ## Architecture & Deep Dive
 
 For a detailed look at our RAG implementation, hybrid search strategy, and theoretical foundations, please refer to:
 
-👉 **[ARCH.md](./docs/ARCH.md)**
+👉 **[ARCH.md](./ARCH.md)**
 
 ### Project Structure
 
@@ -177,22 +169,22 @@ If the scraper encounters unexpected API response formats or empty conversation 
 
 We prioritize a "Testing Trophy" architecture, emphasizing integration tests.
 
-```powershell
+```bash
 # Execute unit-level verifications
-pnpm run test:unit
+npm run test:unit
 
 # Execute integration-level verifications
-pnpm run test:integration
+npm run test:integration
 ```
 
 ## Benchmarking
 
 Measure RAG pipeline latency and validate the full retrieval stack against your actual export data.
 
-```powershell
-pnpm run benchmark
+```bash
+npm run benchmark
 ```
 
 Requires a built vector index and a running Ollama instance. The benchmark runs a set of predefined queries end-to-end through the full pipeline (HyDE → hybrid search → cross-encoder reranking → MapReduce → synthesis) and reports per-query latency and success rate. Edit `BENCHMARK_QUERIES` in `src/benchmark.ts` to tailor queries to your history.
 
-👉 **[BENCHMARKS.md](./docs/BENCHMARKS.md)**: Full details on each benchmark, why the metrics were chosen, how to interpret results, and how to write effective custom queries.
+👉 **[BENCHMARKS.md](./BENCHMARKS.md)**: Full details on each benchmark, why the metrics were chosen, how to interpret results, and how to write effective custom queries.

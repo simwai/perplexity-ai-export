@@ -11,27 +11,46 @@ export interface AppError {
 class ErrorBus extends EventEmitter {
   constructor() {
     super()
-    this.on('error', (appError: AppError) => {
-      const contextSuffix = appError.context
-        ? ` | Context: ${JSON.stringify(appError.context)}`
-        : ''
-      logger.error(`${appError.message}${contextSuffix}`)
-
-      const isDebugEnabled = process.env['DEBUG'] === 'true' || process.env['DEBUG_MODE'] === 'true'
-      if (appError.error && isDebugEnabled) {
-        console.error(appError.error)
-      }
-    })
+    this.on('error', () => {})
   }
 
-  emitError(message: string, error?: unknown, context?: Record<string, unknown>): void {
-    const appError: AppError = {
-      message,
-      error,
-      context,
+  emitError(
+    errorMessage: string,
+    errorObject?: unknown,
+    contextMetadata?: Record<string, unknown>
+  ): void {
+    const applicationError: AppError = {
+      message: errorMessage,
+      error: errorObject,
+      context: contextMetadata,
       timestamp: new Date(),
     }
-    this.emit('error', appError)
+    this.emit('error', applicationError)
+    this.logApplicationError(applicationError)
+  }
+
+  raiseError(
+    errorMessage: string,
+    errorObject?: unknown,
+    contextMetadata?: Record<string, unknown>
+  ): never {
+    this.emitError(errorMessage, errorObject, contextMetadata)
+    if (errorObject instanceof Error) {
+      throw errorObject
+    }
+    throw new Error(errorMessage)
+  }
+
+  private logApplicationError(applicationError: AppError): void {
+    const contextSuffix = applicationError.context
+      ? ` | Context: ${JSON.stringify(applicationError.context)}`
+      : ''
+    logger.error(`${applicationError.message}${contextSuffix}`)
+
+    const isDebugModeActive = process.env['DEBUG'] === 'true'
+    if (applicationError.error && isDebugModeActive) {
+      console.error(applicationError.error)
+    }
   }
 }
 

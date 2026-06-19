@@ -1,64 +1,43 @@
-import { join } from 'node:path'
-import { writeFileSync, existsSync, mkdirSync } from 'node:fs'
+import { join, dirname } from 'node:path'
+import fileSystem from 'node:fs/promises'
+import writeFileAtomic from 'write-file-atomic'
 import { type Config } from '../utils/config.js'
-import type { ExtractedConversation } from '../scraper/conversation-extractor.js'
+import { type ExtractedConversation } from '../scraper/extractor/types.js'
 import { sanitizeFilename, sanitizeSpaceName } from './sanitizer.js'
+import { errorBus } from '../utils/error-bus.js'
 
 export class FileWriter {
-  static readonly WriteError = class extends Error {
-    constructor(message: string) {
-      super(message)
-      this.name = 'FileWriteError'
-    }
-  }
+  constructor(private readonly applicationConfig: Config) {}
 
-  constructor(private readonly config: Config) {
-    this.ensureRootExportDirectoryExists()
-  }
-
-  write(conversation: ExtractedConversation): string {
+  async write(extractedConversation: ExtractedConversation): Promise<string> {
     try {
-      const destinationFilePath = this.constructDestinationFilePath(conversation)
-      const markdownContent = this.formatConversationAsMarkdown(conversation)
+      const destinationFilePath = this.constructDestinationPath(extractedConversation)
+      const formattedMarkdownContent = this.formatAsMarkdown(extractedConversation)
 
-      this.ensureSpaceDirectoryExists(conversation.spaceName)
-
-      writeFileSync(destinationFilePath, markdownContent, 'utf-8')
+      await fileSystem.mkdir(dirname(destinationFilePath), { recursive: true })
+      await (writeFileAtomic as any)(destinationFilePath, formattedMarkdownContent, 'utf8')
       return destinationFilePath
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error)
-      throw new FileWriter.WriteError(
-        `Failed to write conversation ${conversation.id}: ${errorMessage}`
+    } catch (writeError) {
+      return errorBus.raiseError(
+        `Failed to write conversation ${extractedConversation.conversationId}`,
+        writeError
       )
     }
   }
 
-  private ensureRootExportDirectoryExists(): void {
-    if (!existsSync(this.config.exportDir)) {
-      mkdirSync(this.config.exportDir, { recursive: true })
-    }
+  private constructDestinationPath(extractedConversation: ExtractedConversation): string {
+    const safeSpaceName = sanitizeSpaceName(extractedConversation.conversationSpaceName)
+    const safeTitle = sanitizeFilename(extractedConversation.conversationTitle)
+    const filenameWithIdSuffix = `${safeTitle} (${extractedConversation.conversationId}).md`
+    return join(this.applicationConfig.exportDir, safeSpaceName, filenameWithIdSuffix)
   }
 
-  private ensureSpaceDirectoryExists(spaceName: string): void {
-    const spaceSpecificDirectory = join(this.config.exportDir, sanitizeSpaceName(spaceName))
-    if (!existsSync(spaceSpecificDirectory)) {
-      mkdirSync(spaceSpecificDirectory, { recursive: true })
-    }
-  }
-
-  private constructDestinationFilePath(conversation: ExtractedConversation): string {
-    const safeSpaceName = sanitizeSpaceName(conversation.spaceName)
-    const safeFileTitle = sanitizeFilename(conversation.title)
-    const fileNameWithIdSuffix = `${safeFileTitle} (${conversation.id}).md`
-    return join(this.config.exportDir, safeSpaceName, fileNameWithIdSuffix)
-  }
-
-  private formatConversationAsMarkdown(conversation: ExtractedConversation): string {
-    const headerTitle = `# ${conversation.title}\n\n`
+  private formatAsMarkdown(extractedConversation: ExtractedConversation): string {
+    const headerTitle = `# ${extractedConversation.conversationTitle}\n\n`
     const metadataBlock =
-      `**Space:** ${conversation.spaceName}  \n` +
-      `**ID:** ${conversation.id}  \n` +
-      `**Date:** ${conversation.timestamp.toISOString()}  \n\n`
-    return headerTitle + metadataBlock + conversation.content
+      `**Space:** ${extractedConversation.conversationSpaceName}  \n` +
+      `**ID:** ${extractedConversation.conversationId}  \n` +
+      `**Date:** ${extractedConversation.extractionTimestamp.toISOString()}  \n\n`
+    return headerTitle + metadataBlock + extractedConversation.formattedMarkdownContent
   }
 }

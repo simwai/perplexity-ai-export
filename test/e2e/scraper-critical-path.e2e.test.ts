@@ -1,39 +1,41 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
-import { chromium, type Browser, type BrowserContext } from '@playwright/test'
+import { chromium, type Browser, type BrowserContext } from 'patchright'
 import { ConversationExtractor } from '../../src/scraper/conversation-extractor.js'
-import { config } from '../../src/utils/config.js'
+import { config as applicationConfiguration } from '../../src/utils/config.js'
 import { existsSync, rmSync } from 'node:fs'
 
-const TEST_OUTPUT = './test-output-e2e'
+const TEST_OUTPUT_DIRECTORY = './test-output-e2e'
 
 describe('Scraper E2E - Critical Path', () => {
-  let browser: Browser
-  let context: BrowserContext
+  let browserInstance: Browser
+  let browserContext: BrowserContext
 
   beforeAll(async () => {
-    browser = await chromium.launch({ headless: true })
-    if (existsSync(TEST_OUTPUT)) rmSync(TEST_OUTPUT, { recursive: true })
+    browserInstance = await chromium.launch({ headless: true })
+    if (existsSync(TEST_OUTPUT_DIRECTORY)) {
+      rmSync(TEST_OUTPUT_DIRECTORY, { recursive: true })
+    }
   })
 
   afterAll(async () => {
-    await browser?.close()
-    if (existsSync(TEST_OUTPUT)) rmSync(TEST_OUTPUT, { recursive: true })
+    await browserInstance?.close()
+    if (existsSync(TEST_OUTPUT_DIRECTORY)) {
+      rmSync(TEST_OUTPUT_DIRECTORY, { recursive: true })
+    }
   })
 
-  // Skip this - requires real authenticated Perplexity session
-  it.skip('should complete full workflow: discover → extract → save', async () => {
-    // Manual test only - replace URL with real conversation from your account
-  }, 60000)
+  it('should handle missing/invalid URL gracefully by raising a descriptive error', async () => {
+    browserContext = await browserInstance.newContext()
+    const conversationExtractor = new ConversationExtractor(
+      applicationConfiguration,
+      browserContext
+    )
 
-  it('should handle missing/invalid URL gracefully without crashing', async () => {
-    context = await browser.newContext()
-    const extractor = new ConversationExtractor(config, context)
-
-    // ✅ Now we expect it to THROW with a descriptive error
+    // We expect the extraction to fail with an authentication or status error for a nonexistent thread
     await expect(
-      extractor.extract('https://www.perplexity.ai/search/nonexistent-xyz-12345')
-    ).rejects.toThrow(/Authentication required|403|401|No API response/)
+      conversationExtractor.extract('https://www.perplexity.ai/search/nonexistent-xyz-12345')
+    ).rejects.toThrow(/Auth required or expired|Authentication required|403|401|No API response/)
 
-    await context.close()
+    await browserContext.close()
   }, 30000)
 })

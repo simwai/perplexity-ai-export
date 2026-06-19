@@ -1,44 +1,53 @@
-export function chunkMarkdown(markdown: string, maxChars = 1500, overlapChars = 150): string[] {
-  const HEADER_OR_RULE_REGEX = /(?=^#{1,3}\s)|(?=^---)/gm
+export function chunkMarkdown(
+  sourceMarkdownText: string,
+  maximumCharactersPerChunk = 1500,
+  overlapCharactersBetweenChunks = 150
+): string[] {
+  const MARKDOWN_SECTION_MARKER_REGEX = /(?=^#{1,3}\s)|(?=^---)/gm
+  const markdownSections = sourceMarkdownText.split(MARKDOWN_SECTION_MARKER_REGEX)
+  const resultChunks: string[] = []
+  let currentChunkTextBuffer = ''
 
-  const sections = markdown.split(HEADER_OR_RULE_REGEX)
+  for (const markdownSection of markdownSections) {
+    const trimmedSectionText = markdownSection.trim()
+    if (!trimmedSectionText) continue
 
-  const chunks: string[] = []
-  let currentChunk = ''
+    const isChunkFull =
+      currentChunkTextBuffer.length + trimmedSectionText.length > maximumCharactersPerChunk
+    const hasExistingContentInChunk = currentChunkTextBuffer.length > 0
 
-  for (const section of sections) {
-    const trimmedSection = section.trim()
-    if (!trimmedSection) continue
-
-    const wouldExceedMaxSize = currentChunk.length + trimmedSection.length > maxChars
-    const isCurrentChunkPopulated = currentChunk.length > 0
-
-    if (wouldExceedMaxSize && isCurrentChunkPopulated) {
-      chunks.push(currentChunk.trim())
-
-      const overlapText = currentChunk.slice(-overlapChars).replace(/^---\s*/, '')
-      currentChunk = overlapText + '\n\n' + trimmedSection
+    if (isChunkFull && hasExistingContentInChunk) {
+      resultChunks.push(currentChunkTextBuffer.trim())
+      const overlapText = currentChunkTextBuffer
+        .slice(-overlapCharactersBetweenChunks)
+        .replace(/^---\s*/, '')
+      currentChunkTextBuffer = overlapText + '\n\n' + trimmedSectionText
     } else {
-      const separator = currentChunk ? '\n\n' : ''
-      currentChunk += separator + trimmedSection
+      const sectionSeparator = currentChunkTextBuffer ? '\n\n' : ''
+      currentChunkTextBuffer += sectionSeparator + trimmedSectionText
     }
   }
 
-  const trimmedRemainingChunk = currentChunk.trim()
-  if (trimmedRemainingChunk.length > 0) {
-    chunks.push(trimmedRemainingChunk)
+  if (currentChunkTextBuffer.trim()) {
+    resultChunks.push(currentChunkTextBuffer.trim())
   }
 
-  const MAX_CHUNK_THRESHOLD = maxChars + 500
-  return chunks.flatMap((chunk) => {
-    if (chunk.length <= MAX_CHUNK_THRESHOLD) {
-      return [chunk]
+  return resultChunks.flatMap((accumulatedChunk) => {
+    const MAXIMUM_ALLOWED_CHUNK_SIZE_BEFORE_SPLITTING = maximumCharactersPerChunk + 500
+    if (accumulatedChunk.length <= MAXIMUM_ALLOWED_CHUNK_SIZE_BEFORE_SPLITTING) {
+      return [accumulatedChunk]
     }
 
-    const oversizedSubChunks: string[] = []
-    for (let offset = 0; offset < chunk.length; offset += maxChars) {
-      oversizedSubChunks.push(chunk.slice(offset, offset + maxChars))
+    const subChunksAfterSplittingLargeBlock: string[] = []
+    for (
+      let currentOffset = 0;
+      currentOffset < accumulatedChunk.length;
+      currentOffset += maximumCharactersPerChunk
+    ) {
+      subChunksAfterSplittingLargeBlock.push(
+        accumulatedChunk.slice(currentOffset, currentOffset + maximumCharactersPerChunk)
+      )
     }
-    return oversizedSubChunks
+    return subChunksAfterSplittingLargeBlock
   })
 }

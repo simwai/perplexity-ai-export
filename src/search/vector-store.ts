@@ -1,7 +1,7 @@
 import { errorBus } from '../utils/error-bus.js'
 import { LocalIndex } from 'vectra'
 import { join } from 'node:path'
-import { readFileSync, readdirSync, statSync } from 'node:fs'
+import fileSystem from 'node:fs/promises'
 import { type Config } from '../utils/config.js'
 import { logger } from '../utils/logger.js'
 import { OllamaClient } from '../ai/ollama-client.js'
@@ -15,232 +15,159 @@ export interface VectorSearchResult {
 }
 
 export class VectorStore {
-  static readonly VectorStoreError = class extends Error {
-    constructor(message: string) {
-      super(message)
-      this.name = 'VectorStoreError'
-    }
-  }
-
-  static readonly IndexError = class extends Error {
-    constructor(message: string) {
-      super(message)
-      this.name = 'VectorStoreIndexError'
-    }
-  }
-
-  static readonly EmbeddingError = class extends Error {
-    constructor(message: string) {
-      super(message)
-      this.name = 'VectorStoreEmbeddingError'
-    }
-  }
-
-  static readonly SearchError = class extends Error {
-    constructor(message: string) {
-      super(message)
-      this.name = 'VectorStoreSearchError'
-    }
-  }
-
   private readonly vectorIndex: LocalIndex
   private readonly ollamaClient: OllamaClient
 
-  constructor(private readonly config: Config) {
-    this.vectorIndex = new LocalIndex(config.vectorIndexPath)
-    this.ollamaClient = new OllamaClient(config)
+  constructor(private readonly applicationConfig: Config) {
+    this.vectorIndex = new LocalIndex(applicationConfig.vectorIndexPath)
+    this.ollamaClient = new OllamaClient(applicationConfig)
   }
 
   async validate(): Promise<void> {
     try {
       await this.ollamaClient.validate()
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error)
-      throw new VectorStore.VectorStoreError(`Vector store validation failed: ${errorMessage}`)
+    } catch (validationError) {
+      errorBus.raiseError(`Vector store validation failed`, validationError)
     }
   }
 
   async rebuildFromExports(): Promise<void> {
     logger.info('Building vector index from exports folder...')
-    const markdownFilePaths = this.getMarkdownFilePathsRecursively(this.config.exportDir)
+    const markdownFilePaths = await this.discoverMarkdownFilesRecursively(
+      this.applicationConfig.exportDir
+    )
 
     if (markdownFilePaths.length === 0) {
       logger.warn('No markdown files found to index.')
       return
     }
 
-    await this.ensureIndexExists()
-    await this.processMarkdownFilesByBatches(markdownFilePaths)
-
+    await this.ensureVectorIndexIsCreated()
+    await this.indexFilesByBatches(markdownFilePaths)
     logger.success('Vector index rebuild complete.')
   }
 
-  async search(query: string, limit = 10): Promise<VectorSearchResult[]> {
+  async search(searchQuery: string, resultLimit = 10): Promise<VectorSearchResult[]> {
     try {
-      const queryEmbedding = await this.generateQueryEmbedding(query)
-      const rawResults = await this.queryVectorIndex(queryEmbedding, query, limit)
-      return this.formatVectorSearchResults(rawResults)
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error)
-      throw new VectorStore.SearchError(`Vector search failed: ${errorMessage}`)
-    }
-  }
+      const [searchQueryEmbedding] = await this.ollamaClient.embed([searchQuery])
+      if (!searchQueryEmbedding) {
+        return errorBus.raiseError('Failed to generate embedding for query')
+      }
 
-  async searchWithMetadataFilter(
-    query: string,
-    filter: (meta: Record<string, any>) => boolean,
-    limit = 10
-  ): Promise<VectorSearchResult[]> {
-    try {
-      const queryEmbedding = await this.generateQueryEmbedding(query)
-      const rawResults = await this.vectorIndex.queryItems(
-        queryEmbedding,
-        query,
-        limit,
-        filter as any
+      const rawSearchResults = await this.vectorIndex.queryItems(
+        searchQueryEmbedding,
+        searchQuery,
+        resultLimit
       )
-      return this.formatVectorSearchResults(rawResults)
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error)
-      throw new VectorStore.SearchError(`Filtered vector search failed: ${errorMessage}`)
+      return rawSearchResults.map((searchResult) => ({
+        meta: searchResult.item.metadata as VectorDocMeta,
+        score: searchResult.score,
+      }))
+    } catch (searchError) {
+      return errorBus.raiseError('Vector search failed', searchError, { searchQuery })
     }
   }
 
-  private async ensureIndexExists(): Promise<void> {
-    const isAlreadyCreated = await this.vectorIndex.isIndexCreated()
-    if (!isAlreadyCreated) {
+  private async ensureVectorIndexIsCreated() {
+    const isIndexAlreadyCreated = await this.vectorIndex.isIndexCreated()
+    if (!isIndexAlreadyCreated) {
       await this.vectorIndex.createIndex()
     }
   }
 
-  private getMarkdownFilePathsRecursively(directoryPath: string): string[] {
-    const directoryEntries = readdirSync(directoryPath)
+  private async discoverMarkdownFilesRecursively(directoryPath: string): Promise<string[]> {
+    const directoryEntries = await fileSystem.readdir(directoryPath, { withFileTypes: true })
     const markdownFilePaths: string[] = []
 
-    for (const entryName of directoryEntries) {
-      const fullPath = join(directoryPath, entryName)
-      const pathStatus = statSync(fullPath)
-
-      if (pathStatus.isDirectory()) {
-        markdownFilePaths.push(...this.getMarkdownFilePathsRecursively(fullPath))
-      } else if (pathStatus.isFile() && fullPath.endsWith('.md')) {
-        markdownFilePaths.push(fullPath)
+    for (const directoryEntry of directoryEntries) {
+      const fullEntryPath = join(directoryPath, directoryEntry.name)
+      if (directoryEntry.isDirectory()) {
+        const nestedMarkdownPaths = await this.discoverMarkdownFilesRecursively(fullEntryPath)
+        markdownFilePaths.push(...nestedMarkdownPaths)
+      } else if (fullEntryPath.endsWith('.md')) {
+        markdownFilePaths.push(fullEntryPath)
       }
     }
     return markdownFilePaths
   }
 
-  private async processMarkdownFilesByBatches(filePaths: string[]): Promise<void> {
+  private async indexFilesByBatches(markdownFilePaths: string[]) {
     await this.vectorIndex.beginUpdate()
-
     const EMBEDDING_BATCH_SIZE = 10
-    let pendingTextsToEmbed: string[] = []
-    let pendingMetadataToInsert: VectorDocMeta[] = []
+    let pendingTextChunks: string[] = []
+    let pendingMetadataEntries: VectorDocMeta[] = []
 
-    for (let i = 0; i < filePaths.length; i++) {
-      const currentFilePath = filePaths[i]!
-      const { contentChunks, fileMetadata } = this.extractContentAndMetadata(currentFilePath)
+    for (let fileIndex = 0; fileIndex < markdownFilePaths.length; fileIndex++) {
+      const currentFilePath = markdownFilePaths[fileIndex]!
+      const { markdownChunks, fileMetadata } = await this.extractChunksAndMetadata(currentFilePath)
 
-      for (let chunkIndex = 0; chunkIndex < contentChunks.length; chunkIndex++) {
-        const textChunk = contentChunks[chunkIndex]!
-        pendingTextsToEmbed.push(textChunk)
-        pendingMetadataToInsert.push({
+      for (let chunkIndex = 0; chunkIndex < markdownChunks.length; chunkIndex++) {
+        const textChunk = markdownChunks[chunkIndex]!
+        pendingTextChunks.push(textChunk)
+        pendingMetadataEntries.push({
           ...fileMetadata,
-          id: `${fileMetadata['id']}_part_${chunkIndex}`,
+          id: `${fileMetadata['id']}_p${chunkIndex}`,
           title: `${fileMetadata['title']} (Part ${chunkIndex + 1})`,
           snippet: textChunk,
         })
 
-        const isBatchFull = pendingTextsToEmbed.length >= EMBEDDING_BATCH_SIZE
-        if (isBatchFull) {
-          await this.processAndInsertEmbeddingBatch(pendingTextsToEmbed, pendingMetadataToInsert)
-          pendingTextsToEmbed = []
-          pendingMetadataToInsert = []
+        if (pendingTextChunks.length >= EMBEDDING_BATCH_SIZE) {
+          await this.insertEmbeddingBatchIntoIndex(pendingTextChunks, pendingMetadataEntries)
+          pendingTextChunks = []
+          pendingMetadataEntries = []
         }
       }
 
-      const isLogCheckpoint = (i + 1) % 10 === 0
-      if (isLogCheckpoint) {
-        logger.debug(`Processed ${i + 1}/${filePaths.length} files...`)
+      const LOGGING_FREQUENCY = 10
+      if ((fileIndex + 1) % LOGGING_FREQUENCY === 0) {
+        logger.debug(`Processed ${fileIndex + 1}/${markdownFilePaths.length} files...`)
       }
     }
 
-    const hasRemainingItems = pendingTextsToEmbed.length > 0
-    if (hasRemainingItems) {
-      await this.processAndInsertEmbeddingBatch(pendingTextsToEmbed, pendingMetadataToInsert)
+    if (pendingTextChunks.length > 0) {
+      await this.insertEmbeddingBatchIntoIndex(pendingTextChunks, pendingMetadataEntries)
     }
-
     await this.vectorIndex.endUpdate()
   }
 
-  private extractContentAndMetadata(filePath: string): {
-    contentChunks: string[]
-    fileMetadata: VectorDocMeta
-  } {
-    const fileContent = readFileSync(filePath, 'utf-8')
-
-    const titleMatch = fileContent.match(/^# (.+)$/m)
-    const spaceMatch = fileContent.match(/^\*\*Space:\*\* (.+?)\s{2,}$/m)
-    const idMatch = fileContent.match(/^\*\*ID:\*\* (.+?)\s{2,}$/m)
-    const dateMatch = fileContent.match(/^\*\*Date:\*\* (.+?)\s{2,}$/m)
-
-    const CHUNK_SIZE_CHARS = 1500
-    const CHUNK_OVERLAP_CHARS = 100
-
-    const fileMetadata: VectorDocMeta = {
-      id: idMatch?.[1] ?? filePath,
+  private async extractChunksAndMetadata(filePath: string) {
+    const fileContent = await fileSystem.readFile(filePath, 'utf-8')
+    const fileMetadata = {
+      id: fileContent.match(/^\*\*ID:\*\* (.+?)\s{2,}$/m)?.[1] ?? filePath,
       path: filePath,
-      title: titleMatch?.[1] ?? 'Untitled',
-      spaceName: spaceMatch?.[1] ?? 'General',
-      date: dateMatch?.[1] ?? new Date().toISOString(),
+      title: fileContent.match(/^# (.+)$/m)?.[1] ?? 'Untitled',
+      spaceName: fileContent.match(/^\*\*Space:\*\* (.+?)\s{2,}$/m)?.[1] ?? 'General',
+      date: fileContent.match(/^\*\*Date:\*\* (.+?)\s{2,}$/m)?.[1] ?? new Date().toISOString(),
     }
-
-    const contentChunks = chunkMarkdown(fileContent, CHUNK_SIZE_CHARS, CHUNK_OVERLAP_CHARS)
-
-    return { contentChunks, fileMetadata }
+    const MAXIMUM_CHARS_PER_CHUNK = 1500
+    const OVERLAP_CHARS_BETWEEN_CHUNKS = 100
+    return {
+      markdownChunks: chunkMarkdown(
+        fileContent,
+        MAXIMUM_CHARS_PER_CHUNK,
+        OVERLAP_CHARS_BETWEEN_CHUNKS
+      ),
+      fileMetadata,
+    }
   }
 
-  private async processAndInsertEmbeddingBatch(
-    batchTexts: string[],
-    batchMetas: VectorDocMeta[]
-  ): Promise<void> {
+  private async insertEmbeddingBatchIntoIndex(
+    textChunks: string[],
+    metadataEntries: VectorDocMeta[]
+  ) {
     try {
-      const embeddingVectors = await this.ollamaClient.embed(batchTexts)
-
-      for (let i = 0; i < embeddingVectors.length; i++) {
-        const currentVector = embeddingVectors[i]
-        if (!currentVector) continue
-
-        await this.vectorIndex.insertItem({
-          vector: currentVector,
-          metadata: batchMetas[i] as Record<string, any>,
-        })
+      const embeddingVectors = await this.ollamaClient.embed(textChunks)
+      for (let vectorIndex = 0; vectorIndex < embeddingVectors.length; vectorIndex++) {
+        const vector = embeddingVectors[vectorIndex]
+        if (vector) {
+          await this.vectorIndex.insertItem({
+            vector: vector,
+            metadata: metadataEntries[vectorIndex] as any,
+          })
+        }
       }
-    } catch (error) {
-      errorBus.emitError('Batch embedding failed', error)
+    } catch (embeddingError) {
+      errorBus.emitError('Batch embedding failed', embeddingError)
     }
-  }
-
-  private async generateQueryEmbedding(query: string): Promise<number[]> {
-    const [queryEmbeddingVector] = await this.ollamaClient.embed([query])
-    if (!queryEmbeddingVector) {
-      throw new VectorStore.EmbeddingError('Failed to generate embedding for query')
-    }
-    return queryEmbeddingVector
-  }
-
-  private async queryVectorIndex(
-    queryEmbedding: number[],
-    queryString: string,
-    resultLimit: number
-  ): Promise<any[]> {
-    return this.vectorIndex.queryItems(queryEmbedding, queryString, resultLimit)
-  }
-
-  private formatVectorSearchResults(rawResults: any[]): VectorSearchResult[] {
-    return rawResults.map((result) => ({
-      meta: result.item.metadata as VectorDocMeta,
-      score: result.score,
-    }))
   }
 }

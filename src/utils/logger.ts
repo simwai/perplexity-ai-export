@@ -2,59 +2,54 @@ import chalk from 'chalk'
 import { appendFileSync, mkdirSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
 
-const IS_DEBUG_MODE =
-  process.env['DEBUG_MODE'] === 'true' || process.env['DIAGNOSIS_MODE'] === 'true'
-const LOGS_DIRECTORY = 'logs'
-const LOG_FILE_TIMESTAMP = new Date().toISOString().replace(/[:.]/g, '-')
-const MAIN_LOG_FILENAME = `main-log-${LOG_FILE_TIMESTAMP}.txt`
-const MAIN_LOG_PATH = join(LOGS_DIRECTORY, MAIN_LOG_FILENAME)
+function isVerboseLoggingEnabled(): boolean {
+  return process.env['DEBUG'] === 'true'
+}
 
-function writeToLogFile(message: string): void {
-  if (!IS_DEBUG_MODE) return
+const LOGS_ROOT_DIRECTORY = 'logs'
+const LOG_FILE_TIMESTAMP_IDENTIFIER = new Date().toISOString().replace(/[:.]/g, '-')
+const MAIN_APPLICATION_LOG_FILENAME = `main-log-${LOG_FILE_TIMESTAMP_IDENTIFIER}.txt`
+const MAIN_LOG_FILE_PATH = join(LOGS_ROOT_DIRECTORY, MAIN_APPLICATION_LOG_FILENAME)
 
-  if (!existsSync(LOGS_DIRECTORY)) {
-    mkdirSync(LOGS_DIRECTORY, { recursive: true })
+function writeMessageToFile(logMessage: string): void {
+  if (!isVerboseLoggingEnabled()) return
+
+  if (!existsSync(LOGS_ROOT_DIRECTORY)) {
+    mkdirSync(LOGS_ROOT_DIRECTORY, { recursive: true })
   }
 
-  // oxlint-disable-next-line no-control-regex
-  const ANSI_ESCAPE_REGEX = /\x1b\[[0-9;]*m/g
-  const plainTextLines = message.replace(ANSI_ESCAPE_REGEX, '')
-  const logTimestamp = new Date().toISOString()
+  const ANSI_COLOR_CODE_REGEX = /\x1b\[[0-9;]*m/g
+  const plainTextMessage = logMessage.replace(ANSI_COLOR_CODE_REGEX, '')
+  const currentTimestamp = new Date().toISOString()
 
-  appendFileSync(MAIN_LOG_PATH, `[${logTimestamp}] ${plainTextLines}\n`)
+  appendFileSync(MAIN_LOG_FILE_PATH, `[${currentTimestamp}] ${plainTextMessage}\n`)
 }
 
 export const logger = {
-  info(...args: unknown[]): void {
-    const message = args.join(' ')
-    console.log(chalk.blue('ℹ'), message)
-    writeToLogFile(`INFO: ${message}`)
+  info(...messageArguments: unknown[]): void {
+    const combinedMessage = messageArguments.join(' ')
+    console.log(chalk.blue('ℹ'), combinedMessage)
+    writeMessageToFile(`INFO: ${combinedMessage}`)
   },
-
-  success(...args: unknown[]): void {
-    const message = args.join(' ')
-    console.log(chalk.green('✓'), message)
-    writeToLogFile(`SUCCESS: ${message}`)
+  success(...messageArguments: unknown[]): void {
+    const combinedMessage = messageArguments.join(' ')
+    console.log(chalk.green('✓'), combinedMessage)
+    writeMessageToFile(`SUCCESS: ${combinedMessage}`)
   },
-
-  warn(...args: unknown[]): void {
-    const message = args.join(' ')
-    console.log(chalk.yellow('⚠'), message)
-    writeToLogFile(`WARN: ${message}`)
+  warn(...messageArguments: unknown[]): void {
+    const combinedMessage = messageArguments.join(' ')
+    console.log(chalk.yellow('⚠'), combinedMessage)
+    writeMessageToFile(`WARN: ${combinedMessage}`)
   },
-
-  error(...args: unknown[]): void {
-    const message = args.join(' ')
-    console.error(chalk.red('✗'), message)
-    writeToLogFile(`ERROR: ${message}`)
+  error(...messageArguments: unknown[]): void {
+    const combinedMessage = messageArguments.join(' ')
+    console.error(chalk.red('✗'), combinedMessage)
+    writeMessageToFile(`ERROR: ${combinedMessage}`)
   },
-
-  debug(...args: unknown[]): void {
-    const isVerboseDebug = process.env['DEBUG'] === 'true'
-    if (!isVerboseDebug) return
-
-    const message = args.join(' ')
-    console.log(chalk.gray('›'), message)
-    writeToLogFile(`DEBUG: ${message}`)
+  debug(...messageArguments: unknown[]): void {
+    if (!isVerboseLoggingEnabled()) return
+    const combinedMessage = messageArguments.join(' ')
+    console.log(chalk.gray('›'), combinedMessage)
+    writeMessageToFile(`DEBUG: ${combinedMessage}`)
   },
 }

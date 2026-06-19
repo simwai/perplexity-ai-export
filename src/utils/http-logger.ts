@@ -1,20 +1,19 @@
 import { appendFileSync, existsSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
-import type { Request, Response } from '@playwright/test'
-import { config } from './config.js'
+import type { Request, Response } from 'patchright'
+import { errorBus } from './error-bus.js'
 
-const LOGS_DIRECTORY = 'logs'
-const LOG_FILE_TIMESTAMP = new Date().toISOString().replace(/[:.]/g, '-')
-const HTTP_LOG_FILENAME = `http-req-res-log-${LOG_FILE_TIMESTAMP}.txt`
-const HTTP_LOG_PATH = join(LOGS_DIRECTORY, HTTP_LOG_FILENAME)
+const LOGS_DIRECTORY_NAME = 'logs'
+const LOG_FILE_TIMESTAMP_SUFFIX = new Date().toISOString().replace(/[:.]/g, '-')
+const HTTP_REQUEST_RESPONSE_LOG_FILENAME = `http-request-response-log-${LOG_FILE_TIMESTAMP_SUFFIX}.txt`
+const HTTP_LOG_FULL_PATH = join(LOGS_DIRECTORY_NAME, HTTP_REQUEST_RESPONSE_LOG_FILENAME)
 
-const SENSITIVE_HEADERS = ['authorization', 'cookie', 'set-cookie', 'x-api-key']
-const PROMPT_KEYWORDS = ['"query"', '"prompt"', '"messages"']
+const SENSITIVE_HEADER_NAMES = ['authorization', 'cookie', 'set-cookie', 'x-api-key']
+const PROMPT_KEYWORD_INDICATORS = ['"query"', '"prompt"', '"messages"']
 
-function redactSensitiveHeaders(headers: Record<string, string>): Record<string, string> {
-  const redactedHeaders = { ...headers }
-
-  for (const headerKey of SENSITIVE_HEADERS) {
+function redactSensitiveHeaders(headersRecord: Record<string, string>): Record<string, string> {
+  const redactedHeaders = { ...headersRecord }
+  for (const headerKey of SENSITIVE_HEADER_NAMES) {
     if (redactedHeaders[headerKey]) {
       redactedHeaders[headerKey] = '[REDACTED]'
     }
@@ -22,89 +21,88 @@ function redactSensitiveHeaders(headers: Record<string, string>): Record<string,
   return redactedHeaders
 }
 
-function isPromptRequest(url: string, postData: string | null): boolean {
-  const isPerplexityAiApi = url.includes('/backend-api/chat') || url.includes('/api/v1/chat')
-  if (isPerplexityAiApi) return true
+function isRequestContainingUserPrompts(
+  requestUrl: string,
+  requestPostData: string | null
+): boolean {
+  const isChatEndpoint = requestUrl.includes('/chat')
+  if (isChatEndpoint) return true
 
-  if (postData) {
+  if (requestPostData) {
     try {
-      const parsedPostData = JSON.parse(postData)
-      const hasPromptFields =
+      const parsedPostData = JSON.parse(requestPostData)
+      const hasPromptProperties = !!(
         parsedPostData.query ||
         parsedPostData.prompt ||
         (parsedPostData.messages && Array.isArray(parsedPostData.messages))
-      if (hasPromptFields) {
-        return true
-      }
+      )
+      if (hasPromptProperties) return true
     } catch {
-      const containsPromptKeyword = PROMPT_KEYWORDS.some((keyword) => postData.includes(keyword))
-      if (containsPromptKeyword) {
-        return true
-      }
+      return PROMPT_KEYWORD_INDICATORS.some((keyword) => requestPostData.includes(keyword))
     }
   }
   return false
 }
 
-function ensureLogsDirectoryExists(): void {
-  if (!existsSync(LOGS_DIRECTORY)) {
-    mkdirSync(LOGS_DIRECTORY, { recursive: true })
-  }
-}
+export function logHttpRequest(webRequest: Request, isDebugModeEnabled: boolean): void {
+  if (!isDebugModeEnabled) return
 
-export async function logHttpRequest(request: Request): Promise<void> {
-  if (!config.debug) return
-
-  ensureLogsDirectoryExists()
-
-  const requestUrl = request.url()
-  const requestMethod = request.method()
-  const sanitizedHeaders = redactSensitiveHeaders(request.headers())
-  const rawPostData = request.postData()
-
-  const requestBody = isPromptRequest(requestUrl, rawPostData) ? '[PROMPT REDACTED]' : rawPostData
-
-  const logTimestamp = new Date().toISOString()
-  const logEntry = [
-    `[${logTimestamp}] REQUEST: ${requestMethod} ${requestUrl}`,
-    `Headers: ${JSON.stringify(sanitizedHeaders, null, 2)}`,
-    `Body: ${requestBody ?? 'None'}`,
-    '--------------------------------------------------------------------------------',
-  ].join('\n')
-
-  appendFileSync(HTTP_LOG_PATH, logEntry + '\n')
-}
-
-export async function logHttpResponse(response: Response): Promise<void> {
-  if (!config.debug) return
-
-  const originalRequest = response.request()
-  const responseUrl = originalRequest.url()
-  const responseStatus = response.status()
-  const sanitizedHeaders = redactSensitiveHeaders(response.headers())
-
-  let responseBody = '[BODY SKIPPED]'
-
-  const contentType = sanitizedHeaders['content-type'] ?? ''
-  const isJsonContent = contentType.includes('application/json')
-  const isPrompt = isPromptRequest(responseUrl, originalRequest.postData())
-
-  if (isJsonContent && !isPrompt) {
-    try {
-      const jsonResponse = await response.json()
-      responseBody = JSON.stringify(jsonResponse, null, 2)
-    } catch {
-      responseBody = '[COULD NOT PARSE JSON BODY]'
+  try {
+    if (!existsSync(LOGS_DIRECTORY_NAME)) {
+      mkdirSync(LOGS_DIRECTORY_NAME, { recursive: true })
     }
+
+    const bodyDisplayContent = isRequestContainingUserPrompts(
+      webRequest.url(),
+      webRequest.postData()
+    )
+      ? '[PROMPT REDACTED]'
+      : webRequest.postData()
+
+    const logEntryText =
+      `[${new Date().toISOString()}] REQUEST: ${webRequest.method()} ${webRequest.url()}\n` +
+      `Headers: ${JSON.stringify(redactSensitiveHeaders(webRequest.headers()), null, 2)}\n` +
+      `Body: ${bodyDisplayContent ?? 'None'}\n` +
+      '--------------------------------------------------------------------------------\n'
+
+    appendFileSync(HTTP_LOG_FULL_PATH, logEntryText)
+  } catch (loggingError) {
+    errorBus.emitError('HTTP Request logging failed', loggingError)
   }
+}
 
-  const logTimestamp = new Date().toISOString()
-  const logEntry = [
-    `[${logTimestamp}] RESPONSE: ${responseStatus} ${responseUrl}`,
-    `Headers: ${JSON.stringify(sanitizedHeaders, null, 2)}`,
-    `Body: ${responseBody}`,
-    '--------------------------------------------------------------------------------',
-  ].join('\n')
+export async function logHttpResponse(
+  webResponse: Response,
+  isDebugModeEnabled: boolean
+): Promise<void> {
+  if (!isDebugModeEnabled) return
 
-  appendFileSync(HTTP_LOG_PATH, logEntry + '\n')
+  try {
+    const originalRequest = webResponse.request()
+    let responseBodyDisplay = '[BODY SKIPPED]'
+    const responseContentType = webResponse.headers()['content-type'] ?? ''
+    const isJsonContent = responseContentType.includes('json')
+    const isRequestAPrompt = isRequestContainingUserPrompts(
+      originalRequest.url(),
+      originalRequest.postData()
+    )
+
+    if (isJsonContent && !isRequestAPrompt) {
+      try {
+        responseBodyDisplay = JSON.stringify(await webResponse.json(), null, 2)
+      } catch {
+        responseBodyDisplay = '[PARSE ERROR]'
+      }
+    }
+
+    const logEntryText =
+      `[${new Date().toISOString()}] RESPONSE: ${webResponse.status()} ${webResponse.url()}\n` +
+      `Headers: ${JSON.stringify(redactSensitiveHeaders(webResponse.headers()), null, 2)}\n` +
+      `Body: ${responseBodyDisplay}\n` +
+      '--------------------------------------------------------------------------------\n'
+
+    appendFileSync(HTTP_LOG_FULL_PATH, logEntryText)
+  } catch (loggingError) {
+    errorBus.emitError('HTTP Response logging failed', loggingError)
+  }
 }

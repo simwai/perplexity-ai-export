@@ -6,20 +6,20 @@ import { CommandHandler } from './commands.js'
 import { type Config } from '../utils/config.js'
 
 export class Repl {
-  private readonly commandHandler: CommandHandler
-  private isRunning = true
+  private readonly applicationCommandHandler: CommandHandler
+  private isApplicationRunning = true
 
-  constructor(config: Config) {
-    this.commandHandler = new CommandHandler(config)
+  constructor(applicationConfig: Config) {
+    this.applicationCommandHandler = new CommandHandler(applicationConfig)
   }
 
   async start(): Promise<void> {
     logger.info(chalk.bold.cyan('\n🔮 Perplexity History Export Tool\n'))
     logger.info('Select commands to execute. Press Ctrl+C to exit.\n')
 
-    while (this.isRunning) {
+    while (this.isApplicationRunning) {
       try {
-        const selectedAction = await select({
+        const userSelectedAction = await select({
           message: 'perplexity>',
           choices: [
             { name: 'Start scraper (Library)', value: 'start-library' },
@@ -31,47 +31,50 @@ export class Repl {
           ],
         })
 
-        await this.dispatchCommand(selectedAction)
-      } catch (error) {
-        const isUserExit = error instanceof Error && error.name === 'ExitPromptError'
-        if (isUserExit) {
-          this.terminate()
+        await this.dispatchSelectedCommand(userSelectedAction)
+      } catch (interactionError) {
+        const isUserIntentionalExit =
+          interactionError instanceof Error && interactionError.name === 'ExitPromptError'
+        if (isUserIntentionalExit) {
+          this.terminateApplication()
         } else {
-          throw error
+          throw interactionError
         }
       }
     }
   }
 
-  private async dispatchCommand(actionValue: string): Promise<void> {
-    switch (actionValue) {
+  private async dispatchSelectedCommand(commandValue: string): Promise<void> {
+    switch (commandValue) {
       case 'start-library':
-        await this.commandHandler.handleScraperWizard()
+        await this.applicationCommandHandler.handleScraperWizard()
         break
       case 'search':
-        await this.commandHandler.handleSearchWizard()
+        await this.applicationCommandHandler.handleSearchWizard()
         break
       case 'vectorize':
-        await this.commandHandler.handleVectorizeWizard()
+        await this.applicationCommandHandler.handleVectorizeWizard()
         break
       case 'reset':
-        await this.commandHandler.handleDataReset()
+        await this.applicationCommandHandler.handleDataReset()
         break
       case 'help':
-        this.commandHandler.handleShowHelp()
+        this.applicationCommandHandler.handleShowHelp()
         break
       case 'exit':
-        this.terminate()
+        this.terminateApplication()
         break
       default:
-        errorBus.emitError(`Unknown action: ${actionValue}`)
-        this.commandHandler.handleShowHelp()
+        errorBus.emitError(`Unknown command action: ${commandValue}`)
+        this.applicationCommandHandler.handleShowHelp()
     }
   }
 
-  private terminate(): void {
-    if (!this.isRunning) return
-    this.isRunning = false
+  private terminateApplication(): void {
+    if (!this.isApplicationRunning) {
+      return
+    }
+    this.isApplicationRunning = false
     logger.info(chalk.cyan('\n👋 Goodbye!\n'))
     process.exit(0)
   }

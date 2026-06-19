@@ -1,23 +1,13 @@
-# node
 node_modules/
-tsconfig.tsbuildinfo
-
-# build
 dist/
-out/
-
-# debug
-debug/
-logs/*.txt
-*.log
-
-# misc
-.env
-*.old
-exports/
-exports*
 .storage/
+exports/
 coverage/
 
-# AI
+.env
+*.log
 .aider*
+*.old
+exports*
+debug/
+logs/*.txt

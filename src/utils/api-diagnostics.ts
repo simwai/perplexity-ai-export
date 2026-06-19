@@ -1,6 +1,6 @@
-import fs from 'node:fs/promises'
-import { join } from 'node:path'
-import { logger } from './logger.js'
+import fileSystem from 'node:fs/promises'
+import path from 'node:path'
+import { errorBus } from './error-bus.js'
 import type { Config } from './config.js'
 
 export interface ApiDiagnosticEntry {
@@ -11,28 +11,30 @@ export interface ApiDiagnosticEntry {
 }
 
 export class ApiDiagnosticsWriter {
-  private readonly DEBUG_DIRECTORY = 'debug'
-  private readonly DIAGNOSTICS_FILENAME = 'api-diagnostics.jsonl'
+  private static readonly DEBUG_DIRECTORY = 'debug'
+  private static readonly DIAGNOSTICS_FILENAME = 'api-diagnostics.jsonl'
 
-  constructor(private readonly config: Config) {}
+  constructor(private readonly applicationConfig: Config) {}
 
-  async writeFailure(entry: Omit<ApiDiagnosticEntry, 'timestamp'>): Promise<void> {
-    if (!this.config.debug) return
+  async writeFailure(failureEntry: Omit<ApiDiagnosticEntry, 'timestamp'>): Promise<void> {
+    if (!this.applicationConfig.debug) return
 
     try {
       const diagnosticEntry: ApiDiagnosticEntry = {
         timestamp: new Date().toISOString(),
-        ...entry,
+        ...failureEntry,
       }
 
-      await fs.mkdir(this.DEBUG_DIRECTORY, { recursive: true })
-      const diagnosticLogPath = join(this.DEBUG_DIRECTORY, this.DIAGNOSTICS_FILENAME)
+      await fileSystem.mkdir(ApiDiagnosticsWriter.DEBUG_DIRECTORY, { recursive: true })
+      const diagnosticLogPath = path.join(
+        ApiDiagnosticsWriter.DEBUG_DIRECTORY,
+        ApiDiagnosticsWriter.DIAGNOSTICS_FILENAME
+      )
 
-      const entryAsJsonLine = JSON.stringify(diagnosticEntry) + '\n'
-      await fs.appendFile(diagnosticLogPath, entryAsJsonLine, 'utf8')
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error)
-      logger.warn(`Failed to write API diagnostic: ${errorMessage}`)
+      const diagnosticEntryAsJsonLine = JSON.stringify(diagnosticEntry) + '\n'
+      await fileSystem.appendFile(diagnosticLogPath, diagnosticEntryAsJsonLine, 'utf8')
+    } catch (failureError) {
+      errorBus.emitError('Failed to write API diagnostic', failureError)
     }
   }
 }
