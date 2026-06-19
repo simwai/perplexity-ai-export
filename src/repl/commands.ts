@@ -7,10 +7,13 @@ import { BrowserManager } from '../scraper/browser.js'
 import { CheckpointManager } from '../scraper/checkpoint-manager.js'
 import { WorkerPool } from '../scraper/worker-pool.js'
 import { SearchOrchestrator } from '../search/search-orchestrator.js'
+import { RagOrchestrator } from '../ai/rag-orchestrator.js'
+import { type ChatMessage } from '../ai/ollama-client.js'
 import { logger } from '../utils/logger.js'
 import { showHelp } from './help.js'
 import { LibraryDiscovery } from '../scraper/library-discovery.js'
 import { type Config } from '../utils/config.js'
+import chalk from 'chalk'
 
 export class CommandHandler {
   static readonly ScraperError = class extends Error {
@@ -48,13 +51,17 @@ export class CommandHandler {
     }
   }
 
+
   private readonly checkpointManager: CheckpointManager
   private readonly searchOrchestrator: SearchOrchestrator
+  private readonly ragOrchestrator: RagOrchestrator
 
   constructor(private readonly config: Config) {
     this.checkpointManager = new CheckpointManager(config)
     this.searchOrchestrator = new SearchOrchestrator(config)
+    this.ragOrchestrator = new RagOrchestrator(config)
   }
+
 
   async handleStartLibraryExport(): Promise<void> {
     try {
@@ -296,6 +303,58 @@ export class CommandHandler {
     await this.searchOrchestrator.vectorizeNow()
   }
 
+
+  async handleChatWizard(): Promise<void> {
+    try {
+      await this.searchOrchestrator.validateVectorSearch()
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      errorBus.emitError(errorMessage)
+      logger.info('Start Ollama with the embedding model, then run "vectorize".')
+      return
+    }
+
+    logger.info(chalk.bold.cyan('\n💬 History Chat Mode'))
+    logger.info(chalk.gray('Type your questions about your exported conversations.'))
+    logger.info(chalk.gray('Type "exit" or "quit" to return to the main menu.\n'))
+
+    const history: ChatMessage[] = []
+    let isChatting = true
+
+    while (isChatting) {
+      try {
+        const query = await input({
+          message: chalk.cyan('chat>'),
+          validate: (value) => (value.trim().length === 0 ? 'Please enter a message.' : true),
+        })
+
+        if (query.toLowerCase() === 'exit' || query.toLowerCase() === 'quit') {
+          isChatting = false
+          continue
+        }
+
+        const response = await this.ragOrchestrator.chat(query, history)
+
+        console.log(`\n${chalk.bold.green('Assistant:')}\n`)
+        console.log(response.content)
+        console.log(`\n${chalk.gray(`Tokens: ${response.usage.totalTokens} (${response.usage.promptTokens} prompt + ${response.usage.completionTokens} completion)`)}\n`)
+
+        history.push({ role: 'user', content: query })
+        history.push({ role: 'assistant', content: response.content })
+
+        // Keep history manageable
+        if (history.length > 20) {
+          history.splice(0, 2)
+        }
+      } catch (error) {
+        if (error instanceof Error && error.name === 'ExitPromptError') {
+          isChatting = false
+        } else if (error instanceof Error) {
+          errorBus.emitError(error.message, error)
+        }
+      }
+    }
+  }
   private wipeStorageDirectory(): void {
     const authStoragePath = this.config.authStoragePath
 

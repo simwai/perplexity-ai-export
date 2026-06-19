@@ -1,6 +1,6 @@
 import { errorBus } from '../utils/error-bus.js'
 import { VectorStore, type VectorSearchResult } from '../search/vector-store.js'
-import { OllamaClient } from './ollama-client.js'
+import { OllamaClient, type ChatMessage, type LlmResponse } from './ollama-client.js'
 import { RgSearch } from '../search/rg-search.js'
 import { logger } from '../utils/logger.js'
 import chalk from 'chalk'
@@ -18,13 +18,15 @@ async function getCrossEncoder() {
 
   const transformers = await import('@huggingface/transformers').catch(() => null)
   const isTransformersInstalled =
-    transformers && transformers.AutoTokenizer && transformers.AutoModelForSequenceClassification
+    transformers &&
+    (transformers as any).AutoTokenizer &&
+    (transformers as any).AutoModelForSequenceClassification
 
   if (!isTransformersInstalled) {
     return null
   }
 
-  const { AutoTokenizer, AutoModelForSequenceClassification } = transformers
+  const { AutoTokenizer, AutoModelForSequenceClassification } = transformers as any
 
   crossEncoderTokenizer = await AutoTokenizer.from_pretrained('Xenova/ms-marco-MiniLM-L-6-v2')
   crossEncoderModel = await AutoModelForSequenceClassification.from_pretrained(
@@ -50,68 +52,125 @@ interface ExtractedFact {
 }
 
 export class RagOrchestrator {
-  private readonly vectorStore: VectorStore
   private readonly ollamaClient: OllamaClient
+  private readonly vectorStore: VectorStore
   private readonly ripgrep: RgSearch
 
   constructor(private readonly config: Config) {
-    this.vectorStore = new VectorStore(config)
     this.ollamaClient = new OllamaClient(config)
+    this.vectorStore = new VectorStore(config)
     this.ripgrep = new RgSearch(config)
   }
 
   async answerQuestion(question: string): Promise<void> {
-    logger.info(`Mightiest Adaptive RAG processing: "${question}"`)
+    logger.info(`Mightiest RAG is analyzing: "${question}"...`)
 
     try {
-      const researchPlan = await this.developResearchPlan(question)
-      const isExhaustiveMode = researchPlan.strategy === 'exhaustive'
+      const plan = await this.developResearchPlan(question)
+      const results = await this.executeAdaptiveHybridSearch(plan)
+      const rerankedResults = await this.crossEncoderRerank(question, results)
 
-      logger.info(`Plan: ${chalk.bold.yellow(researchPlan.strategy.toUpperCase())}`)
-      if (isExhaustiveMode) {
-        logger.warn(
-          `Exhaustive mode enabled. This may take a while as I'll be doing a deep dive into your history.`
-        )
-      }
-
-      const hasHardKeywords = researchPlan.hardKeywords?.length > 0
-      if (hasHardKeywords) {
-        logger.info(`Hard Keywords detected: ${chalk.gray(researchPlan.hardKeywords.join(', '))}`)
-      }
-
-      if (researchPlan.hydePassage) {
-        logger.debug(`HyDE passage generated: "${researchPlan.hydePassage.slice(0, 80)}..."`)
-      }
-
-      const searchResults = await this.executeAdaptiveHybridSearch(researchPlan)
-      const rerankedResults = await this.crossEncoderRerank(question, searchResults)
-      const contextFacts = await this.extractFactsWithGranularMapReduce(
+      const isExhaustive = plan.strategy === 'exhaustive'
+      const extractedFacts = await this.extractFactsWithGranularMapReduce(
         question,
         rerankedResults,
-        isExhaustiveMode
+        isExhaustive
       )
 
-      logger.info(`Synthesizing final answer from ${contextFacts.length} verified facts...`)
-      const finalAnswer = await this.generateMightiestResponse(
-        question,
-        contextFacts,
-        researchPlan.strategy
-      )
+      const answer = await this.generateMightiestResponse(question, extractedFacts, plan.strategy)
 
-      console.log(`\n${chalk.bold.green('Mightiest AI Response:')}\n`)
-      console.log(finalAnswer)
+      console.log(`\n${chalk.bold.green('Mightiest Answer:')}\n`)
+      console.log(answer)
 
-      this.displaySourceProvenance(contextFacts)
+      this.displaySourceProvenance(extractedFacts)
 
-      const feedback = await this.verifyAnswerQuality(question, finalAnswer)
-      const isImprovementSuggested = feedback.status === 'improvement-needed'
-      if (isImprovementSuggested) {
+      const feedback = await this.verifyAnswerQuality(question, answer)
+      const needsCorrection = feedback.status === 'missed-info'
+      if (needsCorrection) {
         logger.warn(`Self-Correction: ${chalk.gray(feedback.suggestion)}`)
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error)
       errorBus.emitError(`Mightiest RAG failed: ${errorMessage}`)
     }
+  }
+
+  async chat(question: string, history: ChatMessage[]): Promise<LlmResponse> {
+    logger.info(`Processing chat turn: "${question}"...`)
+
+    try {
+      const refinedQuestion = await this.rephraseQuestionWithHistory(question, history)
+      logger.debug(`Refined question for search: "${refinedQuestion}"`)
+
+      const plan = await this.developResearchPlan(refinedQuestion)
+      const results = await this.executeAdaptiveHybridSearch(plan)
+      const rerankedResults = await this.crossEncoderRerank(refinedQuestion, results)
+
+      const isExhaustive = plan.strategy === 'exhaustive'
+      const extractedFacts = await this.extractFactsWithGranularMapReduce(
+        refinedQuestion,
+        rerankedResults,
+        isExhaustive
+      )
+
+      const systemPrompt = this.buildChatSystemPrompt(extractedFacts)
+      const chatMessages: ChatMessage[] = [
+        { role: 'system', content: systemPrompt },
+        ...history,
+        { role: 'user', content: question },
+      ]
+
+      const response = await this.ollamaClient.chat(chatMessages)
+
+      this.displaySourceProvenance(extractedFacts)
+
+      return response
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      errorBus.emitError(`Mightiest Chat failed: ${errorMessage}`)
+      throw error
+    }
+  }
+
+  private async rephraseQuestionWithHistory(
+    question: string,
+    history: ChatMessage[]
+  ): Promise<string> {
+    const isHistoryEmpty = history.length === 0
+    if (isHistoryEmpty) return question
+
+    const rephrasePrompt = `
+Given the following conversation history and a new question, rephrase the new question to be a standalone question that can be used for search.
+If the new question is already standalone, return it as is.
+
+History:
+${history.map((m) => `${m.role.toUpperCase()}: ${m.content}`).join('\n')}
+
+New Question: ${question}
+
+Standalone Question:
+`
+    const response = await this.ollamaClient.generate(rephrasePrompt)
+    return response.trim() || question
+  }
+
+  private buildChatSystemPrompt(extractedFacts: ExtractedFact[]): string {
+    const findings = extractedFacts
+      .map((fact, index) => `[Find ${index}] (${fact.source_title}): ${fact.fact}`)
+      .join('\n')
+
+    return `
+You are a helpful assistant answering questions based on the user's exported conversation history.
+Use the following research findings to provide an authoritative and specific response.
+
+Findings:
+${findings}
+
+INSTRUCTIONS:
+1. Provide a cohesive and helpful answer.
+2. Cite the findings using [Find N] when appropriate.
+3. If the history doesn't contain relevant information, inform the user but still try to be helpful based on general knowledge if it's a follow-up.
+`
   }
 
   private async developResearchPlan(originalQuestion: string): Promise<ResearchPlan> {

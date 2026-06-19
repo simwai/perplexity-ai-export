@@ -10,9 +10,31 @@ const legacyFormatSchema = z.object({ embedding: z.array(z.number()) })
 const generationResponseSchema = z.object({
   model: z.string(),
   created_at: z.string(),
-  response: z.string(),
+  response: z.string().optional(),
+  message: z
+    .object({
+      role: z.string(),
+      content: z.string(),
+    })
+    .optional(),
   done: z.boolean(),
+  prompt_eval_count: z.number().optional(),
+  eval_count: z.number().optional(),
 })
+
+export interface ChatMessage {
+  role: 'system' | 'user' | 'assistant'
+  content: string
+}
+
+export interface LlmResponse {
+  content: string
+  usage: {
+    promptTokens: number
+    completionTokens: number
+    totalTokens: number
+  }
+}
 
 export class OllamaClient {
   static readonly OllamaError = class extends Error {
@@ -46,7 +68,47 @@ export class OllamaClient {
 
     const responseData = await this.performOllamaHttpRequest('/api/generate', requestBody)
     const validatedData = generationResponseSchema.parse(responseData)
-    return validatedData.response
+    return validatedData.response || ''
+  }
+
+  async generateWithUsage(promptText: string, modelOverride?: string): Promise<LlmResponse> {
+    const requestBody = {
+      model: modelOverride ?? this.config.ollamaModel,
+      prompt: promptText,
+      stream: false,
+    }
+
+    const responseData = await this.performOllamaHttpRequest('/api/generate', requestBody)
+    const validatedData = generationResponseSchema.parse(responseData)
+
+    return {
+      content: validatedData.response || '',
+      usage: {
+        promptTokens: validatedData.prompt_eval_count || 0,
+        completionTokens: validatedData.eval_count || 0,
+        totalTokens: (validatedData.prompt_eval_count || 0) + (validatedData.eval_count || 0),
+      },
+    }
+  }
+
+  async chat(messages: ChatMessage[], modelOverride?: string): Promise<LlmResponse> {
+    const requestBody = {
+      model: modelOverride ?? this.config.ollamaModel,
+      messages,
+      stream: false,
+    }
+
+    const responseData = await this.performOllamaHttpRequest('/api/chat', requestBody)
+    const validatedData = generationResponseSchema.parse(responseData)
+
+    return {
+      content: validatedData.message?.content || '',
+      usage: {
+        promptTokens: validatedData.prompt_eval_count || 0,
+        completionTokens: validatedData.eval_count || 0,
+        totalTokens: (validatedData.prompt_eval_count || 0) + (validatedData.eval_count || 0),
+      },
+    }
   }
 
   async validate(): Promise<void> {

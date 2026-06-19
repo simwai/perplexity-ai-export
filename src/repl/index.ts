@@ -24,6 +24,7 @@ export class Repl {
           choices: [
             { name: 'Start scraper (Library)', value: 'start-library' },
             { name: 'Search conversations', value: 'search' },
+            { name: 'Chat with history', value: 'chat' },
             { name: 'Build vector index', value: 'vectorize' },
             { name: 'Reset all data', value: 'reset' },
             { name: 'Help', value: 'help' },
@@ -50,6 +51,9 @@ export class Repl {
         break
       case 'search':
         await this.commandHandler.handleSearchWizard()
+        break
+      case 'chat':
+        await this.commandHandler.handleChatWizard()
         break
       case 'vectorize':
         await this.commandHandler.handleVectorizeWizard()
