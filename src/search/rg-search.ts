@@ -4,10 +4,7 @@ import { createInterface } from 'node:readline'
 import { type Config } from '../utils/config.js'
 import { logger } from '../utils/logger.js'
 import chalk from 'chalk'
-import { rgPath as bundledRgPath } from '@vscode/ripgrep'
-
-// Support for portable execution where ripgrep might be in a different location
-const rgPath = process.env.RIPGREP_PATH || bundledRgPath
+import { rgPath } from '@vscode/ripgrep'
 
 export interface RgSearchOptions {
   pattern: string

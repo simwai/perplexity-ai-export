@@ -2,7 +2,6 @@ import { build } from 'esbuild'
 import { existsSync, mkdirSync, copyFileSync, rmSync, cpSync, readdirSync, writeFileSync } from 'fs'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
-import { execSync } from 'child_process'
 import caxa from 'caxa'
 
 const __filename = fileURLToPath(import.meta.url)
@@ -36,26 +35,12 @@ async function main() {
       js: `
 const { createRequire } = require('module');
 const path = require('path');
-
-// In caxa, __dirname is the extraction directory where bundle.cjs lives
-const require_ = createRequire(__filename);
-
-// Set environment variables for self-contained execution
-process.env.PLAYWRIGHT_BROWSERS_PATH = path.join(__dirname, 'browsers');
-process.env.RIPGREP_PATH = path.join(__dirname, 'bin', process.platform === 'win32' ? 'rg.exe' : 'rg');
-
+const require_ = createRequire(process.cwd() + '/index.js');
 const originalResolve = require.resolve;
 require.resolve = (id, options) => {
-  if (id.includes('package.json')) return path.resolve(__dirname, 'package.json');
-
-  // Ripgrep resolution override
-  if (id.includes('@vscode/ripgrep-win32-x64')) {
-    return path.resolve(__dirname, 'bin/rg.exe');
-  }
-  if (id.includes('@vscode/ripgrep')) {
-    return path.resolve(__dirname, 'bin', process.platform === 'win32' ? 'rg.exe' : 'rg');
-  }
-
+  if (id.includes('package.json')) return path.resolve(process.cwd(), 'package.json');
+  if (id.includes('appIcon.png')) return path.resolve(process.cwd(), 'appIcon.png');
+  if (id.includes('./loader')) return path.resolve(process.cwd(), 'loader.js');
   try {
     return originalResolve(id, options);
   } catch (e) {
@@ -77,27 +62,13 @@ require.resolve = (id, options) => {
   mkdirSync(stagingDir, { recursive: true })
   copyFileSync(bundleFile, join(stagingDir, 'bundle.cjs'))
 
-  // Create a minimal package.json for caxa
-  writeFileSync(join(stagingDir, 'package.json'), JSON.stringify({
-    name: "perplexity-history-export-staging",
-    version: "1.0.0",
-    private: true
-  }))
-
-  // Copy Ripgrep
-  console.log('--- Copying Ripgrep ---')
-  const rgDestDir = join(stagingDir, 'bin')
-  mkdirSync(rgDestDir, { recursive: true })
-  const rgSource = join(projectRoot, 'node_modules', '@vscode', 'ripgrep-win32-x64', 'bin', 'rg.exe')
-  if (existsSync(rgSource)) {
-    copyFileSync(rgSource, join(rgDestDir, 'rg.exe'))
-    console.log('Copied Windows ripgrep binary')
-  } else {
-    console.warn('Warning: Windows ripgrep binary not found at', rgSource)
+  // Assets
+  for (const asset of ['appIcon.png', 'loader.js']) {
+    const src = join(projectRoot, asset)
+    if (existsSync(src)) copyFileSync(src, join(stagingDir, asset))
   }
 
   // Copy native modules from pnpm store (symlink‑proof)
-  console.log('--- Copying Native Modules ---')
   const pnpmDir = join(projectRoot, 'node_modules', '.pnpm')
   for (const mod of ['onnxruntime-node', 'onnxruntime-common']) {
     try {
@@ -113,28 +84,12 @@ require.resolve = (id, options) => {
     }
   }
 
-  // ── 3. Install Playwright Browsers ───────────────────────
-  console.log('--- Installing Playwright Browsers (Chromium) ---')
-  const browsersDir = join(stagingDir, 'browsers')
-  mkdirSync(browsersDir, { recursive: true })
-
-  try {
-    execSync(`npx playwright install chromium`, {
-      env: { ...process.env, PLAYWRIGHT_BROWSERS_PATH: browsersDir },
-      stdio: 'inherit'
-    })
-    console.log('Chromium installed in staging directory')
-  } catch (e) {
-    console.error('Failed to install Playwright browsers:', e.message)
-  }
-
-  // ── 4. Package with caxa ──────────────────────────────────
+  // ── 3. Package with caxa ──────────────────────────────────
   console.log('--- Packaging with caxa ---')
   await caxa({
     input: stagingDir,
     output: outputExePath,
-    command: ['{{node}}', 'bundle.cjs'],
-    exclude: ['node_modules/.bin', 'node_modules/@types']
+    command: ['node', 'bundle.cjs'],
   })
 
   console.log(`\n✅ Successfully created ${outputExePath}`)
