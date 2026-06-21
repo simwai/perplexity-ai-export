@@ -171,18 +171,18 @@ async function fetchThreadBatch(
   logger.debug(`list_ask_threads offset=${offset}: body=${raw.body.slice(0, 500)}`)
 
   if (raw.status !== 200) {
-    throw new Error(`list_ask_threads returned HTTP ${raw.status}`)
+    throw new LibraryDiscovery.ApiError(`list_ask_threads returned HTTP ${raw.status}`)
   }
 
   let parsed: unknown
   try {
     parsed = JSON.parse(raw.body)
   } catch {
-    throw new Error(`list_ask_threads: invalid JSON — body: ${raw.body.slice(0, 200)}`)
+    throw new LibraryDiscovery.ApiError(`list_ask_threads: invalid JSON — body: ${raw.body.slice(0, 200)}`)
   }
 
   if (!Array.isArray(parsed)) {
-    throw new Error(`list_ask_threads: expected array, got ${typeof parsed}`)
+    throw new LibraryDiscovery.ApiError(`list_ask_threads: expected array, got ${typeof parsed}`)
   }
 
   const threads = parsed as RawThread[]
@@ -252,7 +252,7 @@ async function fetchFirstBatch(page: Page, version: string): Promise<ThreadBatch
     }
   }
 
-  throw new Error(
+  throw new LibraryDiscovery.DiscoveryError(
     `list_ask_threads returned empty after ${MAX_RETRIES} attempts — API may be unavailable or the library is empty`
   )
 }
@@ -260,6 +260,20 @@ async function fetchFirstBatch(page: Page, version: string): Promise<ThreadBatch
 // ─── Main Discovery ───────────────────────────────────────────────────────────
 
 export class LibraryDiscovery {
+  static readonly DiscoveryError = class extends Error {
+    constructor(message: string) {
+      super(message)
+      this.name = 'DiscoveryError'
+    }
+  }
+
+  static readonly ApiError = class extends Error {
+    constructor(message: string) {
+      super(message)
+      this.name = 'ApiError'
+    }
+  }
+
   async discoverAllConversationsFromLibrary(page: Page): Promise<ConversationMeta[]> {
     logger.info('Discovering threads via REST API...')
 

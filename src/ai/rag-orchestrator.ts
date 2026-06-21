@@ -50,6 +50,13 @@ interface ExtractedFact {
 }
 
 export class RagOrchestrator {
+  static readonly OrchestratorError = class extends Error {
+    constructor(message: string) {
+      super(message)
+      this.name = 'OrchestratorError'
+    }
+  }
+
   private readonly ollamaClient: OllamaClient
   private readonly vectorStore: VectorStore
   private readonly ripgrep: RgSearch
@@ -89,7 +96,8 @@ export class RagOrchestrator {
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error)
-      errorBus.emitError(`Mightiest RAG failed: ${errorMessage}`)
+      const orchestratorError = new RagOrchestrator.OrchestratorError(`Mightiest RAG failed: ${errorMessage}`)
+      errorBus.emitError(orchestratorError.message, orchestratorError)
     }
   }
 
@@ -125,8 +133,11 @@ export class RagOrchestrator {
       return response
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error)
-      errorBus.emitError(`Mightiest Chat failed: ${errorMessage}`)
-      throw error
+      const orchestratorError = new RagOrchestrator.OrchestratorError(
+        `Mightiest Chat failed: ${errorMessage}`
+      )
+      errorBus.emitError(orchestratorError.message, orchestratorError)
+      throw orchestratorError
     }
   }
 

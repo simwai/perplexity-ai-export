@@ -8,10 +8,10 @@ import { type ExportStrategy } from '../exporters/export.strategy.js'
 import { logger } from '../utils/logger.js'
 
 export class ExportOrchestrator {
-  static readonly WriteError = class extends Error {
+  static readonly ExportError = class extends Error {
     constructor(message: string) {
       super(message)
-      this.name = 'FileWriteError'
+      this.name = 'ExportError'
     }
   }
 
@@ -89,7 +89,9 @@ export class ExportOrchestrator {
         writeFileSync(destinationFilePath, content, 'utf-8')
 
         if (!existsSync(destinationFilePath) || statSync(destinationFilePath).size === 0) {
-          throw new Error(`Exported file is missing or empty: ${destinationFilePath}`)
+          throw new ExportOrchestrator.ExportError(
+            `Exported file is missing or empty: ${destinationFilePath}`
+          )
         }
 
         writtenFiles.push(destinationFilePath)
@@ -102,7 +104,7 @@ export class ExportOrchestrator {
     }
 
     if (writtenFiles.length === 0 && this.strategies.length > 0) {
-      throw new ExportOrchestrator.WriteError(
+      throw new ExportOrchestrator.ExportError(
         `Failed to write conversation ${conversation.id} with any strategy.`
       )
     }

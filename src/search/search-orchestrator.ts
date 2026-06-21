@@ -8,10 +8,10 @@ import chalk from 'chalk'
 export type SearchMode = 'rg' | 'vector' | 'auto' | 'rag'
 
 export class SearchOrchestrator {
-  static readonly SearchOrchestratorError = class extends Error {
+  static readonly OrchestratorError = class extends Error {
     constructor(message: string) {
       super(message)
-      this.name = 'SearchOrchestratorError'
+      this.name = 'OrchestratorError'
     }
   }
 
@@ -65,7 +65,7 @@ export class SearchOrchestrator {
     } catch (_error) {
       if (_error instanceof Error) {
         const searchFailedErrorMessage = `Search failed: ${_error.message}`
-        throw new SearchOrchestrator.SearchOrchestratorError(searchFailedErrorMessage)
+        throw new SearchOrchestrator.OrchestratorError(searchFailedErrorMessage)
       }
       throw _error
     }
