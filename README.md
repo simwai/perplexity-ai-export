@@ -116,8 +116,9 @@ bash -c "cp .env.example .env"
 
 - **HEADLESS**: Set to `false` in your `.env` file. **Note:** Headless mode (`true`) is currently non-functional due to Cloudflare Turnstile protection on Perplexity.ai. Using headful mode allows you to complete any challenges manually if they appear.
 - **OLLAMA_URL**: Access point for your local AI engine (default: http://localhost:11434).
-- **OLLAMA_MODEL**: Cognitive model for RAG synthesis (e.g., deepseek-r1).
+- **OLLAMA_MODEL**: Cognitive model for RAG synthesis (e.g., deepseek-r1). The system defaults to `llama3.1` internally if this is not specified.
 - **OLLAMA_EMBED_MODEL**: Model for generating vector representations (e.g., nomic-embed-text).
+- **EXPORT_STRATEGIES**: A comma-separated list of enabled export formats (default: `markdown`).
 - **ENABLE_VECTOR_SEARCH**: Set to `true` to activate semantic and RAG layers.
 
 ## Usage Guide
@@ -138,6 +139,7 @@ pnpm run dev
   - **Semantic**: Fuzzy matching via high-dimensional vector space.
   - **RAG**: Direct inquiry, such as "What did I learn about emergent intelligence?"
   - **Exact**: Rapid string matching via ripgrep (bundled).
+- **Chat with history**: Engage in a continuous, multi-turn dialogue with your knowledge base. The assistant maintains context and cites sources from your history.
 - **Build vector index**: Processes Markdown exports into a local vector store.
 - **Reset all data**: Purges checkpoints, authentication data, and the vector index.
 
