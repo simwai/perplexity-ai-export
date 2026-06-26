@@ -35,7 +35,7 @@ export function showHelp(): void {
 
   logger.info(chalk.bold('💡 Search & RAG Tips:\n'))
   logger.info(
-    '  • RAG: Ask history with Ollama. Combines vector retrieval with AI generation for comprehensive answers.'
+    '  • RAG: Ask history with AI Provider. Combines vector retrieval with AI generation for comprehensive answers.'
   )
   logger.info(
     '    The pipeline now includes HyDE (generates a hypothetical answer passage before searching)'

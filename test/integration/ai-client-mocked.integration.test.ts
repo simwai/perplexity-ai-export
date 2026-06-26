@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterEach, afterAll, vi } from 'vitest'
 import { setupServer } from 'msw/node'
 import { http, HttpResponse } from 'msw'
-import { OllamaClient } from '../../src/ai/ollama-client.js'
+import { AiClient } from '../../src/ai/ai-client.js'
 import { config } from '../../src/utils/config.js'
 
 const mswServer = setupServer(
@@ -39,9 +39,9 @@ afterEach(() => {
 })
 afterAll(() => mswServer.close())
 
-describe('OllamaClient (MSW Mocked)', () => {
+describe('AiClient (MSW Mocked)', () => {
   it('should generate text with usage successfully', async () => {
-    const client = new OllamaClient(config)
+    const client = new AiClient(config)
     const response = await client.generateWithUsage('Hello')
 
     expect(response.content).toBe('Generated text')
@@ -51,7 +51,7 @@ describe('OllamaClient (MSW Mocked)', () => {
   })
 
   it('should chat successfully', async () => {
-    const client = new OllamaClient(config)
+    const client = new AiClient(config)
     const response = await client.chat([{ role: 'user', content: 'Hello' }])
 
     expect(response.content).toBe('Chat response')
@@ -67,7 +67,7 @@ describe('OllamaClient (MSW Mocked)', () => {
       })
     )
 
-    const client = new OllamaClient(config)
+    const client = new AiClient(config)
     await expect(client.embed(['text'])).rejects.toThrow(/Ollama request failed with status 500/)
   })
 })

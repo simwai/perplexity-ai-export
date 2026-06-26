@@ -1,6 +1,6 @@
 import { errorBus } from '../utils/error-bus.js'
 import { VectorStore, type VectorSearchResult } from '../search/vector-store.js'
-import { OllamaClient, type ChatMessage, type LlmResponse } from './ollama-client.js'
+import { AiClient, type ChatMessage, type LlmResponse } from './ai-client.js'
 import { RgSearch } from '../search/rg-search.js'
 import { logger } from '../utils/logger.js'
 import chalk from 'chalk'
@@ -57,12 +57,12 @@ export class RagOrchestrator {
     }
   }
 
-  private readonly ollamaClient: OllamaClient
+  private readonly aiClient: AiClient
   private readonly vectorStore: VectorStore
   private readonly ripgrep: RgSearch
 
   constructor(private readonly config: Config) {
-    this.ollamaClient = new OllamaClient(config)
+    this.aiClient = new AiClient(config)
     this.vectorStore = new VectorStore(config)
     this.ripgrep = new RgSearch(config)
   }
@@ -126,7 +126,7 @@ export class RagOrchestrator {
         { role: 'user', content: question },
       ]
 
-      const response = await this.ollamaClient.chat(chatMessages)
+      const response = await this.aiClient.chat(chatMessages)
 
       this.displaySourceProvenance(extractedFacts)
 
@@ -159,7 +159,7 @@ New Question: ${question}
 
 Standalone Question:
 `
-    const response = await this.ollamaClient.generate(rephrasePrompt)
+    const response = await this.aiClient.generate(rephrasePrompt)
     return response.trim() || question
   }
 
@@ -201,7 +201,7 @@ ${hydeInstruction}
 Return JSON: ${jsonTemplate}
 `
     try {
-      const response = await this.ollamaClient.generate(plannerPrompt)
+      const response = await this.aiClient.generate(plannerPrompt)
       const planJson = this.parseJsonFromResponse(response, {})
 
       return {
@@ -407,7 +407,7 @@ Extract every specific fact, mention, date, or piece of code.
 Return JSON array: [{"fact": "...", "node_id": N, "thread": "..."}]
 `
       try {
-        const response = await this.ollamaClient.generate(researchPrompt)
+        const response = await this.aiClient.generate(researchPrompt)
         const extractedFacts = this.parseJsonFromResponse(response, [])
 
         extractedFacts.forEach((factEntry: any) => {
@@ -438,7 +438,7 @@ Write 1-2 sentences that would plausibly appear in a saved answer to the questio
 Write as if it's content already stored in a document, not as a direct reply.
 `
     try {
-      return await this.ollamaClient.generate(hydePrompt)
+      return await this.aiClient.generate(hydePrompt)
     } catch (error) {
       return ''
     }
@@ -463,7 +463,7 @@ INSTRUCTIONS:
 
 ANSWER:
 `
-    return this.ollamaClient.generate(synthesisPrompt)
+    return this.aiClient.generate(synthesisPrompt)
   }
 
   private displaySourceProvenance(extractedFacts: ExtractedFact[]): void {
@@ -488,7 +488,7 @@ Did I miss anything important?
 Return JSON: {"status": "ok" | "missed-info", "suggestion": "..."}
 `
     try {
-      const verificationResponse = await this.ollamaClient.generate(verificationPrompt)
+      const verificationResponse = await this.aiClient.generate(verificationPrompt)
       return this.parseJsonFromResponse(verificationResponse, { status: 'ok' })
     } catch (error) {
       return { status: 'ok' }

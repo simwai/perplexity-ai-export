@@ -1,9 +1,9 @@
-import { OllamaClient } from '../src/ai/ollama-client.js'
+import { AiClient } from '../src/ai/ai-client.js'
 import { logger } from '../src/utils/logger.js'
 import { config } from '../src/utils/config.js'
 
 export async function isOllamaAvailable(): Promise<boolean> {
-  const ollama = new OllamaClient(config)
+  const ollama = new AiClient(config)
   try {
     await ollama.validate()
     return true

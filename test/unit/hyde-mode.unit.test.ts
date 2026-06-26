@@ -1,11 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { RagOrchestrator } from '../../src/ai/rag-orchestrator.js'
 import { VectorStore } from '../../src/search/vector-store.js'
-import { OllamaClient } from '../../src/ai/ollama-client.js'
+import { AiClient } from '../../src/ai/ai-client.js'
 import { RgSearch } from '../../src/search/rg-search.js'
 
 vi.mock('../../src/search/vector-store.js')
-vi.mock('../../src/ai/ollama-client.js')
+vi.mock('../../src/ai/ai-client.js')
 vi.mock('../../src/search/rg-search.js')
 vi.mock('../../src/utils/logger.js')
 
@@ -13,7 +13,7 @@ describe('RagOrchestrator HyDE Modes', () => {
   let config: any
   let orchestrator: any
   let mockVectorStore: any
-  let mockOllamaClient: any
+  let mockAiClient: any
 
   beforeEach(() => {
     config = {
@@ -24,15 +24,15 @@ describe('RagOrchestrator HyDE Modes', () => {
       exportDir: 'exports'
     }
     mockVectorStore = new VectorStore(config)
-    mockOllamaClient = new OllamaClient(config)
+    mockAiClient = new AiClient(config)
 
     orchestrator = new RagOrchestrator(config)
     orchestrator.vectorStore = mockVectorStore
-    orchestrator.ollamaClient = mockOllamaClient
+    orchestrator.aiClient = mockAiClient
     orchestrator.ripgrep = new RgSearch(config)
 
     // Default mocks
-    mockOllamaClient.generate.mockResolvedValue(JSON.stringify({
+    mockAiClient.generate.mockResolvedValue(JSON.stringify({
       strategy: 'precise',
       queries: ['query1'],
       hardKeywords: [],
