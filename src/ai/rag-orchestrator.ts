@@ -1,4 +1,3 @@
-import { errorBus } from '../utils/error-bus.js'
 import { VectorStore, type VectorSearchResult } from '../search/vector-store.js'
 import { AiClient, type ChatMessage, type LlmResponse } from './ai-client.js'
 import { RgSearch } from '../search/rg-search.js'
@@ -13,212 +12,179 @@ let crossEncoderTokenizer: PreTrainedTokenizer | null = null
 let crossEncoderModel: PreTrainedModel | null = null
 
 async function getCrossEncoder() {
-  const isAlreadyLoaded = crossEncoderTokenizer && crossEncoderModel
-  if (isAlreadyLoaded) {
+  if (crossEncoderTokenizer && crossEncoderModel) {
     return { tokenizer: crossEncoderTokenizer, model: crossEncoderModel }
   }
 
-  const transformers = await import('@huggingface/transformers').catch(() => null)
-  if (!transformers) {
+  try {
+    const { pipeline } = await import('@huggingface/transformers')
+    const reranker = await pipeline('text-classification', 'Xenova/ms-marco-MiniLM-L-6-v2')
+
+    crossEncoderTokenizer = (reranker as unknown as { tokenizer: PreTrainedTokenizer }).tokenizer
+    crossEncoderModel = (reranker as unknown as { model: PreTrainedModel }).model
+    return { tokenizer: crossEncoderTokenizer!, model: crossEncoderModel! }
+  } catch (error) {
     return null
   }
-
-  const { AutoTokenizer, AutoModelForSequenceClassification } = transformers
-
-  crossEncoderTokenizer = await AutoTokenizer.from_pretrained('Xenova/ms-marco-MiniLM-L-6-v2')
-  crossEncoderModel = await AutoModelForSequenceClassification.from_pretrained(
-    'Xenova/ms-marco-MiniLM-L-6-v2',
-    { dtype: 'int8' }
-  )
-
-  return { tokenizer: crossEncoderTokenizer, model: crossEncoderModel }
 }
 
-interface ResearchPlan {
-  originalQuestion: string
-  strategy: 'precise' | 'exhaustive'
-  queries: string[]
-  hardKeywords: string[]
-  hydePassage: string
-  filters: Record<string, unknown>
-}
-
-interface ExtractedFact {
+export interface ExtractedFact {
   fact: string
   source_title: string
   thread: string
 }
 
+interface ResearchPlan {
+  originalQuestion: string
+  strategy: string
+  queries: string[]
+  hydePassage?: string
+  hardKeywords: string[]
+  filters: Record<string, string>
+}
+
 export class RagOrchestrator {
-  static readonly OrchestratorError = class extends Error {
+  static readonly RagOrchestratorError = class extends Error {
     constructor(message: string) {
       super(message)
-      this.name = 'OrchestratorError'
+      this.name = 'RagOrchestratorError'
     }
   }
 
-  private readonly aiClient: AiClient
   private readonly vectorStore: VectorStore
+  private readonly aiClient: AiClient
   private readonly ripgrep: RgSearch
 
   constructor(private readonly config: Config) {
-    this.aiClient = new AiClient(config)
     this.vectorStore = new VectorStore(config)
+    this.aiClient = new AiClient(config)
     this.ripgrep = new RgSearch(config)
   }
 
-  async answerQuestion(question: string): Promise<void> {
-    logger.info(`Mightiest RAG is analyzing: "${question}"...`)
-
+  async answerQuestion(originalQuestion: string, isExhaustive = false): Promise<string> {
     try {
-      const plan = await this.developResearchPlan(question)
-      const results = await this.executeAdaptiveHybridSearch(plan)
-      const rerankedResults = await this.crossEncoderRerank(question, results)
+      logger.info(`Analyzing question: "${originalQuestion}"...`)
+      const plan = await this.developResearchPlan(originalQuestion, isExhaustive)
 
-      const isExhaustive = plan.strategy === 'exhaustive'
+      const initialResults = await this.executeAdaptiveHybridSearch(plan)
+      const rerankedResults = await this.crossEncoderRerank(originalQuestion, initialResults)
+
       const extractedFacts = await this.extractFactsWithGranularMapReduce(
-        question,
+        originalQuestion,
         rerankedResults,
         isExhaustive
       )
-
-      const answer = await this.generateMightiestResponse(question, extractedFacts, plan.strategy)
-
-      console.log(`\n${chalk.bold.green('Mightiest Answer:')}\n`)
-      console.log(answer)
-
       this.displaySourceProvenance(extractedFacts)
 
-      const feedback = await this.verifyAnswerQuality(question, answer)
-      const needsCorrection = feedback.status === 'missed-info'
-      if (needsCorrection) {
-        logger.warn(`Self-Correction: ${chalk.gray(feedback.suggestion)}`)
+      const finalAnswer = await this.generateMightiestResponse(
+        originalQuestion,
+        extractedFacts,
+        plan.strategy
+      )
+
+      const verification = await this.verifyAnswerQuality(originalQuestion, finalAnswer)
+      if (verification.status === 'missed-info') {
+        logger.warn(`Heuristic check suggests missed info: ${verification.suggestion}`)
       }
+
+      return finalAnswer
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error)
-      const orchestratorError = new RagOrchestrator.OrchestratorError(`Mightiest RAG failed: ${errorMessage}`)
-      errorBus.emitError(orchestratorError.message, orchestratorError)
+      throw new RagOrchestrator.RagOrchestratorError(`RAG pipeline failed: ${errorMessage}`)
     }
   }
 
-  async chat(question: string, history: ChatMessage[]): Promise<LlmResponse> {
-    logger.info(`Processing chat turn: "${question}"...`)
-
+  async chat(messages: ChatMessage[]): Promise<LlmResponse>
+  async chat(query: string, history: ChatMessage[]): Promise<LlmResponse>
+  async chat(messagesOrQuery: ChatMessage[] | string, history?: ChatMessage[]): Promise<LlmResponse> {
     try {
-      const refinedQuestion = await this.rephraseQuestionWithHistory(question, history)
-      logger.debug(`Refined question for search: "${refinedQuestion}"`)
+      let messages: ChatMessage[] = []
+      if (typeof messagesOrQuery === 'string') {
+        messages = [...(history || []), { role: 'user', content: messagesOrQuery }]
+      } else {
+        messages = messagesOrQuery
+      }
 
-      const plan = await this.developResearchPlan(refinedQuestion)
+      const lastMessage = messages[messages.length - 1]
+      if (!lastMessage) return { content: '', usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 } }
+
+      const contextSearchQuestion = lastMessage.content
+      const plan = await this.developResearchPlan(contextSearchQuestion, false)
       const results = await this.executeAdaptiveHybridSearch(plan)
-      const rerankedResults = await this.crossEncoderRerank(refinedQuestion, results)
+      const reranked = await this.crossEncoderRerank(contextSearchQuestion, results)
 
-      const isExhaustive = plan.strategy === 'exhaustive'
-      const extractedFacts = await this.extractFactsWithGranularMapReduce(
-        refinedQuestion,
-        rerankedResults,
-        isExhaustive
-      )
+      const facts = await this.extractFactsWithGranularMapReduce(contextSearchQuestion, reranked, false)
 
-      const systemPrompt = this.buildChatSystemPrompt(extractedFacts)
+      const systemPrompt = `
+You are the History Assistant. You have access to the user's exported Perplexity history.
+Use the provided facts to answer the user's message.
+If the facts don't contain the answer, say you don't know based on the history.
+Citations: [Fact N]
+
+Facts:
+${facts.map((f, i) => `[Fact ${i}] (${f.source_title}): ${f.fact}`).join('\n')}
+`
       const chatMessages: ChatMessage[] = [
         { role: 'system', content: systemPrompt },
-        ...history,
-        { role: 'user', content: question },
+        ...messages,
       ]
 
-      const response = await this.aiClient.chat(chatMessages)
-
-      this.displaySourceProvenance(extractedFacts)
-
-      return response
+      return await this.aiClient.chat(chatMessages)
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error)
-      const orchestratorError = new RagOrchestrator.OrchestratorError(
-        `Mightiest Chat failed: ${errorMessage}`
-      )
-      errorBus.emitError(orchestratorError.message, orchestratorError)
-      throw orchestratorError
+      throw new RagOrchestrator.RagOrchestratorError(`Chat failed: ${errorMessage}`)
     }
   }
 
-  private async rephraseQuestionWithHistory(
-    question: string,
-    history: ChatMessage[]
-  ): Promise<string> {
-    const isHistoryEmpty = history.length === 0
-    if (isHistoryEmpty) return question
-
-    const rephrasePrompt = `
-Given the following conversation history and a new question, rephrase the new question to be a standalone question that can be used for search.
-If the new question is already standalone, return it as is.
-
-History:
-${history.map((m) => `${m.role.toUpperCase()}: ${m.content}`).join('\n')}
-
-New Question: ${question}
-
-Standalone Question:
-`
-    const response = await this.aiClient.generate(rephrasePrompt)
-    return response.trim() || question
-  }
-
-  private buildChatSystemPrompt(extractedFacts: ExtractedFact[]): string {
-    const findings = extractedFacts
-      .map((fact, index) => `[Find ${index}] (${fact.source_title}): ${fact.fact}`)
-      .join('\n')
-
-    return `
-You are a helpful assistant answering questions based on the user's exported conversation history.
-Use the following research findings to provide an authoritative and specific response.
-
-Findings:
-${findings}
-
-INSTRUCTIONS:
-1. Provide a cohesive and helpful answer.
-2. Cite the findings using [Find N] when appropriate.
-3. If the history doesn't contain relevant information, inform the user but still try to be helpful based on general knowledge if it's a follow-up.
-`
-  }
-
-  private async developResearchPlan(originalQuestion: string): Promise<ResearchPlan> {
-    const isHydeInPlanner = this.config.hydeMode === 'fusion'
-    const hydeInstruction = isHydeInPlanner
-      ? '4. HyDE: Write 1-2 sentences that would plausibly appear in a saved answer to this question. Write as if it\'s content already stored, not as a reply.'
-      : ''
-
-    const jsonTemplate = isHydeInPlanner
-      ? '{"strategy": "...", "queries": [], "hardKeywords": [], "hydePassage": "...", "filters": {}}'
-      : '{"strategy": "...", "queries": [], "hardKeywords": [], "filters": {}}'
+  private async developResearchPlan(
+    originalQuestion: string,
+    isExhaustive: boolean
+  ): Promise<ResearchPlan> {
+    const strategy = isExhaustive ? 'exhaustive' : 'precise'
+    const hydeInstruction =
+      this.config.hydeMode !== 'off'
+        ? '2. HyDE: Write a 1-sentence hypothetical answer that might appear in a document.'
+        : ''
+    const jsonTemplate = `{
+  "strategy": "${strategy}",
+  "queries": ["..."],
+  "hydePassage": "...",
+  "hardKeywords": ["..."],
+  "filters": {}
+}`
 
     const plannerPrompt = `
-Analyze: "${originalQuestion}"
-1. Strategy: "precise" (specific facts) or "exhaustive" (broad summary/entity history).
-2. Variations: 3 semantic search phrases.
-3. Hard Keywords: Identify any names, IDs, or unique technical terms for exact matching.
+Analyze this question: "${originalQuestion}"
+1. Sub-queries: Break it down into 1-3 distinct semantic search queries.
 ${hydeInstruction}
+3. Hard Keywords: Identify any names, IDs, or unique technical terms for exact matching.
+
 Return JSON: ${jsonTemplate}
 `
     try {
       const response = await this.aiClient.generate(plannerPrompt)
-      const planJson = this.parseJsonFromResponse(response, {})
+      const planJson = this.parseJsonFromResponse<{
+        strategy?: string
+        queries?: string[]
+        hydePassage?: string
+        hardKeywords?: string[]
+        filters?: Record<string, string>
+      }>(response, {})
 
       return {
         originalQuestion,
-        strategy: planJson.strategy || 'precise',
+        strategy: planJson.strategy || strategy,
         queries: planJson.queries || [originalQuestion],
+        hydePassage: planJson.hydePassage,
         hardKeywords: planJson.hardKeywords || [],
-        hydePassage: planJson.hydePassage || '',
         filters: planJson.filters || {},
       }
     } catch (error) {
       return {
-        strategy: 'precise',
         originalQuestion,
+        strategy,
         queries: [originalQuestion],
         hardKeywords: [],
-        hydePassage: '',
         filters: {},
       }
     }
@@ -408,9 +374,9 @@ Return JSON array: [{"fact": "...", "node_id": N, "thread": "..."}]
 `
       try {
         const response = await this.aiClient.generate(researchPrompt)
-        const extractedFacts = this.parseJsonFromResponse(response, [])
+        const extractedFacts = this.parseJsonFromResponse<Array<{ fact: string; node_id: number; thread?: string }>>(response, [])
 
-        extractedFacts.forEach((factEntry: any) => {
+        extractedFacts.forEach((factEntry) => {
           const originalSnippet = processingPool[factEntry.node_id]
           extractedFindings.push({
             fact: factEntry.fact,
@@ -489,17 +455,17 @@ Return JSON: {"status": "ok" | "missed-info", "suggestion": "..."}
 `
     try {
       const verificationResponse = await this.aiClient.generate(verificationPrompt)
-      return this.parseJsonFromResponse(verificationResponse, { status: 'ok' })
+      return this.parseJsonFromResponse<{ status: string; suggestion?: string }>(verificationResponse, { status: 'ok' })
     } catch (error) {
       return { status: 'ok' }
     }
   }
 
-  private parseJsonFromResponse(response: string, defaultValue: any): any {
+  private parseJsonFromResponse<T>(response: string, defaultValue: T): T {
     const jsonMatch = response.match(/(\{[\s\S]*\}|\[[\s\S]*\])/)
     if (jsonMatch?.[0]) {
       try {
-        return JSON.parse(jsonMatch[0])
+        return JSON.parse(jsonMatch[0]) as T
       } catch (error) {
         return defaultValue
       }

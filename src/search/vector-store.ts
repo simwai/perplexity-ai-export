@@ -1,5 +1,5 @@
 import { errorBus } from '../utils/error-bus.js'
-import { LocalIndex } from 'vectra'
+import { LocalIndex, type MetadataFilter } from 'vectra'
 import { join } from 'node:path'
 import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { type Config } from '../utils/config.js'
@@ -88,7 +88,7 @@ export class VectorStore {
 
   async searchWithMetadataFilter(
     query: string,
-    filter: (meta: Record<string, any>) => boolean,
+    filter: MetadataFilter,
     limit = 10
   ): Promise<VectorSearchResult[]> {
     try {
@@ -97,7 +97,7 @@ export class VectorStore {
         queryEmbedding,
         query,
         limit,
-        filter as any
+        filter
       )
       return this.formatVectorSearchResults(rawResults)
     } catch (error) {

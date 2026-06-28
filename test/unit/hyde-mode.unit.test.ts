@@ -27,9 +27,10 @@ describe('RagOrchestrator HyDE Modes', () => {
     mockAiClient = new AiClient(config)
 
     orchestrator = new RagOrchestrator(config)
-    orchestrator.vectorStore = mockVectorStore
-    orchestrator.aiClient = mockAiClient
-    orchestrator.ripgrep = new RgSearch(config)
+    // Access private members via indexing for testing
+    ;(orchestrator as any).vectorStore = mockVectorStore
+    ;(orchestrator as any).aiClient = mockAiClient
+    ;(orchestrator as any).ripgrep = new RgSearch(config)
 
     // Default mocks
     mockAiClient.generate.mockResolvedValue(JSON.stringify({
@@ -43,8 +44,8 @@ describe('RagOrchestrator HyDE Modes', () => {
 
   it('should NOT trigger HyDE when mode is "off"', async () => {
     config.hydeMode = 'off'
-    const plan = await orchestrator.developResearchPlan('test question')
-    await orchestrator.executeAdaptiveHybridSearch(plan)
+    const plan = await (orchestrator as any).developResearchPlan('test question', false)
+    await (orchestrator as any).executeAdaptiveHybridSearch(plan)
 
     expect(mockVectorStore.search).toHaveBeenCalledTimes(1)
     expect(mockVectorStore.search).not.toHaveBeenCalledWith('hypothetical passage', 40)
@@ -52,8 +53,8 @@ describe('RagOrchestrator HyDE Modes', () => {
 
   it('should ALWAYS trigger HyDE when mode is "fusion"', async () => {
     config.hydeMode = 'fusion'
-    const plan = await orchestrator.developResearchPlan('test question')
-    await orchestrator.executeAdaptiveHybridSearch(plan)
+    const plan = await (orchestrator as any).developResearchPlan('test question', false)
+    await (orchestrator as any).executeAdaptiveHybridSearch(plan)
 
     expect(mockVectorStore.search).toHaveBeenCalledTimes(2) // 1 query + 1 hyde
     expect(mockVectorStore.search).toHaveBeenCalledWith('hypothetical passage', 40)
@@ -66,8 +67,8 @@ describe('RagOrchestrator HyDE Modes', () => {
     ])
     mockVectorStore.search.mockResolvedValueOnce([]) // HyDE results
 
-    const plan = await orchestrator.developResearchPlan('test question')
-    await orchestrator.executeAdaptiveHybridSearch(plan)
+    const plan = await (orchestrator as any).developResearchPlan('test question', false)
+    await (orchestrator as any).executeAdaptiveHybridSearch(plan)
 
     expect(mockVectorStore.search).toHaveBeenCalledTimes(2)
   })
@@ -83,8 +84,8 @@ describe('RagOrchestrator HyDE Modes', () => {
       { meta: { id: '6' }, score: 0.8 }
     ])
 
-    const plan = await orchestrator.developResearchPlan('test question')
-    await orchestrator.executeAdaptiveHybridSearch(plan)
+    const plan = await (orchestrator as any).developResearchPlan('test question', false)
+    await (orchestrator as any).executeAdaptiveHybridSearch(plan)
 
     expect(mockVectorStore.search).toHaveBeenCalledTimes(1)
   })
