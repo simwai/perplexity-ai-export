@@ -44,17 +44,7 @@ export class BrowserManager {
     try {
       const authPath = this.config.authStoragePath
       const authExists = existsSync(authPath)
-      const isFresh = authExists && this.isSavedAuthenticationFresh(authPath)
-
-      let wantRefresh = false
-      if (authExists && !isFresh) {
-        wantRefresh = await confirm({
-          message: 'Saved authentication is older than 1 day. Do you want to refresh it now?',
-          default: true,
-        })
-      }
-
-      const shouldTrySavedState = authExists && !wantRefresh
+      const shouldTrySavedState = authExists
 
       if (shouldTrySavedState) {
         await this.launchBrowser(this.config.headless)
@@ -160,20 +150,6 @@ export class BrowserManager {
           !responseUrl.includes('static')
         if (isRelevantUrl) logHttpResponse(res)
       })
-    }
-  }
-
-  private isSavedAuthenticationFresh(filePath: string): boolean {
-    const fileExists = existsSync(filePath)
-    if (!fileExists) return false
-
-    try {
-      const fileStats = statSync(filePath)
-      const fileAgeMs = Date.now() - fileStats.mtimeMs
-      const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000
-      return fileAgeMs < TWENTY_FOUR_HOURS_MS
-    } catch (_error) {
-      return false
     }
   }
 
