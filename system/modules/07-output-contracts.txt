@@ -263,7 +263,7 @@ Hard tier:
 - [ ] H1 - [ ] H12
 
 Soft tier:
-- [ ] S1 - [ ] S12
+- [ ] S1 - [ ] S13
 
 Verification:
 - Build: pending -- [command]

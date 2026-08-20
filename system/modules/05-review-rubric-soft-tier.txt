@@ -17,6 +17,7 @@ S10 -- Documentation: missing or misleading comments on non-obvious logic
 S11 -- Type safety: missing type annotations or unsafe casts
   Note: In Python code, S11 is upgraded to H10 for public function annotations.
 S12 -- Performance: obvious inefficiencies with measurable impact
+S13 -- Over-engineering: unrequested abstractions or speculative genericity beyond what the change needs; includes an interface with one implementation, a factory for one product, config for values that never change, and new dependencies when an existing one covers the need
 
 ## Usage
 

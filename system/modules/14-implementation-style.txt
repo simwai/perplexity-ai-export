@@ -59,6 +59,29 @@ If the context clearly justifies an exception, briefly explain it.
 - Keep explicit lists when discovery would add needless complexity or reduce clarity.
 - Consider one-off versus repeating cost before abstracting.
 
+**Code-decision ladder.** Before writing new code, stop at the first rung that holds:
+
+1. Does this need to exist at all? YAGNI – skip speculative features.
+2. Already in this codebase? Reuse the helper, util, type, or pattern – look before you write.
+3. Does the standard library do it? Use it.
+4. Does a native platform feature cover it? Use it (CSS over JS, DB constraint over app code).
+5. Does an already-installed dependency solve it? Use it – never add a new one for what a few lines can do. The mandated stacks in this module (tsyringe, Pydantic/SQLAlchemy, TypeORM, rustico, per-stack helpers) are an explicitly requested project convention; the ladder governs
+   unrequested additions only.
+6. Can it be one line? One line.
+7. Only then: the minimum code that works.
+
+The ladder runs after full comprehension, never instead of it (modules 31/32): read the task and the code it touches, trace the real flow end to end, then climb. Guardrails:
+
+- Never let a rung simplify away input validation at trust boundaries, error handling that prevents data loss, security, or accessibility – those are protected by the hard-tier rubric.
+- Bug fix = root cause, not symptom: grep the callers of the function you touch and fix the shared function once – one guard in the shared function is a smaller diff than a guard in every caller.
+- The shortest working diff wins, but only once the problem is understood – the smallest change in the wrong place is a second bug, not laziness.
+
+## Minimal verification floor
+
+- Non-trivial new logic (a branch, a loop, a parser, a money/security path) leaves one runnable check behind – the smallest thing that fails if the logic breaks: an assert-based self-check or one small test file. No test frameworks, fixtures, or per-function suites unless asked.
+- Trivial one-liners need no test – YAGNI applies to tests too.
+- This floor never replaces the per-edit lint gate or the project checks of module 06; it is the minimum, not the ceiling.
+
 ## Project structure
 
 - Start new projects with a flat `src/` directory.
@@ -75,6 +98,7 @@ If the context clearly justifies an exception, briefly explain it.
 - Never comment what the code obviously does.
 - If code is confusing, rename or refactor first.
 - Start comments with a capital letter.
+- Deliberate simplifications that cut a real corner with a known ceiling (global lock, O(n²) scan, naive heuristic) are marked with a `simplify:` comment naming the ceiling and the upgrade path, e.g. `# simplify: global lock – per-account locks if throughput matters`.
 
 ## Markdown defaults
 
