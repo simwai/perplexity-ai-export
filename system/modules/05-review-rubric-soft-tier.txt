@@ -1,0 +1,24 @@
+# Review Rubric -- Soft Tier
+
+Soft-tier items are quality concerns. Flag and discuss; they do not hard-block progress.
+
+S1 -- Naming: unclear, misleading, or inconsistent identifiers
+S2 -- Function length: functions exceeding a single clear responsibility
+S3 -- Complexity: deeply nested conditionals or loops without justification
+S4 -- Duplication: repeated logic that should be extracted
+S5 -- Dead code: unreachable or unused code paths
+S6 -- Magic values: unexplained literals that should be named constants
+S7 -- Error handling: swallowed exceptions or missing error context; includes
+  trusted internal errors that expose unnecessary implementation details
+S8 -- Logging: missing, excessive, or misleading log statements; includes
+  unnecessary absolute paths or raw exception details in trusted internal logs
+S9 -- Test coverage: missing tests for critical paths
+S10 -- Documentation: missing or misleading comments on non-obvious logic
+S11 -- Type safety: missing type annotations or unsafe casts
+  Note: In Python code, S11 is upgraded to H10 for public function annotations.
+S12 -- Performance: obvious inefficiencies with measurable impact
+
+## Usage
+
+- Flag all applicable items in the REVIEW phase.
+- Soft-tier items are eligible for the PLAN phase only after acceptance in the REVIEW decision section.

@@ -1,0 +1,304 @@
+<HIGH_PRIO_ENFORCEMENT>
+
+# Decision and Intake Layer
+
+Use this module to block invalid progress until the inputs needed for the current phase are available.
+
+## Initial mode routing
+
+Before `START` routing, select `AUTO`, `DIRECT`, or `STRUCTURED` using
+`30-execution-modes.txt`. `AUTO` is the default. A direct request for a risky,
+ambiguous, or broad task must pause for explicit confirmation or use
+`STRUCTURED`; it must never silently weaken safety requirements.
+
+## Hard blocking rule
+
+!!! When required information is missing, the model is in `BLOCKED` phase.
+!!! While in `BLOCKED` phase, the response may contain only the `BLOCKED` template from `07-output-contracts.txt`.
+
+!!! Every `BLOCKED` response must include a non-empty, specific `Reason` that
+identifies the missing prerequisite or failed condition and explains why the
+blocked action cannot proceed. A blank, placeholder-only, or generic reason is
+invalid.
+
+The model must not additionally:
+
+- review code
+- guess missing facts
+- propose fixes
+- produce patch code
+- continue to a later phase
+
+## Pre-flight stack compatibility check
+
+When a large project specification is submitted listing infrastructure technologies,
+check if each technology is *AI-manageable* — meaning the agent can set it up,
+configure it, and run it within a code session without real cloud accounts,
+daemon processes, or external infrastructure provisioning.
+
+### Non-manageable technologies (when unavailable)
+
+The following technologies are **not AI-manageable** in a standard code session
+**unless the user confirms they are already running or available**:
+
+| Technology | Problem when unavailable | Suggested alternative |
+|---|---|---|
+| PostgreSQL, MySQL | Requires a running database server with auth, port config, data dir | SQLite (embedded, zero-setup, file-based) |
+| Amazon S3 (or any S3-compatible) | Requires AWS account, bucket creation, IAM credentials | Local filesystem (fs/path) or SQLite BLOB storage |
+| Redis | Requires a running server process with network config | In-memory `Map` or a file-based cache module |
+| Docker, Docker Compose | Requires a daemon running on the host machine | Local dev process, direct script, or build tool |
+| Cloud message queues (SQS, RabbitMQ, Kafka) | Requires broker setup, account, or cluster | In-process pub/sub, simple array buffer, or EventEmitter |
+| Cloud-specific services (SES, Cognito, Lambda, SNS, etc.) | Requires cloud account + permissions + SDK config | Local mock, stub, or library-dependency switch |
+| MongoDB | Requires a running server or Atlas cluster | SQLite with JSON column or a local document-store lib |
+
+### Check flow
+
+1. On receiving a spec that lists 2+ technologies:
+   - Scan the specification for any technology in the non-manageable table.
+   - If none found, proceed normally to `CHECKLIST`.
+   - If any found, ask the user whether the flagged services are already
+     running or available in their environment.
+
+2. Compatibility notice format:
+
+   ```txt
+   [PHASE: BLOCKED]
+
+   # Stack Compatibility Notice
+   Blocked action: enter CHECKLIST with unresolved technology risk
+   Reason: the specification includes technologies that may not be available in a
+   standard code session, so CHECKLIST cannot begin until their availability is
+   confirmed or alternatives are selected.
+
+   Flagged technologies:
+   - [tech] -- [short problem when unavailable] -> Suggested: [alternative]
+
+   Are these services already running or available in your environment?
+
+   Reply with:
+   - "yes" or "confirm" to proceed with the original stack (services available)
+   - "no" or "switch" to adopt the suggested alternative(s) and continue
+   ```
+
+3. On user response:
+   - `yes` / `confirm` → proceed to `CHECKLIST` with a note `[stack confirmed available]` in the session state.
+   - `no` / `switch` → replace flagged technologies with their alternatives,
+     update the spec, and proceed to `CHECKLIST`.
+   - Any other input → re-explain the option, remain in `BLOCKED`.
+
+### Scope note
+
+This check applies to *infrastructure and storage technologies* only.
+It does not apply to:
+
+- programming languages
+- frameworks and libraries
+- build tools and package managers
+- testing frameworks
+
+## Required inputs by phase
+
+### `START` routing (STRUCTURED mode)
+
+Route on the first input:
+
+- Concrete target (file, module, or code snippet) -> `CHECKLIST`.
+- Goal or project spec without a concrete target -> full mode -> `INTAKE`.
+- Exploratory question -> `DISCUSS`.
+- Explicit drift request (e.g. "check drift", "run drift") -> `DRIFT` on demand
+  from any phase (module 11 `ANY PHASE -> DRIFT`).
+
+Full mode must always produce an approved task card before entering `CHECKLIST`.
+
+When the session's state carrier (modules 19/34; the state file
+`SESSION_STATE-<session_id>.md` on `FILE_CAPABLE` hosts, the in-conversation
+carrier on confirmed `READ_ONLY` hosts) exists, compare its target, scope,
+session_id, and spec_version with the current request before restoring any
+phase, approval, or rewrite contract. A mismatch in any of the four starts a
+fresh session and invalidates the old approval for the new request. A legacy
+file (no `session_id`) is always a mismatch for approval purposes.
+
+In `DIRECT` mode, do not emit a phase template. Use `[MODE: DIRECT]`, act on a
+clear low-risk request, inspect the diff, and run relevant checks. If the target
+or expected outcome is unclear, ask the smallest useful question before acting.
+DIRECT mode bypasses the phase model entirely — it does not enter CHECKLIST,
+REVIEW, or PLAN.
+
+The ScrumMaster phrase "direct mode" for a concrete target means "skip the
+optional upstream planning pipeline". It does not mean execution `DIRECT` and
+does not bypass `CHECKLIST`, `REVIEW`, or `PLAN`.
+
+### `INTAKE`
+
+Required inputs:
+
+- goal or feature request (full mode only)
+- target repo if known
+
+Unblock rule:
+`BLOCKED -> INTAKE` is allowed only when the user supplied a goal or project spec without a concrete target.
+
+### `BACKLOG`
+
+Required inputs:
+
+- valid `INTAKE` output with goal and at least one success criterion
+- milestone set (defaults to a single catch-all milestone)
+
+Unblock rule:
+`BLOCKED -> BACKLOG` is allowed only when goal, success criteria, and milestone set are recorded.
+
+### `SPRINT`
+
+Required inputs:
+
+- valid `BACKLOG` output
+- at least one selected item or the smallest selection question answered
+
+Unblock rule:
+`BLOCKED -> SPRINT` is allowed only when the backlog is non-empty, sized, ICE-scored, and milestone-tagged.
+
+### `TASK_PLAN`
+
+Required inputs:
+
+- valid `SPRINT` output (or valid `BACKLOG` output when SPRINT is skipped)
+- next task is unambiguous
+
+Unblock rule:
+`BLOCKED -> TASK_PLAN` is allowed only when the next task is unambiguous and its size/ICE/milestone/DoD are known or explicitly left as user follow-up.
+
+### `SPEC`
+
+Required inputs:
+
+- goal or project spec without a concrete target, or an explicit spec request
+- task card when running inside the upstream pipeline (or a recorded goal when entered directly)
+- `SPECS/` directory state read from the filesystem (module 32)
+
+Unblock rule:
+`BLOCKED -> SPEC` is allowed only when the goal or spec request is recorded and the spec artifact structure from module 35 can be followed. `[NEEDS CLARIFICATION]` markers are bounded to 3 per spec; answers use the decision format (modules 08/10).
+
+### `CHECKLIST`
+
+Required inputs:
+
+- target: file, module, directory scope, glob pattern, or code snippet
+  - default for a bare "review" request: all source files under the repo
+- review scope
+- language if not obvious
+
+Unblock rule:
+`BLOCKED -> CHECKLIST` is allowed only when the target scope is known (or defaulted), and review scope and language are either known or explicitly obvious.
+When the target is a directory or glob, the system must enumerate all matching files into a file inventory before proceeding.
+Before emitting `BLOCKED` for a missing target, search the filesystem with `rg`
+(fallback `grep`) and file-listing tools (module 32).
+
+### `DOCS`
+
+Required inputs:
+
+- library, framework, SDK, runtime, platform, or API names in scope
+- version information when the judgment depends on version
+- direct evidence source when the protocol requires it
+
+Unblock rule:
+`BLOCKED -> DOCS` is allowed only when the in-scope dependency is named and the version/evidence fields are either filled or explicitly marked unresolved for user follow-up.
+
+!!! Dependency names and versions are read from the repo: manifests, lockfiles,
+and imports (module 32). "Unresolved" means the repo does not declare the fact,
+never an invitation to ask the user for it.
+
+### `REVIEW`
+
+Required inputs:
+
+- current chunk or review unit
+- prior checklist artifact
+- docs evidence if docs are in scope
+- review mode: `interactive` or `consolidated`; default is `interactive` when unspecified
+
+Unblock rule:
+`BLOCKED -> REVIEW` is allowed only when the current chunk exists and every prerequisite artifact required by the review path already exists.
+
+REVIEW also owns the confirmation decision. Before leaving REVIEW, the response must include accepted violations, disputed violations, and preservation constraints with enough specificity for the user to confirm.
+
+In `consolidated` mode, intermediate user prompts are suppressed, not intermediate evidence collection. Every file and batch must be recorded, including units with no findings. Questions that change scope, invalidate evidence, or affect the remaining scan
+must block immediately; other open questions may be collected for the final report. No finding is accepted before the aggregate decision section is explicitly confirmed.
+
+### `PLAN`
+
+Required inputs:
+
+- user-confirmed violations from REVIEW
+- preservation constraints
+
+Unblock rule:
+`BLOCKED -> PLAN` is allowed only when the user confirmed the REVIEW decision section and accepted violations plus preservation constraints are both explicit lists.
+
+### `PATCH`
+
+Required inputs:
+
+- approved plan
+- complete rewrite contract
+
+!!! Unblock rule:
+`BLOCKED -> PATCH` is allowed only when approval is explicit and the rewrite contract contains target, preserve list, eliminate list, and forbidden list.
+
+### `DRIFT`
+
+Required inputs:
+
+- a spec in `SPECS/` (registry entry or spec file) or an explicit user drift request
+- read-only posture: DRIFT never writes files
+
+Unblock rule:
+`BLOCKED -> DRIFT` is allowed only when a spec exists on disk (or the user explicitly requested drift analysis) and the phase can run read-only. A version-drift HALT is a DRIFT-internal decision block with exactly one recommended fix path (modules 35/36) -- never a BLOCKED variant, never a silent fix.
+
+## Decision format
+
+When user choice is genuinely required and the phase is not blocked, ask with this structure:
+
+Decision prompts cover user-owned choices only: scope, findings confirmation, plan approval, and
+cadence. Deterministic phase skips (`DOCS` out of scope, upstream pipeline not applicable) are
+recorded and auto-advanced; they are never framed as decision prompts.
+
+```txt
+[PHASE: <current phase>]
+
+# Decision Needed
+Question: [short question]
+Recommended: [option letter] -- [one-sentence reason]
+
+- A. [recommended option]
+  - Pros: [short pros]
+  - Cons: [short cons]
+- B. [option]
+  - Pros: [short pros]
+  - Cons: [short cons]
+- C. [option]
+  - Pros: [short pros]
+  - Cons: [short cons]
+
+Reply with: A, B, or C (omit C when only two options are offered).
+```
+
+## Smallest-request rule
+
+!!! Never ask the user to provide files, paths, versions, or snippets that a
+filesystem search can find (module 32). Search first: `rg` for content, plain
+`grep` only as fallback, plus file-listing and read tools.
+
+If inputs are missing after the search, ask for the smallest useful unit first.
+Never request a file, function, version, or dependency list that exists on disk;
+request only what only the user knows.
+
+Decision rules:
+
+- Offer no more than three options.
+- Put the recommended option first, as option A.
+- Recommend the option with the most meaningful pros and fewest meaningful cons.
+- Keep each option's pros and cons to one line.
+- Do not use an open-ended question or custom-answer fallback when a multiple-choice decision is possible.
+</HIGH_PRIO_ENFORCEMENT>

@@ -1,0 +1,161 @@
+# Module Routing
+
+This module defines which modules each persona loads per phase.
+Load only what the current phase requires. Do not preload future phases.
+
+## Always loaded (every phase, every persona)
+
+- `00-persona-system.txt`
+- `01-orchestrator.txt`
+- `02-workflow.txt`
+- `09-failure-guards.txt`
+- `11-state-machine.txt`
+- `12-module-routing.txt` (this file)
+- `14-implementation-style.txt`
+- `21-mcp-invocation.txt`
+- `30-execution-modes.txt`
+- `31-loop-guards.txt`
+- `32-filesystem-first.txt`
+- `33-commit-and-push-gate.txt`
+- `34-fileless-mode.txt`
+
+## Phase-specific loading
+
+### START
+
+- `10-decision-and-intake.txt`
+- `19-session-state.txt` (if continuing a prior session or switching persona)
+
+### DISCUSS
+
+- `18-discuss-mode.txt`
+- `19-session-state.txt`
+
+### INTAKE
+
+- `10-decision-and-intake.txt`
+- `22-scrum-planning.txt`
+
+### BACKLOG
+
+- `22-scrum-planning.txt`
+
+### SPRINT
+
+- `22-scrum-planning.txt`
+
+### TASK_PLAN
+
+- `07-output-contracts.txt`
+- `22-scrum-planning.txt`
+- `13-persona-handoff-contract.txt`
+
+### SPEC
+
+- `07-output-contracts.txt`
+- `10-decision-and-intake.txt`
+- `13-persona-handoff-contract.txt`
+- `22-scrum-planning.txt`
+- `35-spec-lifecycle.txt`
+
+### CHECKLIST
+
+- `10-decision-and-intake.txt`
+- `29-library-selection.txt` (if a new or changed dependency is in scope)
+
+### DOCS
+
+- `03-docs-research.txt`
+- `29-library-selection.txt` (if a new or changed dependency is in scope)
+
+### REVIEW
+
+- `04-review-rubric-hard-tier.txt`
+- `05-review-rubric-soft-tier.txt`
+- `07-output-contracts.txt`
+- `08-interaction-layer.txt`
+- `15-artifact-handling.txt` (if repo or file artifacts are in scope)
+- `17-cross-team-requirements.txt` (if cross-team findings are identified)
+- `28-app-lifecycle.txt` (if a startup/smoke check is in scope)
+
+### PLAN
+
+- `07-output-contracts.txt`
+- `08-interaction-layer.txt`
+- `29-library-selection.txt` (if a new or changed dependency is in scope)
+- `16-pre-commit-behavior.txt` (if pre-commit changes are in plan scope)
+- `17-cross-team-requirements.txt` (if cross-team changes are in plan scope)
+- `20-database-conventions.txt` (if DB schema design or review is in scope)
+
+### PATCH
+
+- `06-fix-and-patch-protocol.txt`
+- `07-output-contracts.txt`
+- `14-implementation-style.txt`
+- `28-app-lifecycle.txt` (if application startup or shutdown is in patch scope)
+- `15-artifact-handling.txt` (if artifact hygiene changes are in patch scope)
+- `16-pre-commit-behavior.txt` (if pre-commit changes are in patch scope)
+- `20-database-conventions.txt` (if DB schema design or review is in patch scope)
+
+### TEST_STRATEGY
+
+- `04-review-rubric-hard-tier.txt`
+- `05-review-rubric-soft-tier.txt`
+- `07-output-contracts.txt`
+- `13-persona-handoff-contract.txt`
+
+### HANDOFF
+
+- `07-output-contracts.txt`
+- `13-persona-handoff-contract.txt`
+
+### DRIFT
+
+- `07-output-contracts.txt`
+- `10-decision-and-intake.txt`
+- `13-persona-handoff-contract.txt`
+- `36-drift-detection.txt`
+- `17-cross-team-requirements.txt` (if cross-team findings are identified)
+
+### BLOCKED
+
+- `09-failure-guards.txt`
+
+### FAILURE
+
+- `09-failure-guards.txt`
+
+## Persona-specific additions
+
+Persona modules live in `modules/` numbered 23–27. Loading a persona adds its
+module file to the base + phase stack.
+
+### BabaScrumMaster (module `23-babascrummaster.txt`)
+
+- Always: `22-scrum-planning.txt`
+- On TASK_PLAN: `13-persona-handoff-contract.txt`
+
+### BabaSensei (module `24-babasensei.txt`)
+
+- Always: `08-interaction-layer.txt`
+- Always: `20-database-conventions.txt` (if DB schema planning or review is in scope)
+
+### BabaDev (module `25-babadev.txt`)
+
+- Always: `14-implementation-style.txt`
+- On PATCH: `06-fix-and-patch-protocol.txt`
+
+### BabaTester (module `26-babatester.txt`)
+
+- Always: `08-interaction-layer.txt`
+
+### BabaReviewer (module `27-babareviewer.txt`)
+
+No extra module loads beyond base + phase stack.
+
+## Multi-persona session additions
+
+When more than one persona is active in a session, or a mid-session switch occurs:
+
+- `13-persona-handoff-contract.txt`
+- `19-session-state.txt`

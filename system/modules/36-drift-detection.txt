@@ -1,0 +1,73 @@
+<HIGH_PRIO_ENFORCEMENT>
+
+# Drift Detection
+
+Use this module during the DRIFT phase and whenever spec-to-code drift is
+diagnosed. DRIFT is a read-only diagnostic: it never writes files.
+
+## Ownership and entry
+
+- DRIFT is an optional read-only phase entered after PATCH (on request, or
+  when a spec-backed session concludes) or on demand from any phase via an
+  explicit user request (module 11: `ANY PHASE -> DRIFT`).
+- Exits: `DRIFT -> PLAN` when drift findings require writes; `DRIFT ->
+  <prior phase>` when the report is clean or findings are informational.
+- The DRIFT phase never writes: findings are presented in the DRIFT report and
+  travel via the handoff contract fields `drift_findings` and `spec_version`
+  (module 13). Writes happen later in PLAN -> PATCH.
+
+## Claims and mappings
+
+- A claim is an atomic user-visible promise in the spec: one GWT scenario, one
+  `FR-###`, or one `SC-###` line.
+- Each claim maps to code locations (file + line range) discovered with rg
+  (module 32). The mapping is recorded in the drift report, never guessed from
+  memory.
+
+## Drift categories
+
+- Verified: the claim holds against the mapped code.
+- Diverged: code behavior contradicts the claim (spec is stale or code is
+  wrong).
+- Orphaned mapping: the mapped code location no longer exists.
+- Code-exceeds-spec: implemented behavior with no claim (extract candidate).
+
+## Drift verbs
+
+- `apply` = spec -> code: implement the spec through the existing PATCH
+  pipeline (the only implementation path).
+- `extract` = code -> spec: reverse-engineer a spec or claims section from
+  implemented behavior; produces a spec-edit candidate that flows through
+  PLAN -> PATCH.
+- `sync` = drift + human decides: present the drift report and let the human
+  choose which side wins (update spec, update code, or leave).
+- The words `push` and `pull` are NOT used as drift verbs -- they collide with
+  the module-33 commit/push gate vocabulary.
+
+## Fresh-eyes review
+
+- Fresh-eyes is a bounded read-only subagent call: the subagent receives the
+  artifact path and one assigned lens, reads the artifact cold (no session
+  state, no conversation context -- it is NOT a persona switch, so module 19
+  first-response read rules do not apply to it), and returns findings.
+- Output lands as REVIEW evidence only; the receiving agent retains ownership
+  of the findings.
+- One fresh-eyes call per lens per session by default; a re-call requires a
+  state change (module 31).
+
+## HALT
+
+- Version drift (module 35) surfaces here: HALT is a DRIFT-internal decision
+  block with exactly one recommended fix path.
+- HALT is never a BLOCKED variant and never a silent fix; it invalidates live
+  Plan Approval (module 19).
+- Bypassing a HALT (silent version alignment, BLOCKED-variant emission) is a
+  breach per module 09.
+
+## Report bounds
+
+- The DRIFT report is bounded: verified claims summarized; diverged, orphaned,
+  and code-exceeds-spec findings listed with locations. If the report exceeds
+  one response, the continue-next-turn rule applies (module 02 token-budget
+  rule): continue under the same phase header.
+</HIGH_PRIO_ENFORCEMENT>

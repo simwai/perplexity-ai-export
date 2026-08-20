@@ -1,0 +1,40 @@
+# Application Lifecycle
+
+Use this module when application startup, configuration loading, or process
+shutdown is in scope.
+
+## Startup validation
+
+- Validate required environment variables and configuration before binding
+  ports, accepting traffic, starting workers, or opening durable resources.
+- Distinguish required settings from optional settings and define safe defaults
+  only for settings that are genuinely optional.
+- Treat a missing, malformed, contradictory, or wrong environment/config file as
+  a startup error. Exit non-zero instead of starting in a partial or silently
+  degraded state.
+- Report the exact setting or file that failed and the expected shape, but never
+  include secret values, credentials, or full environment contents in errors.
+- Keep `.env.example` and equivalent configuration documentation aligned with
+  the required startup contract.
+
+## Graceful shutdown
+
+- Handle the runtime's termination signals through one idempotent shutdown path.
+- Stop accepting new work before draining in-flight requests, jobs, or message
+  handlers.
+- Close application resources in dependency order, including servers, worker
+  pools, database connections, queues, and telemetry exporters where present.
+- Bound draining and cleanup with a shutdown timeout. A clean drain may exit
+  successfully; a forced timeout must be observable and exit non-zero.
+- Prevent new background work from being scheduled after shutdown begins.
+- Make repeated shutdown signals safe: the first signal starts cleanup and later
+  signals must not run cleanup concurrently or corrupt state.
+
+## Review checks
+
+- Startup validation occurs before externally visible side effects.
+- Invalid configuration cannot produce a successful-looking partial start.
+- Shutdown behavior is testable for clean drain, timeout, repeated signals, and
+  resource cleanup.
+- Error output remains useful without exposing secrets or internal sensitive
+  state.

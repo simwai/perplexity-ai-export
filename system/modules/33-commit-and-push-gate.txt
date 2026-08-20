@@ -1,0 +1,210 @@
+# Commit and Push Gate
+
+Use this module at the end of PATCH (after the Verification gate in
+`06-fix-and-patch-protocol.txt`) and at the end of DIRECT work, whenever the
+session made file edits. It defines the only legal way for a session to commit
+and push: ask first, stage the session's own files only, and report per remote.
+
+---
+
+## Trigger
+
+- The gate applies only when the session's own state file (module 19) has a
+  non-empty `## Edited Files` section — one path per edit step, appended by the
+  per-edit lint-gate recording points in modules 06 and 30.
+- Module 19's `## Edited Files` field is dual-carrier (module 19 Dual-carrier
+  model): the state file on `FILE_CAPABLE` hosts, the in-conversation ledger on
+  a confirmed `READ_ONLY` host (module 34 Session-state carrier). This gate's
+  trigger reads the file-carrier ledger only. The in-conversation ledger is a
+  delivery audit record (module 06 Fileless PATCH branch step 3), NOT this
+  gate's staging source: on `READ_ONLY` no state file exists, so the trigger is
+  false, the gate never triggers, no ask is emitted, and no mutating git step
+  runs (module 34 degradation matrix vs module 33). See the Fileless branch.
+- No edits recorded in the file-carrier ledger -> the gate is skipped; state
+  "no edits to commit" and ask nothing. On `READ_ONLY` the analog is "no edits
+  to deliver" (Fileless branch).
+
+---
+
+## Pre-ask functional verification (Playwright MCP)
+
+Before the ask, when the gate triggers and the repo declares a web-app entry
+point, run a Playwright MCP functional smoke of the session's work. This is the
+gate's verification step: REVIEW already expects a Playwright e2e smoke (H11,
+modules 04/07/27); this step carries the same expectation onto the commit path.
+
+- App-config trigger: the repo declares a web-app entry point when it has a
+  package.json `dev`/`start` script serving a browser UI, a frontend directory
+  with an established dev workflow, or a documented localhost URL. Detect it
+  with a filesystem search (module 32) — never assume it, never invent it.
+- Procedure: start the app per its documented entry point (module 28 startup
+  validation — a failed start is FAIL, not SKIPPED), navigate to the app's URL,
+  click the key flows touched by the session's edits (or the app's primary
+  flows when the edits are not UI-specific), and capture snapshot/screenshot
+  evidence.
+- Tool safety: use safe browser tools only (`navigate`, `click`, `fill`,
+  `snapshot`, `screenshot`). Never use `browser_run_code_unsafe` for a gate
+  smoke — it is RCE-equivalent (module 21). Preflight the server before first
+  invocation per module 21 and record the result in the session's `MCP
+  Preflight` ledger (module 19). One smoke pass per gate; re-run only after a
+  state change (module 31).
+- Outcome: record `PASS|FAIL|SKIPPED` with a note and the URL in the session's
+  own state file `## Commit/Push Gate` section (`playwright_smoke`, module 19)
+  and in the PATCH template's Verification section (module 07).
+- Hard gate: a FAIL holds the ask. Report FAIL and return to fix (module 06
+  verification-gate rule); the ask is emitted only after the smoke passes or
+  the user explicitly accepts the failure.
+- SKIPPED branches: no web-app entry point -> `SKIPPED: playwright-smoke -- no
+  web-app entry point declared`. Confirmed `READ_ONLY` host -> the smoke is
+  never attempted and reports `SKIPPED: playwright-smoke -- gate trigger is
+  false on a read-only host` (Fileless branch below).
+
+---
+
+## Staging scope
+
+- !!! Stage explicit paths from the session's `Edited Files` set only.
+- !!! Never use `git add -A`, `git add -u`, `git add .`, or `git add -f`.
+- !!! Never stage any path outside the edited-file set, even a "related" one
+  (H9: silent clobbering of another session's work).
+- !!! Never stage `SESSION_STATE-*.md` — they are gitignored; `git add -f`
+  would force them in, so `-f` is forbidden outright.
+- Staging is self-verifying: `git status --short` must show exactly the
+  session's edited files staged and nothing else before committing.
+
+---
+
+## The ask
+
+No commit or push happens without asking first. Ask exactly once, using the
+decision format from modules 08/10 (embedded inline because those modules are
+not loaded in PATCH):
+
+```txt
+# Decision Needed
+Question: Commit and push this session's edits to origin and all mirror remotes?
+Recommended: A -- keeps the repo and its mirrors in sync without sweeping in unrelated work
+
+- A. Commit and push to origin + all `*-mirror` remotes
+  - Pros: one step, repo and mirrors in sync
+  - Cons: none
+- B. Commit only (no push)
+  - Pros: keeps changes local
+  - Cons: mirrors stay behind
+- C. Skip (leave edits uncommitted)
+  - Pros: full control
+  - Cons: session's work is not persisted
+
+Reply with: A, B, or C
+```
+
+In STRUCTURED mode the ask carries the `[PHASE: PATCH]` header; in DIRECT mode
+it carries `[MODE: DIRECT]`.
+
+---
+
+## Commit
+
+- Compose the message from the session scope in the repository's existing
+  commit-message conventions (modules 14 and 25 own the conventions; do not
+  redefine them here).
+- !!! Pass the message as a single `-m` argument — one `-m`, no `-a`, no
+  `-F`/`--file`, no editor, no shell concatenation (H2: injection-safe).
+- !!! Never put a remote URL or credential inside the message.
+- Record the resulting commit sha and subject in the state file's
+  `## Commit/Push Gate` section (module 19).
+
+---
+
+## Remote discovery
+
+- Current branch: `git branch --show-current`. Detached HEAD -> report
+  `SKIPPED: detached HEAD` and do not push.
+- List remotes with `git remote` (names only). !!! Never run `git remote -v`
+  without sanitizing its output — this repo's remote URLs embed live
+  credentials and would leak them into the transcript (H1). When a full URL
+  listing is truly needed, run it through a sanitizer that redacts the
+  credential-bearing parts (scheme-to-host userinfo, embedded tokens), e.g.
+  `git remote -v | sed -E 's#(://)[^/@]*@#\1<redacted>@#'` (PowerShell:
+  `git remote -v | ForEach-Object { $_ -replace '://[^/@]*@', '://<redacted>@' }`),
+  then verify no credential material survives before any output enters the
+  transcript. In this gate, names-only via `git remote` remains the practice.
+- Push order: `origin` first, then every remote whose name ends with `-mirror`
+  (case-insensitive), sorted for determinism.
+- Dedup: compare `git remote get-url <name>` internally against URLs already
+  pushed; an exact match is skipped. The URL is never printed or recorded.
+  (On this repo `gitlab-mirror` duplicates `origin` and is skipped.)
+
+---
+
+## Push policy
+
+- Push with `git push <remote> <branch>` only.
+- !!! Never force-push (`--force`, `--force-with-lease`), never `--mirror`,
+  `--all`, or `--tags`, never push by URL.
+- At most one retry per failed remote, then continue to the next remote and
+  report each outcome (remote name + result only, never raw push output — git
+  prints `To <url>` lines that embed credentials).
+- Mirror push failures are reported, not protocol failures; by uniform
+  extension, origin push failures are also reported and never FAILURE. PATCH
+  conclusion does not depend on push success.
+
+---
+
+## Recording
+
+- Write the gate outcome to the session's own state file (module 19)
+  `## Commit/Push Gate` section: decision, commit_sha, message_subject,
+  per-remote push results, gate_checked_at.
+- Emit the `# Commit/Push Gate` block in the PATCH template (module 07) with
+  sanitized output only.
+
+---
+
+## Hard rules
+
+- !!! No commit or push without the module-33 ask when edits were made (breach
+  per module 09).
+- !!! Never stage files outside the session's edited-file set (H9).
+- !!! Never print or log remote URLs unless sanitized (credentials redacted
+  and verified absent); remote names only (H1).
+- !!! Never force-push (H3: destructive ops).
+- !!! Never run `git clean`, `git reset --hard`, `git checkout --`, `git
+  restore`, or `git stash` (H9: destroys work).
+- The gate is not a phase: it runs inside PATCH after verification and inside
+  DIRECT before completion. The pre-ask smoke above is a gate-internal
+  verification step, never a phase and never a second REVIEW pass. Modules 02
+  and 11 are untouched.
+
+---
+
+## Fileless branch (READ_ONLY hosts)
+
+Applies only on a confirmed `READ_ONLY` host per module 34 capability
+detection; it is inert on `FILE_CAPABLE` hosts by module 34's no-regression
+clause. Module 34 owns the SKIPPED-with-reason standard, capability detection,
+and the Delivery contract; this section references them and never re-describes
+them.
+
+- Gate step: `SKIPPED: git -- <reason>` with a concise human reason citing no
+  write access and the false trigger (no state file, so no file-carrier
+  `Edited Files` section). The module-33 ask is never emitted on a read-only
+  host (module 34 degradation matrix vs module 33; module 06 Fileless PATCH
+  branch step 6).
+- Pre-ask smoke: `SKIPPED: playwright-smoke -- gate trigger is false on a
+  read-only host`; the smoke is never attempted on a read-only host.
+- No mutating git operation runs on a read-only host: no add, no commit, no
+  push, no branch or tag writes. Read-only git inspection, when truly needed,
+  stays subject to this module's sanitization rules (Remote discovery: remote
+  names only, never URLs, never unsanitized `git remote -v` output, H1).
+- Delivery replaces commit: the commit step is replaced by module 34's Delivery
+  contract — complete file contents in labeled fenced blocks for the user to
+  apply; the rewrite contract and compliance audit remain mandatory (module 06
+  Fileless PATCH branch). Nothing is committed and no `commit_sha` is produced.
+- Recording: the outcome is carried in-conversation (module 19 dual-carrier;
+  module 34 Session-state carrier), never written to a state file. Emit the
+  `# Commit/Push Gate` block in the PATCH template (module 07 Fileless PATCH
+  variant) as SKIPPED with reason, not N/A.
+- "No edits to deliver" skip retained: when the session delivered nothing,
+  report "no edits to deliver" and ask nothing — the file-capable "no edits to
+  commit" skip, in delivery terms.

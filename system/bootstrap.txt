@@ -1,0 +1,71 @@
+# bootstrap.txt — Module Loader
+
+Load this file at startup per AGENTS.md. This file is a **loader only** — it does not define rubrics, phase templates, personas, or implementation style. Those live in `system/modules/`.
+
+## Startup sequence
+
+1. Load the always-on modules listed in `modules/12-module-routing.txt`.
+2. Read `modules/12-module-routing.txt` and load only the modules the current phase requires.
+3. When a persona is active, load its persona module (`23`–`27`) and any persona-specific additions from the routing table.
+4. Do not preload future phases.
+5. Before any external lookup, ensure `modules/21-mcp-invocation.txt` is loaded.
+
+## Source of truth (modules)
+
+| Concern | Module(s) |
+|---|---|
+| Orchestration / single-phase rule | `01-orchestrator.txt` |
+| Phase workflow | `02-workflow.txt` |
+| Docs research | `03-docs-research.txt` |
+| Hard-tier rubric | `04-review-rubric-hard-tier.txt` |
+| Soft-tier rubric | `05-review-rubric-soft-tier.txt` |
+| Fix and patch protocol | `06-fix-and-patch-protocol.txt` |
+| Phase output templates | `07-output-contracts.txt` |
+| Decision prompts | `08-interaction-layer.txt` |
+| Failure guards | `09-failure-guards.txt` |
+| Intake / blocked inputs | `10-decision-and-intake.txt` |
+| State machine / transitions | `11-state-machine.txt` |
+| Module routing | `12-module-routing.txt` |
+| Persona handoff contract | `13-persona-handoff-contract.txt` |
+| Implementation style | `14-implementation-style.txt` |
+| Personas | `00-persona-system.txt`, `23`–`27` |
+| MCP invocation | `21-mcp-invocation.txt` |
+| Session state | `19-session-state.txt` |
+| Execution mode routing | `30-execution-modes.txt` |
+| Loop protection | `31-loop-guards.txt` |
+| Filesystem-first discovery | `32-filesystem-first.txt` |
+| End-of-session commit/push gate | `33-commit-and-push-gate.txt` |
+| Fileless mode (read-only hosts) | `34-fileless-mode.txt` |
+| Database conventions | `20-database-conventions.txt` |
+| Spec lifecycle | `35-spec-lifecycle.txt` |
+| Drift detection | `36-drift-detection.txt` |
+
+## Precedence model
+
+When rules conflict, apply this order:
+
+1. **Explicit user command** (`/direct`, `/structured`, `/auto`, or clear instruction)
+2. **Safety gates** (security, secrets, destructive operations, migrations)
+3. **Execution mode** (`DIRECT` or `STRUCTURED` as selected)
+4. **Phase routing** (as defined in `10-decision-and-intake.txt`)
+5. **Persona-specific rules** (modules `23`–`27`)
+6. **Phase templates** (`07-output-contracts.txt`)
+7. **General workflow rules** (`02-workflow.txt`)
+
+If a lower-precedence rule contradicts a higher-precedence rule, the higher rule wins.
+State the conflict briefly when it affects the response.
+
+Module 34's in-conversation state carrier never overrides module 19 on file-capable hosts; module 34 is inert on such hosts by its no-regression clause, and its carrier applies only on a confirmed `READ_ONLY` host.
+
+## Hard rules (enforced by modules, restated for startup)
+
+- In `STRUCTURED` mode, declare `[PHASE: X]` at the top and use only the
+  template for the active phase. In `DIRECT` mode, declare `[MODE: DIRECT]`.
+- Never mix formal phases; direct mode is outside the phase model.
+- Never skip forward. Missing prerequisites -> `BLOCKED`.
+- One failed recovery -> `FAILURE` and stop.
+- No patch without explicit plan approval and a complete rewrite contract.
+  This applies in `STRUCTURED` mode only. `DIRECT` mode follows its own
+  verification rules (see `30-execution-modes.txt`).
+- Before any code edit, consult `14-implementation-style.txt` and apply its
+  defaults to the edit.
