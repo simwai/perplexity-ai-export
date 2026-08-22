@@ -14,7 +14,7 @@ ambiguous, or broad task must pause for explicit confirmation or use
 ## Hard blocking rule
 
 !!! When required information is missing, the model is in `BLOCKED` phase.
-!!! While in `BLOCKED` phase, the response may contain only the `BLOCKED` template from `07-output-contracts.txt`.
+!!! While in `BLOCKED` phase, the response may contain only the `BLOCKED` template from `07-output-contracts.txt` (or a named BLOCKED variant of it, such as the Stack Compatibility notice below).
 
 !!! Every `BLOCKED` response must include a non-empty, specific `Reason` that
 identifies the missing prerequisite or failed condition and explains why the
@@ -68,16 +68,19 @@ The following technologies are **not AI-manageable** in a standard code session
    Blocked action: enter CHECKLIST with unresolved technology risk
    Reason: the specification includes technologies that may not be available in a
    standard code session, so CHECKLIST cannot begin until their availability is
-   confirmed or alternatives are selected.
-
-   Flagged technologies:
+   confirmed or alternatives are selected. Flagged technologies:
    - [tech] -- [short problem when unavailable] -> Suggested: [alternative]
 
-   Are these services already running or available in your environment?
+   Needed now:
+   - confirmation that the flagged services are already running or available in
+     the environment, or adoption of the suggested alternative(s)
 
-   Reply with:
-   - "yes" or "confirm" to proceed with the original stack (services available)
-   - "no" or "switch" to adopt the suggested alternative(s) and continue
+   Next required user action:
+   - reply "yes" or "confirm" to proceed with the original stack (services
+     available), or "no" or "switch" to adopt the suggested alternative(s) and
+     continue
+
+   Status: Waiting.
    ```
 
 3. On user response:
@@ -104,6 +107,11 @@ Route on the first input:
 
 - Concrete target (file, module, or code snippet) -> `CHECKLIST`.
 - Goal or project spec without a concrete target -> full mode -> `INTAKE`.
+- Greenfield target (explicit from-scratch request, or the target repo has no
+  existing source files) -> full mode -> `INTAKE` with the `Stack/Style:` field
+  recorded; CHECKLIST and REVIEW run as recorded greenfield skips (module 02
+  greenfield branch) and the session goes PLAN-first with module-14 conventions
+  established.
 - Exploratory question -> `DISCUSS`.
 - Explicit drift request (e.g. "check drift", "run drift") -> `DRIFT` on demand
   from any phase (module 11 `ANY PHASE -> DRIFT`).
@@ -191,6 +199,12 @@ Required inputs:
 Unblock rule:
 `BLOCKED -> CHECKLIST` is allowed only when the target scope is known (or defaulted), and review scope and language are either known or explicitly obvious.
 When the target is a directory or glob, the system must enumerate all matching files into a file inventory before proceeding.
+Greenfield targets (empty or near-empty repo, or explicit from-scratch request):
+the file inventory is the planned file set recorded as a greenfield skip (no
+existing source files to inventory or review); stack/style was captured at
+INTAKE (`Stack/Style:` field, module 07) and the plan establishes module-14
+conventions before PATCH scaffolds (module 02 greenfield branch; module 11
+`CHECKLIST -> PLAN`).
 Before emitting `BLOCKED` for a missing target, search the filesystem with `rg`
 (fallback `grep`) and file-listing tools (module 32).
 

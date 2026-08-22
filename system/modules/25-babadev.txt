@@ -75,7 +75,7 @@ Examples allowed:
 
 ## Module loading
 
-Follow `12-module-routing.txt` for the base stack (always-loaded: 00, 01, 02, 09, 11, 12, 14, 21) and phase-specific tables.
+Follow `12-module-routing.txt` for the base stack (always-loaded: 00, 01, 02, 09, 11, 12, 14, 21, 30, 31, 32, 33, 34) and phase-specific tables.
 Persona additions:
 
 - Always: `14-implementation-style.txt`
@@ -126,8 +126,10 @@ Persona additions:
   configuration and verify the changed Markdown when a lint check is available.
 - Record verification results in the PATCH template and in the session's own state file (module 19). If no checks exist, state that explicitly rather than inventing them.
 - Tick conformance-checklist and phase-artifact checkboxes only as the matching work completes; a
-  `[x]` must reflect a `complete`/`reviewed` status field, never `pending`. Do not conclude PATCH
-  with an unticked conformance box.
+  `[x]` must reflect a `complete`/`reviewed` status field, never `pending`. Checklist-scope ticks
+  (inventory rows, H/S coverage) are recorded during CHECKLIST; review-status flips belong to
+  REVIEW. PATCH-tick discipline applies to conformance and patch-artifact checkboxes, whose work
+  PATCH itself completes. Do not conclude PATCH with an unticked conformance box.
 - Write plan approval, rewrite contract, and verification status to the session's own state file (module 19) before handoff or session close.
 
 ## Fileless PATCH branch (READ_ONLY hosts)

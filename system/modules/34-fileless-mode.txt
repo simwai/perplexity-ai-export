@@ -14,11 +14,9 @@ detection). This is the no-regression guarantee.
 
 ## Activation contract
 
-This module is loaded conditionally with the session. Until a later change
-registers it in `12-module-routing.txt`, an agent that encounters a read-only
-host must still load and apply this module when the capability is confirmed;
-the routing-table registration is a separate maintenance step and does not gate
-whether this module governs a read-only session.
+This module is always-loaded per `12-module-routing.txt` and applies on a
+confirmed `READ_ONLY` host; on `FILE_CAPABLE` hosts it is inert (no-regression
+clause).
 
 ## Capability detection
 
@@ -32,15 +30,25 @@ Determine the host capability once per session, in this order:
    deletes the temporary file immediately and confirms `FILE_CAPABLE`.
 3. No evidence either way: default to `FILE_CAPABLE` (module 30 defaults
    unchanged). Never assume `READ_ONLY` from the absence of write tools alone.
+4. Observed write failure mid-session: any file write attempt that errors or
+   fails to persist (tool rejection, permission denial, sandbox error, silent
+   non-persistence) immediately re-resolves the host to `READ_ONLY` for the
+   rest of the session. The failed attempt is itself the evidence and the
+   confirmation event: record it in the session-state carrier, never retry the
+   write anywhere (repo or temp directory), and convert every subsequent write
+   step to the `SKIPPED-with-reason` standard and the Delivery contract.
 
 Record the resolved capability and its evidence in the session's state carrier
-(see Session-state carrier). Re-resolve only when the user declares a change or
-the session moves to a host with different capabilities.
+(see Session-state carrier). Re-resolve when the user declares a change, the
+session moves to a host with different capabilities, or item 4's
+observed-write-failure trigger fires.
 
-!!! On `READ_ONLY`, no write step is performed anywhere: not in the repo, not in
-the temp directory, not in git. Every step that would write is replaced by the
-`SKIPPED-with-reason` standard below. `FILE_CAPABLE` behavior is never
-weakened by this module.
+!!! On a confirmed `READ_ONLY` host, no write step is performed after
+confirmation: not in the repo, not in the temp directory, not in git. The
+pre-confirmation benign write probe and a failed write attempt (capability
+detection items 2 and 4) are detection steps, never post-confirmation writes.
+Every step that would write is replaced by the `SKIPPED-with-reason` standard
+below. `FILE_CAPABLE` behavior is never weakened by this module.
 
 ## SKIPPED-with-reason standard
 
@@ -57,6 +65,9 @@ The canonical categories are exactly:
 - `lint-run` -- running a formatter, linter, typecheck, or test command
 - `diff-inspect` -- producing or inspecting a file diff
 - `git` -- any git command, including commit, push, status, and diff
+- `playwright-smoke` -- the pre-commit functional browser smoke (module 33);
+  SKIPPED when the repo declares no web-app entry point or the gate trigger is
+  false on a read-only host
 
 Rules:
 
@@ -220,10 +231,10 @@ this module adds nothing. Every degradation rule above is conditional on a
 confirmed `READ_ONLY` capability. Any edit to this module that weakens a
 file-capable rule is a breach of this clause.
 
-## Registration note
+## Registration
 
-This module is not yet listed in `12-module-routing.txt`. It governs read-only
-sessions by the Activation contract above until a later change registers it
-(always-loaded or conditional per phase) in the routing table and, if needed,
-adds it to the source-of-truth table in `system/bootstrap.txt`.
+This module is registered as always-loaded in `12-module-routing.txt` and is
+listed in the source-of-truth table in `system/bootstrap.txt`. It governs
+read-only sessions on a confirmed `READ_ONLY` host and is inert on
+`FILE_CAPABLE` hosts (no-regression clause).
 </HIGH_PRIO_ENFORCEMENT>

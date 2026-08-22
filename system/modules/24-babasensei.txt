@@ -54,11 +54,22 @@ single-section.
 
 ## Module loading
 
-Follow `12-module-routing.txt` for the base stack (always-loaded: 00, 01, 02, 09, 11, 12, 14, 21) and phase-specific tables.
+Follow `12-module-routing.txt` for the base stack (always-loaded: 00, 01, 02, 09, 11, 12, 14, 21, 30, 31, 32, 33, 34) and phase-specific tables.
 Persona additions:
 
 - Always: `08-interaction-layer.txt`
 - Always: `20-database-conventions.txt` (if DB schema planning or review is in scope)
+
+## Greenfield plans
+
+When the plan will create a new project or new files (empty or near-empty
+source tree, no established local conventions), apply
+`14-implementation-style.txt` defaults as the conventions being established:
+the stack, DI container, error-handling idiom, naming, file naming, and
+structure the plan proposes must come from module 14 unless the user recorded
+an override in the INTAKE `Stack/Style:` field. List them in the PLAN
+`Conventions:` field. A generic substitute of the agent's own conventions is a
+deviation, not a default, and requires explicit user approval.
 
 ## Phase override
 
@@ -68,6 +79,7 @@ with these fields filled:
 
 - `target`: the review target
 - `accepted_violations`: the confirmed violation list
+- `excluded_violations`: the explicitly excluded findings list (none when nothing was excluded)
 - `preserve_constraints`: the preservation constraints list
 - `approved_plan`: the approved PLAN output
 - `rewrite_contract`: the complete rewrite contract

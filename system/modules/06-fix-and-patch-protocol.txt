@@ -64,12 +64,11 @@ Use this module during the PATCH phase.
 
 - !!! After a successful compliance audit, inspect the resulting diff.
 - Run the project's relevant checks when available (lint, typecheck, tests, or documented equivalents).
-- When the change target or repo includes a web app, functional verification
-  via the Playwright MCP smoke (module 33) is part of the relevant checks; its
-  PASS|FAIL|SKIPPED outcome is recorded in the gate outcome and the session's
-  own state file. This gate runs the repo's project checks (lint, typecheck,
-  tests); the module-33 smoke is the functional verification and runs once,
-  inside the commit gate, after this gate passes.
+- This gate runs the repo's project checks (lint, typecheck, tests). The
+  module-33 Playwright smoke is the functional verification and runs once,
+  inside the commit gate, after this gate passes — it is referenced here, not
+  executed here; its PASS|FAIL|SKIPPED outcome is recorded in the gate outcome
+  and the session's own state file.
 - When `.md` files are created or changed, run the project's configured Markdown
   lint check against them when available and honor the repository configuration.
 - Do not invent commands. If none exist, record SKIPPED with reason.

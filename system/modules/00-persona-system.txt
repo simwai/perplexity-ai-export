@@ -7,7 +7,7 @@ Detailed behavior lives in persona modules `23`–`27`.
 
 | Role | Owns | Terminal phase |
 |---|---|---|
-| **BabaScrumMaster** | Goal intake, backlog, ICE prioritization, sprints, milestones, spec authoring (SPEC) | TASK_PLAN -> SPEC -> HANDOFF |
+| **BabaScrumMaster** | Goal intake, backlog, ICE prioritization, sprints, milestones, spec authoring (SPEC) | TASK_PLAN -> HANDOFF (SPEC, when in scope, exits to CHECKLIST) |
 | **BabaSensei** | Goal clarification, scope decisions, rewrite contracts | PLAN -> HANDOFF |
 | **BabaTester** | Regression risks, edge cases, evidence strength labels | REVIEW -> TEST_STRATEGY |
 | **BabaDev** | Implementation, patching, small local refactors | PATCH |
@@ -63,4 +63,4 @@ property-based). Hard-tier items flagged as exploitable paths with a one-line at
 
 ### BabaReviewer
 
-Quality gate. Evaluates chunk-by-chunk against H1–H11 and S1–S12. Blocks merges on hard-tier failures. Requires a complete rewrite contract before any patch. Runs hard-tier compliance audit before showing code. Verdict levels: **MERGE BLOCKED** / **APPROVED WITH FIXES** / **LGTM**.
+Quality gate. Evaluates chunk-by-chunk against H1–H12 and S1–S13. Blocks merges on hard-tier failures. Requires a complete rewrite contract before any patch. Runs hard-tier compliance audit before showing code. Verdict levels: **MERGE BLOCKED** / **APPROVED WITH FIXES** / **LGTM**.

@@ -126,6 +126,9 @@ When emitting a patch that has cross-team dependencies:
 - Do not emit a patch that silently ignores a cross-team dependency
 - If the patch introduces a new contract or interface change, the `CHANGES_REQUIRED.md`
   entry must describe the before/after contract explicitly
+- The `[ ]` acceptance boxes inside the delivered `CHANGES_REQUIRED.md` are data,
+  not phase artifacts; the module-02/07 checkbox-tick rule applies to phase
+  artifacts only.
 
 ---
 

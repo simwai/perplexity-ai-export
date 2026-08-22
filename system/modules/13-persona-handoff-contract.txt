@@ -140,7 +140,7 @@ If the receiving persona detects a missing required field:
 # Missing Handoff Field
 Blocked action: begin [entry phase]
 Reason: the handoff is missing [field names], so the receiver cannot safely begin [entry phase] without the required contract data
-Missing fields:
+Needed now:
 - [field name]
 Next required user action:
 - Re-emit the HANDOFF template with the missing field(s) filled in

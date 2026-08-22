@@ -106,6 +106,7 @@ milestones default to a single catch-all milestone when none are supplied.
 
 # Project Intake
 Goal: [what the user wants to achieve]
+Stack/Style: [language/stack] -- [module 14 defaults | user-specified conventions]
 Scope:
 - In: [in scope]
 - Out: [out of scope]
@@ -233,10 +234,19 @@ Unlocks next phase only if checklist artifact exists with:
 - soft-tier section
 - batch log
 - pending verdict
-- every `[ ]` checkbox flipped to `[x]`, matching its status field (`reviewing` -> `complete`, `pending` -> `reviewed`)
+- every checklist-scope checkbox (`[ ]` inventory rows, `[ ] H1 - [ ] H12`,
+  `[ ] S1 - [ ] S13`) flipped to `[x]` — a scope tick claims the listing or
+  coverage decision was made during CHECKLIST, never the review outcome
+- review-status fields (`pending | reviewing | complete`, verdict) recorded
+  accurately and left `pending` where REVIEW has not run
 
-A `[x]` is only valid when the matching status field reflects completed work; a checkbox marked
-`[x]` for work still `pending` is a false tick and a protocol breach.
+Tick semantics: an inventory row is ticked `[x]` when it is recorded in the
+inventory with its status; the status field is review progress and flips
+(`pending` -> `reviewed`, `reviewing` -> `complete`) inside REVIEW, never inside
+CHECKLIST. A `[x]` on a status claiming completed review that has not run is a
+false tick and a protocol breach; a `[x]` on a row whose status is `pending` is
+the expected checklist state, not a false tick. The hard/soft-tier lines are
+coverage-scope records (in scope / out of scope), decided at checklist time.
 
 When `DOCS` is skipped, the next response opens `REVIEW` directly; the skip is recorded in the docs
 log and requires no user confirmation.
@@ -444,6 +454,7 @@ Build: PASS|FAIL|SKIPPED -- [command] -- [note]
 Smoke: PASS|FAIL|SKIPPED -- [command] -- [note]
 Functional suite: PASS|FAIL|SKIPPED -- [command] -- [note]
 Playwright e2e smoke: PASS|FAIL|SKIPPED -- [command] -- [note] (navigate + click key flows; uses MCP playwright server from fallback ladder)
+Playwright e2e smoke is aggregate-level (H11): it runs once at verdict time, not per batch.
 Do not invent commands. If none exist, record SKIPPED with reason.
 
 # Decision Needed
@@ -494,6 +505,7 @@ Will preserve:
 
 Conventions:
 - [dominating error-handling/style idiom per touched file, with evidence, and how the plan preserves it]
+- For new files or a new project: [the module-14 defaults being established as conventions — stack, DI container, error idiom, naming, structure — or the user override recorded in the INTAKE `Stack/Style:` field]
 
 Risks:
 - [risk]

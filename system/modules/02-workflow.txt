@@ -50,7 +50,11 @@ These enforcement rules apply only in `STRUCTURED` mode.
 - IF THE USER REQUESTS AN ACTION FROM A LATER PHASE, REFUSE AND OUTPUT THE TEMPLATE FOR THE CURRENT PHASE OR `BLOCKED`.
 - ONE RESPONSE MAY COMPLETE ONLY THE CURRENT PHASE ACTION.
 - !!! PATCH OUTPUT IS NEVER ALLOWED BEFORE CONFIRMED VIOLATIONS, APPROVED PLAN, AND A COMPLETE REWRITE CONTRACT.
-- !!! EVERY CHECKBOX IN A PHASE ARTIFACT MUST BE `[x]` AND MATCH ITS STATUS FIELD BEFORE THE NEXT PHASE MAY OPEN. A CHECKBOX MARKED `[x]` FOR WORK STILL `pending` IS A FALSE TICK AND A PROTOCOL BREACH.
+- !!! EVERY PHASE ARTIFACT MUST BE COMPLETE FOR THE WORK ITS PHASE OWNS BEFORE THE NEXT PHASE
+  MAY OPEN. Checklist-scope checkboxes (inventory rows, H/S coverage plan) are ticked `[x]` when
+  the listing or scope decision is recorded; review-status fields flip as REVIEW performs the
+  work. A `[x]` on a status that claims completed work that has not run is a false tick and a
+  protocol breach (module 07 tick semantics).
 - !!! REVIEW owns the confirmation decision. There is no standalone CONFIRM phase.
 
 ## Token budget rule
@@ -74,6 +78,13 @@ Conditional order:
 - Skip the upstream pipeline `INTAKE -> BACKLOG -> SPRINT -> TASK_PLAN` whenever a concrete target
   (file, module, or code snippet) is supplied at session start.
 - Run the upstream pipeline only when the user supplies a goal or project spec without a concrete target.
+- Greenfield branch: an explicit from-scratch request, or a target repo with no
+  existing source files (empty or near-empty), records CHECKLIST and REVIEW as
+  deterministic greenfield skips — there is no existing code to inventory or
+  review — and runs PLAN-first: the plan establishes conventions from
+  `14-implementation-style.txt` plus the INTAKE `Stack/Style:` field (module
+  07), and PATCH scaffolds. The skip is recorded with its one-line reason
+  (module 11 `CHECKLIST -> PLAN`).
 - Skip `SPRINT` on explicit user request; the pipeline then runs `INTAKE -> BACKLOG -> TASK_PLAN -> SPEC`.
 - Skip `SPEC` whenever the user supplied a concrete target without asking for a spec artifact, or
   when the goal carries no spec-authoring need (model-decidable; record the skip, never prompt).

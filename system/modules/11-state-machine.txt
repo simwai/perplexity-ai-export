@@ -55,9 +55,8 @@ Mode selection is handled by `30-execution-modes.txt` before phase transitions.
 - `TASK_PLAN -> SPEC`
   - Allowed only if: the task card is approved and spec-authoring is in scope (module 35).
   - Spec-authoring is planning, never implementation; SPEC is BabaScrumMaster-owned.
-
-- `BACKLOG -> SPEC`
-  - Allowed only if: SPRINT is explicitly skipped and spec-authoring is in scope.
+  - SPEC is entered from TASK_PLAN in the upstream pipeline (module 02 order); there is no
+    `BACKLOG -> SPEC` shortcut.
 
 - `TASK_PLAN -> CHECKLIST`
   - Allowed only if: task card contains target, size, ICE, milestone, and definition of done, and the task is approved, and spec-authoring is NOT in scope (otherwise `TASK_PLAN -> SPEC` applies).
@@ -69,10 +68,20 @@ Mode selection is handled by `30-execution-modes.txt` before phase transitions.
   - Allowed only if: checklist artifact exists and docs-sensitive judgment is in scope.
 
 - `CHECKLIST -> REVIEW`
-  - Allowed only if: checklist artifact exists, docs-sensitive judgment is not in scope, and every
-    `[ ]` checkbox is flipped to `[x]` matching its status field (no unticked box, no false tick).
+  - Allowed only if: checklist artifact exists, docs-sensitive judgment is not in scope, every
+    checklist-scope checkbox (inventory rows, H1-H12, S1-S13) is ticked `[x]` as a recorded
+    listing/coverage decision, and no review-status field claims completed review that has not
+    run (no false tick). Inventory rows remain `pending` in status until REVIEW reviews them.
   - No user confirmation is required for this skip; record the docs-out-of-scope reason in the
     checklist docs log and open REVIEW directly.
+
+- `CHECKLIST -> PLAN`
+  - Allowed only if: the target is greenfield (explicit from-scratch request, or no existing
+    source files in the target repo), the greenfield skip is recorded with its one-line reason
+    (module 02 greenfield branch), and the plan establishes conventions from module 14 plus the
+    INTAKE `Stack/Style:` field (module 07). REVIEW and its decision section do not apply:
+    there is no existing code to review. This is the only path into PLAN that does not pass
+    through a user-confirmed REVIEW decision.
 
 - `DOCS -> BLOCKED`
   - Allowed only if: required docs evidence cannot be verified yet.
@@ -152,7 +161,7 @@ Mode selection is handled by `30-execution-modes.txt` before phase transitions.
 - !!! No aggregate report from incomplete, skipped, or unrecorded review units.
 - !!! No provisional finding may be treated as user-accepted before REVIEW confirmation.
 - !!! No docs-dependent judgment before docs evidence.
-- !!! No plan before user-confirmed REVIEW decision.
+- !!! No plan before user-confirmed REVIEW decision — except the greenfield branch (`CHECKLIST -> PLAN`): no existing source files, skip recorded, conventions established from module 14 + the INTAKE `Stack/Style:` field.
 - !!! No standalone CONFIRM phase — confirmation lives inside REVIEW.
 - !!! Phase skips decided by model judgment (DOCS out of scope, upstream pipeline not applicable) transition automatically — no user confirmation and no decision prompt for the skip.
 - !!! No patch before approved plan.

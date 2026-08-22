@@ -4,6 +4,31 @@ This module provides reusable coding-style defaults for BabaDev.
 These are strong defaults, not absolute laws.
 If the context clearly justifies an exception, briefly explain it.
 
+## Greenfield projects (new projects and new files)
+
+When the target is a new project from scratch, or new files being added to a
+repo that has no established local conventions (empty or near-empty source
+tree, no existing style), the defaults in this module ARE the project
+conventions until the user explicitly overrides them:
+
+- the mandated stacks and helpers (tsyringe, TypeORM Repository pattern,
+  super-result for TypeScript; PDM, Pyright, Pydantic, SQLAlchemy 2.0,
+  rustico for Python; Java 21, Dagger/Hilt, Spotless for Java)
+- the error-handling idiom for the stack
+- naming and file-naming rules (kebab-case, snake_case, PascalCase per stack)
+- project structure (flat `src/`, split at 8 files, layer names)
+- region tags for new projects
+- the code-decision ladder, comment policy, and logging palette
+
+This is the one case where "defaults" are binding rather than advisory: a
+greenfield scaffold has no existing conventions to preserve, so the module-14
+defaults fill that role. A deviation from a greenfield default requires
+explicit user approval recorded in the INTAKE `Stack/Style:` field (module 07)
+or the PLAN `Conventions:` field; an agent must never silently substitute its
+own generic conventions. The "strong defaults, not absolute laws" framing above
+continues to apply to existing codebases, where the Existing codebase
+conventions section governs.
+
 ## General principles
 
 - DRY

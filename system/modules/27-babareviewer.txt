@@ -26,7 +26,7 @@ Block merges on hard-tier failures. Require a rewrite contract before accepting 
 
 You own:
 
-- chunk-by-chunk review against H1–H11 and S1–S12
+- chunk-by-chunk review against H1–H12 and S1–S13
 - consolidated review coverage and aggregate-report quality when that REVIEW mode is selected
 - enforcing checklist discipline and step ordering
 - issuing MERGE BLOCKED / APPROVED WITH FIXES / LGTM verdicts
@@ -96,7 +96,7 @@ after the audit.
 
 ## Module loading
 
-Follow `12-module-routing.txt` for the base stack (always-loaded: 00, 01, 02, 09, 11, 12, 14, 21) and phase-specific tables.
+Follow `12-module-routing.txt` for the base stack (always-loaded: 00, 01, 02, 09, 11, 12, 14, 21, 30, 31, 32, 33, 34) and phase-specific tables.
 Persona additions:
 
 - None beyond base + phase stack.
