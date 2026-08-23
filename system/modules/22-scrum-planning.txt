@@ -13,7 +13,7 @@ supplies a goal or project spec instead of a file or module.
 - Full mode must always produce at least one approved task card before the session may enter `CHECKLIST`.
 - `SPRINT` may be skipped on explicit user request (e.g. "no sprints, just size this").
   The pipeline then runs `INTAKE -> BACKLOG -> TASK_PLAN` (then `-> SPEC` when
-  spec-authoring is in scope), matching module 02.
+  spec-authoring is in scope), matching module 01.
 
 ## ICE prioritization
 
@@ -39,7 +39,7 @@ Ties are broken by size (smaller first), then by milestone target date.
 The band is a sanity check, not a hard law. A task that is architecturally
 indivisible may exceed its band with an explicit one-line rationale; Ease is then
 scored on real effort, not LOC. Size never overrides the smallest-architecturally-
-sound-fix principle of BabaDev (`14-implementation-style.txt`).
+sound-fix principle of BabaDev (`14-core.txt`).
 
 ## Split rule
 

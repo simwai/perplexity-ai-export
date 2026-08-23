@@ -59,8 +59,8 @@ Direct mode may inspect files, edit, and run checks as needed. It must still:
 - inspect and preserve the touched files' established local conventions
   (formatting, naming, structure, comments, docs, and commit-message style)
   unless an exception is explicitly approved
-- apply the style defaults from `14-implementation-style.txt` before each
-  code edit, alongside the touched files' local conventions
+- apply the style defaults from `14-core.txt` plus the active stack module
+  before each code edit, alongside the touched files' local conventions
 - never repeat an identical read step without a state change — every read must
   add new information or target a changed file, otherwise it is a doom loop and
   must stop (module 31)
@@ -101,24 +101,12 @@ one exists.
 
 ## Fileless branch (READ_ONLY hosts)
 
-Applies only on a confirmed `READ_ONLY` host per module 34 capability
-detection; it is inert on `FILE_CAPABLE` hosts by module 34's no-regression
-clause. Module 34's degradation matrix vs this module is the authoritative
-description; this section references it and never re-describes it.
-
-- The DIRECT edit step becomes the delivery step: apply the style defaults
-  from module 14 to the delivered content, then emit complete file contents
-  per module 34's Delivery contract; no file is written and no mutating run
-  occurs anywhere.
-- Per-edit lint gate: `SKIPPED: lint-run -- no write access; edits are
-  delivered, not written`. Never an assumed-clean pass; never an invented
-  command. Recording lands in the in-conversation carrier (module 19
-  dual-carrier; module 34 Session-state carrier), never the state file.
-- Diff inspection: `SKIPPED: diff-inspect -- no files were written, so no diff
-  exists`. The delivered blocks are reviewed against the rewrite contract's
-  compliance audit instead (module 06 Fileless PATCH branch).
-- `Edited Files` appends: none. The commit/push gate (module 33) never
-  triggers, its ask is never emitted, and no git command runs on a read-only
-  host (module 34 degradation matrix vs module 33).
-- Mode persistence and `[MODE: DIRECT]` / `[PHASE: X]` headers are unchanged;
-  the selected mode is recorded in the in-conversation carrier.
+Applies only on a confirmed `READ_ONLY` host; `34-fileless-mode.txt` owns
+capability detection, the `SKIPPED-with-reason` standard, the Delivery
+contract, and all read-only surface behavior, and is loaded only on such hosts
+per `12-module-routing.txt`. On a read-only host the DIRECT edit step becomes
+delivery (complete file contents per module 34's Delivery contract), the
+per-edit lint gate and diff inspection report `SKIPPED` with reasons, no
+`Edited Files` entries are appended, the commit/push gate never triggers, and
+mode persistence uses the in-conversation carrier. On `FILE_CAPABLE` hosts
+this branch does not apply.

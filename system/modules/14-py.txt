@@ -1,0 +1,50 @@
+# Implementation Style — Python
+
+Part of the module-14 family (core: `14-core.txt`). Load alongside the core
+module when the session's active language is Python (module 12).
+
+- Write Pythonic, readable code with PEP 8 style.
+- Assume Python 3.12 unless the project states otherwise.
+- **Type annotations are required** on all function signatures (parameters + return type). `Any` requires an inline `# pyright: ignore` comment with a written reason.
+- **New data classes default to `@dataclass(slots=True)`** from `dataclasses`. Use `slots=False` only when inheritance conflicts (document why).
+- **Package manager: `pdm`**. Use `pyproject.toml` exclusively (no `setup.py`/`setup.cfg`). Virtualenv mode enabled. Lockfile (`pdm.lock`) committed.
+- **PDM scripts** defined under `[tool.pdm.scripts]`:
+  - `lint` — `ruff check src`
+  - `format` — `ruff format src`
+  - `typecheck` — `pyright`
+  - `test` — `pytest`
+  - `dev` — `python -m src.index`
+- **Pyright** is the type checker (not mypy). Configured in `[tool.pyright]` with `typeCheckingMode = "strict"`. Override noisy strict rules only with rationale (e.g., `reportMissingTypeStubs = false` is an expected exception). Per-file opt-out via `# pyright: basic`.
+- **DI container: dependency-injector.** Favor constructor injection; wire the
+  composition root at the application entry point. Default to transient
+  lifetime unless a clear singleton or scoped rationale exists.
+- **Result pattern library: `rustico`** with the `safe()` convention:
+  - A project-level `safe()` helper wraps a throwing expression into a `Result`:
+
+    ```python
+    from rustico import Ok, Err, Result
+    from typing import Callable, TypeVar
+
+    T = TypeVar("T")
+
+    def safe(fn: Callable[[], T]) -> Result[T, Exception]:
+        try:
+            return Ok(fn())
+        except Exception as e:
+            return Err(e)
+    ```
+
+  - Usage: `result = safe(lambda: risky_op())` — wraps a single expression.
+  - Caller narrows with `if result.is_ok()` / `elif result.is_err()` or `match/case`.
+  - **No `.map()`, `.and_then()`, `.or_else()`, `.inspect()`, `.match()` method chaining allowed.**
+  - `.unwrap()` / `.unwrap_or()` only at boundary points where exiting the Result pattern into exception land.
+  - Do not mix `rustico` with another result library in the same project.
+- **Preferred typed library stack** (fully typed, reduce manual code):
+  - Validation/models: **Pydantic v2** for API boundaries; `@dataclass(slots=True)` for internal data.
+  - HTTP: **httpx** (fully typed, async).
+  - CLI: **typer** (typed via annotation inference).
+  - ORM: **SQLAlchemy 2.0** with `Mapped[]` syntax.
+  - Lint/format: **ruff** (single binary, replaces flake8/black/isort).
+  - Testing: **pytest** + **pytest-asyncio**.
+  - Prefer libs that ship `py.typed` marker or have typeshed stubs over untyped alternatives.
+- File names follow the File naming section in `14-core.txt`: snake_case modules, `test_` prefix for test files.

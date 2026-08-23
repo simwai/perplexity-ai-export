@@ -14,8 +14,7 @@ Load this file at startup per AGENTS.md. This file is a **loader only** — it d
 
 | Concern | Module(s) |
 |---|---|
-| Orchestration / single-phase rule | `01-orchestrator.txt` |
-| Phase workflow | `02-workflow.txt` |
+| Orchestration / workflow / state machine | `01-orchestrator.txt` |
 | Docs research | `03-docs-research.txt` |
 | Hard-tier rubric | `04-review-rubric-hard-tier.txt` |
 | Soft-tier rubric | `05-review-rubric-soft-tier.txt` |
@@ -24,10 +23,9 @@ Load this file at startup per AGENTS.md. This file is a **loader only** — it d
 | Decision prompts | `08-interaction-layer.txt` |
 | Failure guards | `09-failure-guards.txt` |
 | Intake / blocked inputs | `10-decision-and-intake.txt` |
-| State machine / transitions | `11-state-machine.txt` |
 | Module routing | `12-module-routing.txt` |
 | Persona handoff contract | `13-persona-handoff-contract.txt` |
-| Implementation style | `14-implementation-style.txt` |
+| Implementation style | `14-core.txt` + per-stack modules (`14-ts.txt`, `14-py.txt`, `14-java.txt`, `14-frontend.txt`, `14-ps.txt`, `14-pine.txt`) |
 | Personas | `00-persona-system.txt`, `23`–`27` |
 | MCP invocation | `21-mcp-invocation.txt` |
 | Session state | `19-session-state.txt` |
@@ -35,7 +33,7 @@ Load this file at startup per AGENTS.md. This file is a **loader only** — it d
 | Loop protection | `31-loop-guards.txt` |
 | Filesystem-first discovery | `32-filesystem-first.txt` |
 | End-of-session commit/push gate | `33-commit-and-push-gate.txt` |
-| Fileless mode (read-only hosts) | `34-fileless-mode.txt` |
+| Fileless mode (read-only hosts) | `34-fileless-mode.txt` (loaded only on confirmed `READ_ONLY` hosts) |
 | Database conventions | `20-database-conventions.txt` |
 | Spec lifecycle | `35-spec-lifecycle.txt` |
 | Drift detection | `36-drift-detection.txt` |
@@ -50,12 +48,14 @@ When rules conflict, apply this order:
 4. **Phase routing** (as defined in `10-decision-and-intake.txt`)
 5. **Persona-specific rules** (modules `23`–`27`)
 6. **Phase templates** (`07-output-contracts.txt`)
-7. **General workflow rules** (`02-workflow.txt`)
+7. **General workflow rules** (`01-orchestrator.txt`)
 
 If a lower-precedence rule contradicts a higher-precedence rule, the higher rule wins.
 State the conflict briefly when it affects the response.
 
-Module 34's in-conversation state carrier never overrides module 19 on file-capable hosts; module 34 is inert on such hosts by its no-regression clause, and its carrier applies only on a confirmed `READ_ONLY` host.
+Module 34 (fileless mode) is loaded only on a confirmed `READ_ONLY` host; on
+file-capable hosts it is never loaded and its rules do not apply
+(`12-module-routing.txt` read-only trigger).
 
 ## Hard rules (enforced by modules, restated for startup)
 
@@ -67,5 +67,5 @@ Module 34's in-conversation state carrier never overrides module 19 on file-capa
 - No patch without explicit plan approval and a complete rewrite contract.
   This applies in `STRUCTURED` mode only. `DIRECT` mode follows its own
   verification rules (see `30-execution-modes.txt`).
-- Before any code edit, consult `14-implementation-style.txt` and apply its
-  defaults to the edit.
+- Before any code edit, consult `14-core.txt` (plus the active stack module)
+  and apply its defaults to the edit.

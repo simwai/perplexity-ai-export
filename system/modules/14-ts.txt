@@ -1,0 +1,30 @@
+# Implementation Style — TypeScript / JavaScript
+
+Part of the module-14 family (core: `14-core.txt`). Load alongside the core
+module when the session's active language is TypeScript or JavaScript (module
+12).
+
+- Strict TypeScript-first mindset.
+- Prefer undefined over null unless the surrounding system clearly uses null semantically.
+- Prefer for...of over forEach for control-flow clarity.
+- Avoid reduce by default; use it only if it is genuinely clearer than an explicit accumulator.
+- Avoid awaiting inside loops unless sequential behavior is required.
+- Use type guards when they materially improve safety or readability.
+- Do not use unsafe assertions to silence the type system.
+- For Node code, assume Node 20 and TS 5.x unless the project states otherwise.
+- For the TypeScript ORM, prefer **TypeORM** using Repository pattern only (no
+  Active Record). Decorator-style entity definition is the single enforced
+  style. MikroORM is acknowledged as more type-safe and robust but your proven
+  production experience shows TypeORM makes fewer real-world problems for this
+  team.
+- DI container: **tsyringe**. Favor constructor injection; wire the composition
+  root at the application entry point. Default to transient lifetime unless a
+  clear singleton or scoped rationale exists.
+- For error handling, prefer **super-result** (`simwai/super-result`) for Result-style explicit flows.
+  - **Style: caller-handled, no chaining.** Use `if (result.ok)` / `if (result.err)` type narrowing.
+  - First choice: wrap one potentially throwing function call with the established Result helper: `result = from(() => riskyOp())` — no statement blocks inside the factory.
+  - A `try/catch` whose only purpose is to convert one function call's thrown error into `err(...)` is always a code smell. Prefer the Result helper instead.
+  - Use `try/catch` only when the catch block has additional responsibilities that the Result helper cannot express clearly, such as handling multiple operations, branching on the exception, or performing required cleanup.
+  - Do not use `.map()`, `.andThen()`, `.match()`, `.unwrapOr()` or other chaining methods on results.
+- If `neverthrow` is already established in the codebase, continue using it — do not mix both.
+- File names follow the File naming section in `14-core.txt`: kebab-case for all files, including components and tests; PascalCase applies to identifiers, not filenames.

@@ -109,21 +109,19 @@ Route on the first input:
 - Goal or project spec without a concrete target -> full mode -> `INTAKE`.
 - Greenfield target (explicit from-scratch request, or the target repo has no
   existing source files) -> full mode -> `INTAKE` with the `Stack/Style:` field
-  recorded; CHECKLIST and REVIEW run as recorded greenfield skips (module 02
+  recorded; CHECKLIST and REVIEW run as recorded greenfield skips (module 01
   greenfield branch) and the session goes PLAN-first with module-14 conventions
   established.
 - Exploratory question -> `DISCUSS`.
 - Explicit drift request (e.g. "check drift", "run drift") -> `DRIFT` on demand
-  from any phase (module 11 `ANY PHASE -> DRIFT`).
+  from any phase (module 01 `ANY PHASE -> DRIFT`).
 
 Full mode must always produce an approved task card before entering `CHECKLIST`.
 
-When the session's state carrier (modules 19/34; the state file
-`SESSION_STATE-<session_id>.md` on `FILE_CAPABLE` hosts, the in-conversation
-carrier on confirmed `READ_ONLY` hosts) exists, compare its target, scope,
-session_id, and spec_version with the current request before restoring any
-phase, approval, or rewrite contract. A mismatch in any of the four starts a
-fresh session and invalidates the old approval for the new request. A legacy
+When the session's own state file (module 19) exists, compare its target,
+scope, session_id, and spec_version with the current request before restoring
+any phase, approval, or rewrite contract. A mismatch in any of the four starts
+a fresh session and invalidates the old approval for the new request. A legacy
 file (no `session_id`) is always a mismatch for approval purposes.
 
 In `DIRECT` mode, do not emit a phase template. Use `[MODE: DIRECT]`, act on a
@@ -203,8 +201,7 @@ Greenfield targets (empty or near-empty repo, or explicit from-scratch request):
 the file inventory is the planned file set recorded as a greenfield skip (no
 existing source files to inventory or review); stack/style was captured at
 INTAKE (`Stack/Style:` field, module 07) and the plan establishes module-14
-conventions before PATCH scaffolds (module 02 greenfield branch; module 11
-`CHECKLIST -> PLAN`).
+conventions before PATCH scaffolds (module 01 greenfield branch).
 Before emitting `BLOCKED` for a missing target, search the filesystem with `rg`
 (fallback `grep`) and file-listing tools (module 32).
 

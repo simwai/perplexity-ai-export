@@ -1,0 +1,21 @@
+# Implementation Style — Pine Script
+
+Part of the module-14 family (core: `14-core.txt`). Load alongside the core
+module when the session's active work includes Pine Script (module 12).
+
+- Target Pine Script v5+ (`//@version=5` or newer); keep the version directive on line 1.
+- Write every statement on a single physical line.
+- Never break a line inside a ternary chain (`a ? b : c`) or inside a function
+  call's argument list (`plot(`, `request.security(`, `label.new(`, ...) –
+  Pine's continuation rules are fragile at those break points and produce
+  `end of line without line continuation` compile errors.
+- Break lines only where Pine requires them: indented block bodies for `if`,
+  `else`, `for`, `while`, and user-defined functions (Pine is
+  indentation-scoped like Python; use 4 spaces consistently, never mix tabs
+  and spaces).
+- When a single line grows unwieldy, refactor instead of wrapping: extract
+  intermediate variables, or replace a long ternary with an `if`/`else` block.
+- Put comments on their own line above the statement; never end a line that
+  continues onto the next line with a `//` comment (the compiler rejects it).
+- Existing multi-line Pine code keeps its local convention unless reformatting
+  is explicitly approved (see Existing codebase conventions in `14-core.txt`).

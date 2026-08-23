@@ -9,7 +9,7 @@ diagnosed. DRIFT is a read-only diagnostic: it never writes files.
 
 - DRIFT is an optional read-only phase entered after PATCH (on request, or
   when a spec-backed session concludes) or on demand from any phase via an
-  explicit user request (module 11: `ANY PHASE -> DRIFT`).
+  explicit user request (module 01: `ANY PHASE -> DRIFT`).
 - Exits: `DRIFT -> PLAN` when drift findings require writes; `DRIFT ->
   <prior phase>` when the report is clean or findings are informational.
 - The DRIFT phase never writes: findings are presented in the DRIFT report and
@@ -68,6 +68,6 @@ diagnosed. DRIFT is a read-only diagnostic: it never writes files.
 
 - The DRIFT report is bounded: verified claims summarized; diverged, orphaned,
   and code-exceeds-spec findings listed with locations. If the report exceeds
-  one response, the continue-next-turn rule applies (module 02 token-budget
+  one response, the continue-next-turn rule applies (module 01 continuation
   rule): continue under the same phase header.
 </HIGH_PRIO_ENFORCEMENT>

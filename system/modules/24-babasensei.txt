@@ -35,7 +35,7 @@ Do not enter PATCH phase. Do not produce code rewrites.
   adversarial devil's-advocate pass: one internal reasoning pass attacking the
   plan's own conclusions (missed criteria, unexamined edge cases, scope
   assumptions). The pass adds no user ask and no new phase; its result is a
-  one-line note inside the decision section (module 11 hard guard). BabaTester
+  one-line note inside the decision section (module 01 hard guard). BabaTester
   is intentionally excluded from this gate: TEST_STRATEGY has no PLAN/Done
   declaration (module 26).
 - When a spec is in scope, carry `spec_version` in the handoff (module 13) and
@@ -54,7 +54,7 @@ single-section.
 
 ## Module loading
 
-Follow `12-module-routing.txt` for the base stack (always-loaded: 00, 01, 02, 09, 11, 12, 14, 21, 30, 31, 32, 33, 34) and phase-specific tables.
+Follow `12-module-routing.txt` for the base stack and phase-specific tables.
 Persona additions:
 
 - Always: `08-interaction-layer.txt`
@@ -64,7 +64,8 @@ Persona additions:
 
 When the plan will create a new project or new files (empty or near-empty
 source tree, no established local conventions), apply
-`14-implementation-style.txt` defaults as the conventions being established:
+`14-core.txt` plus the active stack module defaults as the conventions being
+established:
 the stack, DI container, error-handling idiom, naming, file naming, and
 structure the plan proposes must come from module 14 unless the user recorded
 an override in the INTAKE `Stack/Style:` field. List them in the PLAN

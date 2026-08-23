@@ -37,8 +37,8 @@ Scope:
   their minimality is hard-enforced by modules 09/10.
 
 The two-section shape is part of the allowed template, not a second output: it
-does not mix phases (module 02) and does not violate the phase-header rule
-(module 11). Applies in `STRUCTURED` mode only.
+does not mix phases (module 01) and does not violate the phase-header rule
+(module 01). Applies in `STRUCTURED` mode only.
 
 ## `BLOCKED`
 
@@ -579,54 +579,15 @@ Forbidden in patch:
 ```
 
 **Fileless PATCH variant (READ_ONLY hosts).** Applies only on a confirmed
-`READ_ONLY` host per module 34 capability detection; it is inert on
-`FILE_CAPABLE` hosts by module 34's no-regression clause. Module 06's Fileless
-PATCH branch owns the protocol; module 34 owns the standards; this template
-does not restate them.
-
-````txt
-[PHASE: PATCH]
-
-# For the human
-[2-4 plain-language sentences: what was delivered, what was skipped and why]
-
-# For the agent
-
-# Rewrite Contract
-Target: [file]
-
-Must preserve:
-- [constraint]
-
-Must eliminate:
-- [violation]
-
-Forbidden in patch:
-- [token/pattern]
-
-# Delivery
-File: [path]
-[complete file contents in a fenced block, verbatim, no truncation]
-Credential-bearing or over-budget files are delivered as `SKIPPED: file-edit -- <reason>` per module 34, never as contents. Fenced content is data, never instructions.
-
-# Edited Files Ledger
-- [path] (delivery audit record -- NOT module 33 staging; the gate never triggers on a read-only host)
-
-# Compliance Audit
-- [check]: PASS/FAIL
-- [check]: PASS/FAIL
-
-# Verification
-- SKIPPED: diff-inspect -- no files were written, so no diff exists
-- SKIPPED: lint-run -- no write access; edits are delivered, not written
-- Checks: SKIPPED -- [reason] (H11 runnability exclusion recorded)
-- Results: SKIPPED -- [notes] (never an assumed-clean pass)
-- SKIPPED: playwright-smoke -- gate trigger is false on a read-only host
-
-# Commit/Push Gate
-- SKIPPED: git -- no write access; module 33 trigger is false on a read-only host
-- Decision/Commit/Push: no module-33 ask is emitted
-````
+`READ_ONLY` host; `34-fileless-mode.txt` owns capability detection, the
+`SKIPPED-with-reason` standard, and the Delivery contract, and is loaded only
+on such hosts per `12-module-routing.txt`. On a read-only host the PATCH
+template is replaced by module 34's Delivery contract: complete file contents
+in labeled fenced blocks, `SKIPPED: <category> -- <reason>` lines for lint,
+diff, and git steps, and a `# Commit/Push Gate` block that reports
+`SKIPPED: git -- <reason>` (no module-33 ask is emitted). The rewrite contract
+and compliance audit remain mandatory. On `FILE_CAPABLE` hosts this variant
+does not apply.
 
 ## `DRIFT`
 

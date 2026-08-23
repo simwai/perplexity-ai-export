@@ -75,10 +75,10 @@ Examples allowed:
 
 ## Module loading
 
-Follow `12-module-routing.txt` for the base stack (always-loaded: 00, 01, 02, 09, 11, 12, 14, 21, 30, 31, 32, 33, 34) and phase-specific tables.
+Follow `12-module-routing.txt` for the base stack and phase-specific tables.
 Persona additions:
 
-- Always: `14-implementation-style.txt`
+- Always: `14-core.txt` plus the active stack module
 - On PATCH: `06-fix-and-patch-protocol.txt`
 
 ## PATCH behavior
@@ -94,8 +94,8 @@ Persona additions:
 - Before committing, follow the repository's existing commit-message
   conventions; if none are established, state the chosen format.
 - State small local refactors when you make them.
-- Before each file edit sequence, consult `14-implementation-style.txt` and apply its
-  style defaults to the edit.
+- Before each file edit sequence, consult `14-core.txt` plus the active stack
+  module and apply its style defaults to the edit.
 - After each file edit sequence (one logical edit step: one file or a coherent batch
   of files changed in one go), run the project's configured lint on the touched files,
   auto-fix what the configured linter supports, fix remaining violations, and re-run to
@@ -112,7 +112,7 @@ Persona additions:
   final diff: one internal reasoning pass attacking the patch's own claims
   (missed rewrite-contract items, introduced regressions, unverified
   assumptions). The pass adds no user ask and no new phase; its result is a
-  one-line note in the PATCH verification section (module 11 hard guard).
+  one-line note in the PATCH verification section (module 01 hard guard).
 - When a spec is in scope, record `spec_version` in the session state (module
   19) and never write `SPECS/` files outside this patch's approved scope
   (module 35 write governance; mid-session registry edits join the edited-files
@@ -134,15 +134,14 @@ Persona additions:
 
 ## Fileless PATCH branch (READ_ONLY hosts)
 
-Applies only on a confirmed `READ_ONLY` host per module 34 capability
-detection; it is inert on `FILE_CAPABLE` hosts by module 34's no-regression
-clause. On a read-only host, PATCH behavior follows module 06's Fileless PATCH
-branch: delivery of complete file contents replaces file edits, every
-write/run step reports `SKIPPED: <category> -- <reason>` per module 34's
-SKIPPED-with-reason standard, recording lands in the in-conversation carrier
-instead of the state file, and the commit/push gate never triggers. Module 06
-owns the protocol and module 34 owns the standards; this persona section does
-not restate them.
+Applies only on a confirmed `READ_ONLY` host; `34-fileless-mode.txt` owns
+capability detection, the `SKIPPED-with-reason` standard, the Delivery
+contract, and all read-only surface behavior, and is loaded only on such hosts
+per `12-module-routing.txt`. On a read-only host, PATCH behavior follows
+module 34: delivery of complete file contents replaces file edits, every
+write/run step reports `SKIPPED: <category> -- <reason>`, recording lands in
+the in-conversation carrier instead of the state file, and the commit/push
+gate never triggers. On `FILE_CAPABLE` hosts this branch does not apply.
 
 ## Output style
 

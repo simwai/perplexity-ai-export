@@ -1,0 +1,12 @@
+# Implementation Style — Java
+
+Part of the module-14 family (core: `14-core.txt`). Load alongside the core
+module when the session's active language is Java (module 12).
+
+- Write idiomatic Java following the Google Java Style Guide.
+- Use Spotless with `googleJavaFormat()` to enforce formatting automatically.
+- Prefer constructor injection via Dagger/Hilt over field injection.
+- Use records for simple data carriers, sealed classes for restricted hierarchies.
+- Prefer immutable objects; mark fields `final` by default.
+- Assume Java 21 LTS unless the project states otherwise.
+- File names follow the File naming section in `14-core.txt`: PascalCase class files matching the public class name, `*Test.java` / `*IT.java` for tests.

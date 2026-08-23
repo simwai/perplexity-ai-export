@@ -12,14 +12,9 @@ and push: ask first, stage the session's own files only, and report per remote.
 - The gate applies only when the session's own state file (module 19) has a
   non-empty `## Edited Files` section — one path per edit step, appended by the
   per-edit lint-gate recording points in modules 06 and 30.
-- Module 19's `## Edited Files` field is dual-carrier (module 19 Dual-carrier
-  model): the state file on `FILE_CAPABLE` hosts, the in-conversation ledger on
-  a confirmed `READ_ONLY` host (module 34 Session-state carrier). This gate's
-  trigger reads the file-carrier ledger only. The in-conversation ledger is a
-  delivery audit record (module 06 Fileless PATCH branch step 3), NOT this
-  gate's staging source: on `READ_ONLY` no state file exists, so the trigger is
-  false, the gate never triggers, no ask is emitted, and no mutating git step
-  runs (module 34 degradation matrix vs module 33). See the Fileless branch.
+- On a confirmed `READ_ONLY` host the trigger is always false: no state file
+  exists, so the gate never triggers, no ask is emitted, and no mutating git
+  step runs (module 34). See the Fileless branch.
 - No edits recorded in the file-carrier ledger -> the gate is skipped; state
   "no edits to commit" and ask nothing. On `READ_ONLY` the analog is "no edits
   to deliver" (Fileless branch).
@@ -131,6 +126,9 @@ it carries `[MODE: DIRECT]`.
   transcript. In this gate, names-only via `git remote` remains the practice.
 - Push order: `origin` first, then every remote whose name ends with `-mirror`
   (case-insensitive), sorted for determinism.
+- This gate discovers remotes via `git remote`, never via this repo's
+  `targets.json` — that file is operational tooling for `sync.ps1` (deploying
+  the system to other projects), not a remote source for the gate.
 - Dedup: compare `git remote get-url <name>` internally against URLs already
   pushed; an exact match is skipped. The URL is never printed or recorded.
   (On this repo `gitlab-mirror` duplicates `origin` and is skipped.)
@@ -173,38 +171,18 @@ it carries `[MODE: DIRECT]`.
   restore`, or `git stash` (H9: destroys work).
 - The gate is not a phase: it runs inside PATCH after verification and inside
   DIRECT before completion. The pre-ask smoke above is a gate-internal
-  verification step, never a phase and never a second REVIEW pass. Modules 02
-  and 11 are untouched.
+  verification step, never a phase and never a second REVIEW pass. Modules 01
+  and 30 are untouched.
 
 ---
 
 ## Fileless branch (READ_ONLY hosts)
 
-Applies only on a confirmed `READ_ONLY` host per module 34 capability
-detection; it is inert on `FILE_CAPABLE` hosts by module 34's no-regression
-clause. Module 34 owns the SKIPPED-with-reason standard, capability detection,
-and the Delivery contract; this section references them and never re-describes
-them.
-
-- Gate step: `SKIPPED: git -- <reason>` with a concise human reason citing no
-  write access and the false trigger (no state file, so no file-carrier
-  `Edited Files` section). The module-33 ask is never emitted on a read-only
-  host (module 34 degradation matrix vs module 33; module 06 Fileless PATCH
-  branch step 6).
-- Pre-ask smoke: `SKIPPED: playwright-smoke -- gate trigger is false on a
-  read-only host`; the smoke is never attempted on a read-only host.
-- No mutating git operation runs on a read-only host: no add, no commit, no
-  push, no branch or tag writes. Read-only git inspection, when truly needed,
-  stays subject to this module's sanitization rules (Remote discovery: remote
-  names only, never URLs, never unsanitized `git remote -v` output, H1).
-- Delivery replaces commit: the commit step is replaced by module 34's Delivery
-  contract — complete file contents in labeled fenced blocks for the user to
-  apply; the rewrite contract and compliance audit remain mandatory (module 06
-  Fileless PATCH branch). Nothing is committed and no `commit_sha` is produced.
-- Recording: the outcome is carried in-conversation (module 19 dual-carrier;
-  module 34 Session-state carrier), never written to a state file. Emit the
-  `# Commit/Push Gate` block in the PATCH template (module 07 Fileless PATCH
-  variant) as SKIPPED with reason, not N/A.
-- "No edits to deliver" skip retained: when the session delivered nothing,
-  report "no edits to deliver" and ask nothing — the file-capable "no edits to
-  commit" skip, in delivery terms.
+Applies only on a confirmed `READ_ONLY` host; `34-fileless-mode.txt` owns
+capability detection, the `SKIPPED-with-reason` standard, the Delivery
+contract, and all read-only surface behavior, and is loaded only on such hosts
+per `12-module-routing.txt`. On a read-only host the gate never triggers (no
+state file, so no file-carrier `Edited Files` section), the module-33 ask is
+never emitted, the pre-ask smoke reports `SKIPPED: playwright-smoke`, no
+mutating git operation runs, and commit is replaced by module 34's Delivery
+contract. On `FILE_CAPABLE` hosts this branch does not apply.

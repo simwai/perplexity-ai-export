@@ -21,22 +21,10 @@ session's phase, findings, plan approval, or rewrite contract.
 
 !!! `SESSION_STATE*.md` files must be listed in `.gitignore`. They are never committed.
 
-## Dual-carrier model
-
-Session state has two carriers. On `FILE_CAPABLE` hosts the carrier is the
-state file `SESSION_STATE-<session_id>.md`, written and read exactly as this
-module specifies. On a confirmed `READ_ONLY` host (module 34 capability
-detection) the carrier is the conversation itself: the same field set is
-carried in session context and updated at every trigger point below, and no
-`SESSION_STATE-<session_id>.md` file is created or written.
-
-Module 19 remains the single canonical source for session identity, state
-fields, freshness, GC, and cleanup semantics on both carriers. Module 34 owns
-host capability detection, the `SKIPPED-with-reason` standard, and the
-read-only mechanics. The in-conversation carrier never overrides module 19 on
-`FILE_CAPABLE` hosts (bootstrap precedence; module 34 no-regression clause);
-module 34's Session-state carrier section describes the read-only behavior and
-is referenced, never re-described here.
+On a confirmed `READ_ONLY` host the state carrier is the conversation itself
+(`34-fileless-mode.txt` Session-state carrier); on every other host this file
+is the carrier. Module 19 remains the single canonical source for session
+identity, state fields, freshness, GC, and cleanup semantics on both carriers.
 
 ## Session identity
 
@@ -57,30 +45,22 @@ Module 19 is the single canonical source for these resolution rules. No other
 surface re-describes them; every other surface resolves its file per this
 module.
 
-On both carriers the resolution order is identical. On a `READ_ONLY` host the
-id is carried in conversation and never becomes a filename (module 34); the
-sanitizer applies on both carriers.
-
 ## Surface inventory
 
 The following surfaces resolve the session's own state file per this module and
 must be kept in sync:
 
 - `10-decision-and-intake.txt` — fresh-session validity
-- `11-state-machine.txt` — DISCUSS prior-phase persistence
+- `01-orchestrator.txt` — DISCUSS prior-phase persistence, phase-skip recording
 - `18-discuss-mode.txt` — DISCUSS entry/exit and promotion
 - `21-mcp-invocation.txt` — MCP preflight ledger
 - `25-babadev.txt` — PATCH verification and approval writes
 - `30-execution-modes.txt` — mode persistence
 - `31-loop-guards.txt` — read ledger
-- `02-workflow.txt` — phase-skip recording
 - `06-fix-and-patch-protocol.txt` — lint and verification recording
 - `32-filesystem-first.txt` — SESSION_STATE recovery cross-reference
 - `33-commit-and-push-gate.txt` — edited-file staging source and gate outcome writes
 - `34-fileless-mode.txt` — carrier selection (`FILE_CAPABLE`/`READ_ONLY`)
-- `.opencode/commands/` — approve-plan, resume, handoff, phase, verify, baba
-- `.opencode/agents/` — build, plan
-- `docs/AGENTS-usage.md`, `docs/conformance-checklist.md`
 
 ## Fresh-session validity
 
@@ -104,9 +84,6 @@ Always at repo root: `SESSION_STATE-<session_id>.md`, where `<session_id>` is
 resolved per the Session identity section. A session reads and writes only its
 own file. The legacy bare `SESSION_STATE.md` exists only as a migration source
 (see Legacy adoption) and is never a live read/write path.
-
-The repo-root location rule applies to the file carrier. On a `READ_ONLY` host
-the state is carried in conversation and no file exists (module 34).
 
 ## Initialization
 
@@ -143,12 +120,6 @@ init claims it:
 No surface may read the bare `SESSION_STATE.md` as live state after the rename;
 the file no longer exists, which also removes the zombie read path.
 
-On a `READ_ONLY` host, the file-creation and `.gitignore` steps are
-`SKIPPED: file-edit` per module 34's SKIPPED-with-reason standard; the
-conversation carrier is initialized with the template's default field set; no
-`SESSION_STATE-<session_id>.md` is ever written, and there is no bare file to
-adopt on a read-only host.
-
 ## Stale-file GC
 
 Run the GC check automatically at fresh-session init only. A candidate
@@ -165,10 +136,6 @@ age is the liveness proxy; a paused-but-live session older than the TTL may be
 GC'd by another session's fresh init, which is accepted because deletions are
 named and auditable.
 
-GC applies to the file carrier. On a `READ_ONLY` host there are no files to GC,
-delete, or name; module 34 applies the freshness semantics to the conversation
-carrier.
-
 ## Write rules
 
 The active persona writes or overwrites its own `SESSION_STATE-<session_id>.md`
@@ -182,9 +149,6 @@ at every:
 If the file does not exist, create it from scratch using the template below.
 Never write another session's file.
 
-The trigger points are identical on both carriers. On a `READ_ONLY` host the
-write updates the conversation carrier, never a file (module 34).
-
 ## Read rules
 
 - Any incoming persona must read its own `SESSION_STATE-<session_id>.md`
@@ -196,10 +160,6 @@ write updates the conversation carrier, never a file (module 34).
   context where unambiguous; otherwise go BLOCKED on the missing field.
 - Any `BLOCKED` response caused by missing session state must identify the
   exact missing file or field and explain why phase restoration cannot proceed.
-
-On a `READ_ONLY` host the in-conversation carrier is the live state; the
-missing-file BLOCKED rule is overridden per module 34, and BLOCKED applies only
-when the conversation carrier is also absent.
 
 ## Template
 
@@ -224,45 +184,12 @@ repo: <repo path or UNKNOWN>
 scope: <description or UNKNOWN>
 language: <language or UNKNOWN>
 
-## Review Progress
-review_mode: interactive|consolidated
-review_cursor:
-  file: <path or NONE>
-  batch: <number or NONE>
-  lines: <range or NONE>
-review_inventory_status: pending|in_progress|complete
-review_coverage:
-- <file> -- <batch/range> -- complete|blocked|failed
-review_findings_status: provisional|confirmed
-review_report_status: pending|ready|confirmed
-
-## Backlog
-<!-- Filled during BACKLOG phase (BabaScrumMaster, full mode only) -->
-- <item_id>: <description> [size: XS|S|M|L] [ICE: I*C*E] [milestone: <id>] [DoD]
-
-## Milestones
-<!-- Declared during INTAKE -->
-- <id>: <name> -- <target> -- <definition of done>
-
-## Current Sprint
-<!-- Filled during SPRINT phase (BabaScrumMaster, full mode only) -->
-sprint: <# or NONE>
-goal: <sprint goal>
-board:
-- To do: []
-- In progress: []
-- Done: []
-
 ## Current Task
-<!-- Task card approved during TASK_PLAN, handed into CHECKLIST -->
 target: <NONE or path>
 size: <XS|S|M|L or NONE>
 ice: <I*C*E or NONE>
 milestone: <id or NONE>
 story: <story id or n/a>
-parallel: <[P] yes|no or n/a>
-mvp_first: <core|supporting or n/a>
-test_first: <yes|no or n/a> -- plan-level ordering signal, never a test-authoring grant (module 14)
 definition_of_done: []
 
 ## Findings
@@ -299,18 +226,6 @@ status: pending|approved|rejected
 approved_at: <ISO timestamp or NONE>
 approved_plan_summary: <NONE or short summary>
 
-## Spec Registry
-<!-- Read cursor into SPECS/index.md; never ownership. Optional-with-default: a session with no spec in scope leaves these NONE. -->
-registry_path: <NONE or SPECS/index.md>
-spec_version: <NONE or x.y.z>
-last_checked: <ISO timestamp or NONE>
-status: <NONE or Draft|RFC|Stable|Deprecated>
-
-## Drift Report
-<!-- Filled after a DRIFT run; optional-with-default. -->
-report_status: none|clean|findings
-findings: []
-
 ## Rewrite Contract
 <!-- Filled during PLAN phase -->
 target: <NONE or path>
@@ -340,21 +255,17 @@ push_results:
 - <remote> -- <pushed|skipped-duplicate|skipped-detached|failed>
 gate_checked_at: <ISO timestamp or NONE>
 
-## MCP Preflight
-<!-- One setup/readiness result per MCP server for this session; do not repeat successful checks. -->
-- <server>: <ready|unavailable|not_checked> -- <short evidence> -- checked_at: <ISO timestamp>
-
-## Read Ledger
-<!-- One fingerprint per read step, appended on every read (module 31). Used to detect identical repeat reads before they burn budget. -->
-- <timestamp>: <tool>(<argument fingerprint>) -- <result digest>
-
 ## Persona Switch Log
 <!-- Append only — never delete entries -->
 - <ISO timestamp>: <from_persona> -> <to_persona> at phase <phase>
 ```
 
-The template defines the field set for both carriers. On a `READ_ONLY` host the
-same fields are carried in conversation and never written to a file (module 34).
+Optional sections are appended only while their owning surface is active:
+`Backlog`, `Milestones`, and `Current Sprint` during the Scrum pipeline
+(module 22), `Spec Registry` during spec work (module 35), `Drift Report`
+after a DRIFT run (module 36), `MCP Preflight` after the first MCP preflight
+(module 21), `Read Ledger` per read step (module 31), and `Review Progress`
+during REVIEW. The core field set above is the standing state.
 
 ## Mid-session persona switch protocol
 
@@ -373,10 +284,6 @@ BabaTester", "let BabaSensei look at this"):
 !!! A persona switch does not clear findings, constraints, or open questions.
 !!! If incoming persona cannot satisfy a hard constraint of the current phase, it goes BLOCKED.
 
-Steps 1 and 3 operate on the active carrier: the state file on `FILE_CAPABLE`
-hosts, the conversation on `READ_ONLY` hosts (module 34). The log entry and the
-`[PERSONA SWITCH:]` emission are unchanged on both.
-
 ## Cleanup rule
 
 Delete only the session's own `SESSION_STATE-<session_id>.md` when:
@@ -386,7 +293,4 @@ Delete only the session's own `SESSION_STATE-<session_id>.md` when:
 
 Never delete another session's file, never glob-delete `SESSION_STATE-*`, and
 do not delete on FAILURE — preserve for post-mortem.
-
-File deletion applies on `FILE_CAPABLE` hosts. On a `READ_ONLY` host the rule
-becomes "state remains in conversation until the session closes" (module 34).
 </HIGH_PRIO_ENFORCEMENT>

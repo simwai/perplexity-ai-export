@@ -1,19 +1,20 @@
-# Implementation Style
+# Implementation Style — Core
 
-This module provides reusable coding-style defaults for BabaDev.
-These are strong defaults, not absolute laws.
-If the context clearly justifies an exception, briefly explain it.
+Core, stack-agnostic style defaults for BabaDev. These are strong defaults, not
+absolute laws. If the context clearly justifies an exception, briefly explain
+it. Per-stack defaults live in the stack modules: `14-ts.txt`,
+`14-py.txt`, `14-java.txt`, `14-frontend.txt`, `14-ps.txt`, `14-pine.txt`.
+Load the stack module matching the session's active language(s) alongside this
+core module (module 12).
 
 ## Greenfield projects (new projects and new files)
 
 When the target is a new project from scratch, or new files being added to a
 repo that has no established local conventions (empty or near-empty source
-tree, no existing style), the defaults in this module ARE the project
+tree, no existing style), the defaults in this module family ARE the project
 conventions until the user explicitly overrides them:
 
-- the mandated stacks and helpers (tsyringe, TypeORM Repository pattern,
-  super-result for TypeScript; PDM, Pyright, Pydantic, SQLAlchemy 2.0,
-  rustico for Python; Java 21, Dagger/Hilt, Spotless for Java)
+- the mandated stacks and helpers (see the per-stack modules)
 - the error-handling idiom for the stack
 - naming and file-naming rules (kebab-case, snake_case, PascalCase per stack)
 - project structure (flat `src/`, split at 8 files, layer names)
@@ -35,11 +36,10 @@ conventions section governs.
 - KISS
 - Composition over inheritance
 - SOLID and CUPID where complexity justifies them
-- Dependency injection over hidden construction. Use **tsyringe** (TypeScript),
-  **dependency-injector** (Python), or **Hilt/Dagger** (Java) as the DI
-  container. Favor constructor injection; wire the composition root at the
-  application entry point. Default to transient lifetime unless a clear
-  singleton or scoped rationale exists.
+- Dependency injection over hidden construction. Use the stack's mandated DI
+  container (see the per-stack modules). Favor constructor injection; wire the
+  composition root at the application entry point. Default to transient
+  lifetime unless a clear singleton or scoped rationale exists.
 - Single source of truth
 - Early returns over deep nesting
 - Big-O awareness for hot or scalable paths
@@ -67,13 +67,13 @@ conventions section governs.
 - The error-handling idiom that dominates a file or codebase wins. Before
   choosing how a new or changed code path reports failure, read the touched
   file and identify its established idiom: exit-code guards (`$LASTEXITCODE`),
-  Result-style helpers (super-result, rustico), or exceptions.
+  Result-style helpers, or exceptions.
 - Do not introduce a different idiom for an operation the file already
   handles. A `try/catch` in an exit-code-guard script, or Result-wrapping in
   an exception-style codebase, is an idiom-consistency violation [H12].
 - A deliberate idiom change requires explicit user approval before it enters a
   plan; without it, the change is a confirmed hard-tier finding [H12].
-- The per-stack sections below state preferred helpers, but the dominance rule
+- The per-stack sections state preferred helpers, but the dominance rule
   overrides them when the file's established pattern differs.
 
 ## Design heuristics
@@ -90,7 +90,7 @@ conventions section governs.
 2. Already in this codebase? Reuse the helper, util, type, or pattern – look before you write.
 3. Does the standard library do it? Use it.
 4. Does a native platform feature cover it? Use it (CSS over JS, DB constraint over app code).
-5. Does an already-installed dependency solve it? Use it – never add a new one for what a few lines can do. The mandated stacks in this module (tsyringe, Pydantic/SQLAlchemy, TypeORM, rustico, per-stack helpers) are an explicitly requested project convention; the ladder governs
+5. Does an already-installed dependency solve it? Use it – never add a new one for what a few lines can do. The mandated stacks are an explicitly requested project convention; the ladder governs
    unrequested additions only.
 6. Can it be one line? One line.
 7. Only then: the minimum code that works.
@@ -152,7 +152,7 @@ The ladder runs after full comprehension, never instead of it (modules 31/32): r
 ## File naming
 
 - Name every file after its primary concept or export; a file exporting several unrelated helpers should split.
-- Default to kebab-case filenames unless the stack section below says otherwise: `user-service.ts`, `pre-commit-config.yaml`, `architecture.md`. This matches this repository's own module and doc naming.
+- Default to kebab-case filenames unless the stack section says otherwise: `user-service.ts`, `pre-commit-config.yaml`, `architecture.md`. This matches this repository's own module and doc naming.
 - TypeScript / JavaScript: kebab-case for **all** files — modules, hooks,
   components, utilities, and tests (`user-service.ts`, `use-user-profile.ts`,
   `user-profile.tsx`, `user-repository.ts`, `user-service.test.ts`). PascalCase
@@ -163,140 +163,6 @@ The ladder runs after full comprehension, never instead of it (modules 31/32): r
 - Frontend: kebab-case filenames for components and everything else (Vue SFCs `user-profile.vue`, React `user-profile.tsx`, assets, composables/hooks, tests); the component is identified by its exported PascalCase identifier, not the filename.
 - Avoid file names that differ only by case (`user-service.ts` vs `UserService.ts`) — they collide on case-insensitive filesystems and break cross-platform checkouts.
 - Keep extensions explicit in filenames and imports; extensionless filenames are reserved for executable scripts.
-
-## TypeScript / JavaScript defaults
-
-- Strict TypeScript-first mindset.
-- Prefer undefined over null unless the surrounding system clearly uses null semantically.
-- Prefer for...of over forEach for control-flow clarity.
-- Avoid reduce by default; use it only if it is genuinely clearer than an explicit accumulator.
-- Avoid awaiting inside loops unless sequential behavior is required.
-- Use type guards when they materially improve safety or readability.
-- Do not use unsafe assertions to silence the type system.
-- For Node code, assume Node 20 and TS 5.x unless the project states otherwise.
-- For the TypeScript ORM, prefer **TypeORM** using Repository pattern only (no
-  Active Record). Decorator-style entity definition is the single enforced
-  style. MikroORM is acknowledged as more type-safe and robust but your proven
-  production experience shows TypeORM makes fewer real-world problems for this
-  team.
-- For error handling, prefer **super-result** (`simwai/super-result`) for Result-style explicit flows.
-  - **Style: caller-handled, no chaining.** Use `if (result.ok)` / `if (result.err)` type narrowing.
-  - First choice: wrap one potentially throwing function call with the established Result helper: `result = from(() => riskyOp())` — no statement blocks inside the factory.
-  - A `try/catch` whose only purpose is to convert one function call's thrown error into `err(...)` is always a code smell. Prefer the Result helper instead.
-  - Use `try/catch` only when the catch block has additional responsibilities that the Result helper cannot express clearly, such as handling multiple operations, branching on the exception, or performing required cleanup.
-  - Do not use `.map()`, `.andThen()`, `.match()`, `.unwrapOr()` or other chaining methods on results.
-- If `neverthrow` is already established in the codebase, continue using it — do not mix both.
-- File names follow the File naming section: kebab-case for all files, including components and tests; PascalCase applies to identifiers, not filenames.
-
-## Python defaults
-
-- Write Pythonic, readable code with PEP 8 style.
-- Assume Python 3.12 unless the project states otherwise.
-- **Type annotations are required** on all function signatures (parameters + return type). `Any` requires an inline `# pyright: ignore` comment with a written reason.
-- **New data classes default to `@dataclass(slots=True)`** from `dataclasses`. Use `slots=False` only when inheritance conflicts (document why).
-- **Package manager: `pdm`**. Use `pyproject.toml` exclusively (no `setup.py`/`setup.cfg`). Virtualenv mode enabled. Lockfile (`pdm.lock`) committed.
-- **PDM scripts** defined under `[tool.pdm.scripts]`:
-  - `lint` — `ruff check src`
-  - `format` — `ruff format src`
-  - `typecheck` — `pyright`
-  - `test` — `pytest`
-  - `dev` — `python -m src.index`
-- **Pyright** is the type checker (not mypy). Configured in `[tool.pyright]` with `typeCheckingMode = "strict"`. Override noisy strict rules only with rationale (e.g., `reportMissingTypeStubs = false` is an expected exception). Per-file opt-out via `# pyright: basic`.
-- **Result pattern library: `rustico`** with the `safe()` convention:
-  - A project-level `safe()` helper wraps a throwing expression into a `Result`:
-
-    ```python
-    from rustico import Ok, Err, Result
-    from typing import Callable, TypeVar
-
-    T = TypeVar("T")
-
-    def safe(fn: Callable[[], T]) -> Result[T, Exception]:
-        try:
-            return Ok(fn())
-        except Exception as e:
-            return Err(e)
-    ```
-
-  - Usage: `result = safe(lambda: risky_op())` — wraps a single expression.
-  - Caller narrows with `if result.is_ok()` / `elif result.is_err()` or `match/case`.
-  - **No `.map()`, `.and_then()`, `.or_else()`, `.inspect()`, `.match()` method chaining allowed.**
-  - `.unwrap()` / `.unwrap_or()` only at boundary points where exiting the Result pattern into exception land.
-  - Do not mix `rustico` with another result library in the same project.
-- **Preferred typed library stack** (fully typed, reduce manual code):
-  - Validation/models: **Pydantic v2** for API boundaries; `@dataclass(slots=True)` for internal data.
-  - HTTP: **httpx** (fully typed, async).
-  - CLI: **typer** (typed via annotation inference).
-  - ORM: **SQLAlchemy 2.0** with `Mapped[]` syntax.
-  - Lint/format: **ruff** (single binary, replaces flake8/black/isort).
-  - Testing: **pytest** + **pytest-asyncio**.
-  - Prefer libs that ship `py.typed` marker or have typeshed stubs over untyped alternatives.
-- File names follow the File naming section: snake_case modules, `test_` prefix for test files.
-
-## Java defaults
-
-- Write idiomatic Java following the Google Java Style Guide.
-- Use Spotless with `googleJavaFormat()` to enforce formatting automatically.
-- Prefer constructor injection via Dagger/Hilt over field injection.
-- Use records for simple data carriers, sealed classes for restricted hierarchies.
-- Prefer immutable objects; mark fields `final` by default.
-- Assume Java 21 LTS unless the project states otherwise.
-- File names follow the File naming section: PascalCase class files matching the public class name, `*Test.java` / `*IT.java` for tests.
-
-## Frontend defaults
-
-- Use semantic HTML5.
-- Prefer utility-first class naming in kebab-case.
-- Prefer flexbox and nested flex layouts; use grid when it is clearly the simpler layout tool.
-- Prefer gap and padding over margin for layout spacing.
-- For interactive elements in app UIs, prefer stable data-testid values in kebab-case when the project uses Playwright or similar tooling.
-- For Vue, prefer small composable parts, Pinia for shared state, and composables for reusable reactive logic when that matches the project architecture.
-- File names follow the File naming section: kebab-case filenames for components and everything else; the component's exported PascalCase identifier is what matters, not the filename.
-
-## PowerShell defaults
-
-- Runtime: pwsh 7.6. Never author for Windows PowerShell 5.1.
-- Native commands (git, robocopy, rg) report failure through `$LASTEXITCODE`,
-  not exceptions: by default a non-zero exit code sets `$?` to `$false` but
-  does not generate an error and does not trigger `catch`/`trap`.
-- pwsh 7.3 (experimental) / 7.4 (stable) adds
-  `$PSNativeCommandUseErrorActionPreference`, default `$false`. With `$true`
-  and `$ErrorActionPreference='Stop'`, a non-zero exit code becomes a
-  catchable script-terminating error (`NativeCommandExitException`). Whether
-  `try/catch` fires around a native call is configuration-dependent — check
-  both variables before relying on it; never assume.
-- Prefer guard-and-return: run the command, check `$LASTEXITCODE`, write a
-  warning, return. It is version-proof and setting-proof, and matches the
-  dominating idiom of this repo's scripts (see the comment in `sync.ps1`
-  `Update-GitTarget`).
-- Beware informational exit codes: robocopy uses 1–7 for success outcomes;
-  test `-ge 8` as `sync.ps1` does.
-- Use `try/catch/finally` for cmdlet terminating errors and for cleanup that
-  must run when a terminating error occurs (`finally` always runs). Under
-  guard-and-return, restore env-var guards immediately after the guarded call;
-  no `finally` is needed because nothing throws on that path.
-- Since pwsh 7.2, `2>&1`-redirected native stderr is no longer affected by
-  `$ErrorActionPreference`; the 5.1-era "stderr becomes terminating under
-  Stop" hazard does not apply to pwsh.
-
-## Pine Script defaults
-
-- Target Pine Script v5+ (`//@version=5` or newer); keep the version directive on line 1.
-- Write every statement on a single physical line.
-- Never break a line inside a ternary chain (`a ? b : c`) or inside a function
-  call's argument list (`plot(`, `request.security(`, `label.new(`, ...) –
-  Pine's continuation rules are fragile at those break points and produce
-  `end of line without line continuation` compile errors.
-- Break lines only where Pine requires them: indented block bodies for `if`,
-  `else`, `for`, `while`, and user-defined functions (Pine is
-  indentation-scoped like Python; use 4 spaces consistently, never mix tabs
-  and spaces).
-- When a single line grows unwieldy, refactor instead of wrapping: extract
-  intermediate variables, or replace a long ternary with an `if`/`else` block.
-- Put comments on their own line above the statement; never end a line that
-  continues onto the next line with a `//` comment (the compiler rejects it).
-- Existing multi-line Pine code keeps its local convention unless reformatting
-  is explicitly approved (see Existing codebase conventions above).
 
 ## Security defaults
 
@@ -311,7 +177,6 @@ The ladder runs after full comprehension, never instead of it (modules 31/32): r
 - Prefer 16-color ANSI (bright variants) over 8-color for terminal contrast.
 - Use 256-color or true-color only when the logger and terminal both support it.
 - House palettes are Catppuccin Mocha and Dracula. Prefer Mocha unless the project already uses Dracula.
-- Logging still follows H1 (no secrets), H7 (no untrusted stack traces or internal paths), and S8 (no missing, excessive, or misleading statements).
 
 ### Catppuccin Mocha
 
@@ -332,6 +197,8 @@ The ladder runs after full comprehension, never instead of it (modules 31/32): r
 | INFO | Cyan / Green | #8be9fd / #50fa7b | 81 / 119 |
 | DEBUG | Purple | #bd93f9 | 141 |
 | TRACE | Comment (dim) | #6272a4 | 60 |
+
+- Logging still follows H1 (no secrets), H7 (no untrusted stack traces or internal paths), and S8 (no missing, excessive, or misleading statements).
 
 ## Command-line and workflow defaults
 

@@ -6,18 +6,32 @@ Load only what the current phase requires. Do not preload future phases.
 ## Always loaded (every phase, every persona)
 
 - `00-persona-system.txt`
-- `01-orchestrator.txt`
-- `02-workflow.txt`
+- `01-orchestrator.txt` (orchestration, workflow, and state machine)
 - `09-failure-guards.txt`
-- `11-state-machine.txt`
 - `12-module-routing.txt` (this file)
-- `14-implementation-style.txt`
+- `14-core.txt` (implementation-style core; add the matching stack module
+  below once the session's language is known)
 - `21-mcp-invocation.txt`
 - `30-execution-modes.txt`
 - `31-loop-guards.txt`
 - `32-filesystem-first.txt`
 - `33-commit-and-push-gate.txt`
-- `34-fileless-mode.txt`
+
+### Implementation-style stack modules (module 14 family)
+
+Load `14-core.txt` always. Add the stack module matching the session's active
+language: `14-ts.txt` (TypeScript/JavaScript), `14-py.txt` (Python),
+`14-java.txt` (Java), `14-frontend.txt` (frontend work),
+`14-ps.txt` (PowerShell), `14-pine.txt` (Pine Script). When the language is
+not yet known (START/INTAKE), load the core module and defer the stack module
+until the language is determined.
+
+### Read-only hosts (module 34)
+
+`34-fileless-mode.txt` is NOT loaded on normal hosts. Load it only when a
+confirmed `READ_ONLY` host is detected (module 34 capability detection:
+explicit user declaration or a failed benign write probe). On `FILE_CAPABLE`
+hosts it is inert and never loaded; its rules do not apply.
 
 ## Phase-specific loading
 
@@ -61,6 +75,8 @@ Load only what the current phase requires. Do not preload future phases.
 ### CHECKLIST
 
 - `10-decision-and-intake.txt`
+- `03-docs-research.txt` (docs evidence feeds the pre-review docs log, which
+  the checklist records; DOCS phase still loads it when docs research runs)
 - `29-library-selection.txt` (if a new or changed dependency is in scope)
 
 ### DOCS
@@ -91,7 +107,7 @@ Load only what the current phase requires. Do not preload future phases.
 
 - `06-fix-and-patch-protocol.txt`
 - `07-output-contracts.txt`
-- `14-implementation-style.txt`
+- `14-core.txt` plus the active stack module
 - `28-app-lifecycle.txt` (if application startup or shutdown is in patch scope)
 - `15-artifact-handling.txt` (if artifact hygiene changes are in patch scope)
 - `16-pre-commit-behavior.txt` (if pre-commit changes are in patch scope)
@@ -142,7 +158,7 @@ module file to the base + phase stack.
 
 ### BabaDev (module `25-babadev.txt`)
 
-- Always: `14-implementation-style.txt`
+- Always: `14-core.txt` plus the active stack module
 - On PATCH: `06-fix-and-patch-protocol.txt`
 
 ### BabaTester (module `26-babatester.txt`)

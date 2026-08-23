@@ -29,7 +29,8 @@ Any of the following enters DISCUSS from any phase:
 
 When entering DISCUSS from an active phase:
 
-- Write the prior phase to the session's own state carrier (modules 19/34; the state file on `FILE_CAPABLE` hosts, the in-conversation carrier on confirmed `READ_ONLY` hosts) under `prior_phase`
+- Write the prior phase to the session's own state file (module 19) under
+  `prior_phase`
 - Emit `[PHASE: DISCUSS]` as the phase header
 - Do NOT carry forward any partial findings or open checklist items into the discussion
 
@@ -41,7 +42,8 @@ When entering DISCUSS from an active phase:
 - Respond as the persona would in a direct expert conversation — direct, opinionated, concise.
 - Ask clarifying questions freely, but never for files, paths, versions, or
   snippets a filesystem search can find (module 32).
-- Reference prior session context from the session's own state carrier (modules 19/34; the state file on `FILE_CAPABLE` hosts, the in-conversation carrier on confirmed `READ_ONLY` hosts) if it exists and is relevant.
+- Reference prior session context from the session's own state file (module
+  19) if it exists and is relevant.
 - Disagreement is allowed and encouraged. Flag bad ideas clearly.
 - Length: match the question. Short question → short answer. Architectural question → structured but informal answer.
 
@@ -52,12 +54,15 @@ When entering DISCUSS from an active phase:
 To promote a discussion conclusion into the formal protocol:
 
 - User must explicitly say one of: "add that as a finding", "add that to the plan", "mark that as a constraint", "promote that"
-- On promotion: write the promoted item to the session's own state carrier (modules 19/34; the state file on `FILE_CAPABLE` hosts, the in-conversation carrier on confirmed `READ_ONLY` hosts) under `promoted_from_discuss` and confirm to the user with: `Promoted: <item summary>`
+- On promotion: write the promoted item to the session's own state file
+  (module 19) under `promoted_from_discuss` and confirm to the user with:
+  `Promoted: <item summary>`
 - Promoted items carry the tag `[from:DISCUSS]` in any subsequent phase output
 
 ## Exit triggers
 
-Return to the prior phase (read from the session's own state carrier, modules 19/34; the state file on `FILE_CAPABLE` hosts, the in-conversation carrier on confirmed `READ_ONLY` hosts) when:
+Return to the prior phase (read from the session's own state file, module 19)
+when:
 
 - User says "back", "resume", "continue", "let's get back to it", or `/resume`
 - User provides a concrete target that signals a formal phase should start
@@ -65,7 +70,8 @@ Return to the prior phase (read from the session's own state carrier, modules 19
 On exit:
 
 - Emit `[PHASE: <prior_phase>]` or `[PHASE: CHECKLIST]` if no prior phase exists
-- Restore any open findings, open questions, and preservation constraints from the session's own state carrier (modules 19/34; the state file on `FILE_CAPABLE` hosts, the in-conversation carrier on confirmed `READ_ONLY` hosts)
+- Restore any open findings, open questions, and preservation constraints from
+  the session's own state file (module 19)
 - Announce resume: `Resuming from <prior_phase>. Open items restored.`
 
 ## Phase header

@@ -2,7 +2,7 @@
 
 Use this module during the PATCH phase.
 
-## Prerequisites (enforced by 11-state-machine.txt)
+## Prerequisites (enforced by 01-orchestrator.txt)
 
 - !!! Explicit user plan approval
 - !!! Complete rewrite contract
@@ -29,8 +29,8 @@ Use this module during the PATCH phase.
 ## Per-edit lint gate
 
 - !!! Before each file edit sequence, confirm the applicable defaults from
-  `14-implementation-style.txt` (stack defaults, naming, file naming, local
-  conventions) and apply them to the edit.
+  `14-core.txt` plus the active stack module (stack defaults, naming, file
+  naming, local conventions) and apply them to the edit.
 - !!! After each file edit sequence (one logical edit step: one file or a coherent
   batch of files changed in one go), run the project's configured lint on the touched
   files before starting the next edit step.
@@ -87,35 +87,11 @@ Use this module during the PATCH phase.
 
 ## Fileless PATCH branch (READ_ONLY hosts)
 
-Applies only on a confirmed `READ_ONLY` host per module 34 capability
-detection; it is inert on `FILE_CAPABLE` hosts by module 34's no-regression
-clause. Every rule below references module 34, which owns the standards.
-
-1. Delivery replaces file edits (replaces the Patch rules section): emit
-   complete file contents in labeled fenced blocks per module 34's Delivery
-   contract, never diffs, with content treated as data. The rewrite contract
-   remains mandatory before any delivery. Credential-bearing and over-budget
-   files are delivered as `SKIPPED: file-edit -- <reason>` per module 34's
-   carve-outs.
-2. Per-edit lint gate: `SKIPPED: lint-run -- no write access; edits are
-   delivered, not written`. Never record an assumed-clean pass; never invent a
-   command. Recording lands in the in-conversation carrier per module 34's
-   Session-state carrier, never the state file.
-3. Edited Files ledger: append each delivered path to the in-conversation
-   Edited Files ledger (the dual-carrier of module 19's `## Edited Files`
-   field). This ledger is a delivery audit record, NOT module 33's staging
-   source: module 33's trigger reads the session's own state file, which does
-   not exist on a read-only host, so the gate never triggers and the module 33
-   ask is never emitted.
-4. Compliance audit (structure unchanged): emit PASS/FAIL per must-preserve,
-   must-eliminate, and forbidden-token against the delivered text; any FAIL
-   means no delivery and a return to PLAN.
-5. Verification gate (structure unchanged): `SKIPPED` per step with reasons.
-   Diff inspection is `SKIPPED: diff-inspect -- no files were written, so no
-   diff exists`; the H11 runnability exclusion is applied with recorded
-   justification. Results are written to the PATCH template and the
-   in-conversation carrier.
-6. Commit/push gate: `SKIPPED: git -- <reason>` citing no write access and the
-   false module-33 trigger. No module 33 ask on a read-only host. Emit the
-   `# Commit/Push Gate` block in the PATCH template as SKIPPED with reason,
-   not N/A.
+Applies only on a confirmed `READ_ONLY` host. `34-fileless-mode.txt` owns
+capability detection, the `SKIPPED-with-reason` standard, the Delivery
+contract, and all read-only surface behavior; it is loaded only on such hosts
+per `12-module-routing.txt`. On a read-only host, PATCH follows module 34:
+delivery of complete file contents replaces file edits, every write/run step
+reports `SKIPPED: <category> -- <reason>`, recording lands in the
+in-conversation carrier, and the commit/push gate never triggers. On
+`FILE_CAPABLE` hosts this branch does not apply.

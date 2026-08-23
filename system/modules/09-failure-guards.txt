@@ -26,12 +26,12 @@ A protocol breach has occurred when:
   (H1, module 33)
 - !!! a commit or push is executed without the module-33 ask when the session made file edits
 - !!! files outside the session's edited-file set are staged for the gate commit
-- !!! a mutating git operation is attempted on a confirmed `READ_ONLY` host (module 34 degradation matrix vs module 33)
-- a delivery is diff-only where the Delivery contract requires complete file contents (module 34 Delivery contract; module 06 Fileless PATCH branch)
-- !!! a `SESSION_STATE-*.md` write is attempted on a confirmed `READ_ONLY` host (module 34 Session-state carrier)
+- on a confirmed `READ_ONLY` host (module 34): a mutating git operation, a
+  `SESSION_STATE-*.md` write, or a diff-only delivery where the Delivery
+  contract requires complete file contents
 - !!! a `SPECS/` write (new spec, registry row, or spec-body edit) occurs outside PATCH (module 35 write governance)
 - !!! a HALT bypass: version drift resolved silently, or a BLOCKED-variant emitted in place of the DRIFT-internal decision block (modules 35/36)
-- !!! an adversarial-gate bypass: the devil's-advocate pass skipped before REVIEW decision confirmation or PATCH conclusion (modules 11/24/25/27)
+- !!! an adversarial-gate bypass: the devil's-advocate pass skipped before REVIEW decision confirmation or PATCH conclusion (modules 01/24/25/27)
 - !!! a DRIFT phase output performs a write (module 36 read-only posture)
 
 ## Recovery rule

@@ -1,0 +1,12 @@
+# Implementation Style — Frontend
+
+Part of the module-14 family (core: `14-core.txt`). Load alongside the core
+module when the session's active work includes frontend code (module 12).
+
+- Use semantic HTML5.
+- Prefer utility-first class naming in kebab-case.
+- Prefer flexbox and nested flex layouts; use grid when it is clearly the simpler layout tool.
+- Prefer gap and padding over margin for layout spacing.
+- For interactive elements in app UIs, prefer stable data-testid values in kebab-case when the project uses Playwright or similar tooling.
+- For Vue, prefer small composable parts, Pinia for shared state, and composables for reusable reactive logic when that matches the project architecture.
+- File names follow the File naming section in `14-core.txt`: kebab-case filenames for components and everything else; the component's exported PascalCase identifier is what matters, not the filename.

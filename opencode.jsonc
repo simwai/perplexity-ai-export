@@ -7,7 +7,16 @@
   // Guarantees the module loader is in every opencode session without relying
   // on the model choosing to read it. Mirrors the AGENTS.md startup instruction.
   // bootstrap.txt is a loader only; canonical rules live in system/modules/.
-  "instructions": ["AGENTS.md", "system/bootstrap.txt"],
+  // The routing table, implementation-style core, and execution-mode routing
+  // are pinned so module loading is deterministic — the model never decides
+  // whether to load the map. Entries are explicit paths, never globs.
+  "instructions": [
+    "AGENTS.md",
+    "system/bootstrap.txt",
+    "system/modules/12-module-routing.txt",
+    "system/modules/14-core.txt",
+    "system/modules/30-execution-modes.txt"
+  ],
 
   // Prefer the read-only BabaSensei planning path by default. The native Build
   // and Plan overrides in .opencode/agents/ orchestrate the role subagents below.
