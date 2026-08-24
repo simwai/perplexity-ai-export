@@ -22,6 +22,172 @@
   // and Plan overrides in .opencode/agents/ orchestrate the role subagents below.
   "default_agent": "plan",
 
+  // Unofficial providers: local OpenAI-compatible server.
+  // `pnpm dev` must be running. Endpoint convention — the AI SDK's
+  // openai-compatible provider appends /chat/completions to baseURL, so
+  // baseURL must be the prefix *without* the /chat/completions suffix:
+  //   correct:   http://localhost:8890/v1         -> POST /v1/chat/completions
+  //   correct:   http://localhost:8890/v1/glm     -> POST /v1/glm/chat/completions
+  //   wrong:     http://localhost:8890/v1/glm/chat/completions -> POST /v1/glm/chat/completions/chat/completions (404)
+  // The server now tolerates the wrong form via alias routes, but configure
+  // the correct prefix to avoid the extra hop.
+  "provider": {
+    "perplexity": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "Perplexity (unofficial)",
+      "options": {
+        "baseURL": "http://localhost:8890/v1",
+        "apiKey": "ppx-local"
+      },
+      "models": {
+        "pplx_pro": {
+          "name": "Perplexity Best",
+          "tool_call": false,
+          "limit": { "context": 200000, "output": 16384 }
+        },
+        "pplx_alpha": {
+          "name": "Perplexity Alpha",
+          "tool_call": false,
+          "limit": { "context": 200000, "output": 16384 }
+        },
+        "turbo": {
+          "name": "Perplexity Turbo",
+          "tool_call": false,
+          "limit": { "context": 200000, "output": 16384 }
+        },
+        "experimental": {
+          "name": "Sonar 2 (Experimental)",
+          "tool_call": false,
+          "limit": { "context": 200000, "output": 16384 }
+        },
+        "grok46low": {
+          "name": "Grok 4.6 (fast)",
+          "tool_call": false,
+          "limit": { "context": 200000, "output": 16384 }
+        },
+        "grok4": {
+          "name": "Grok 4",
+          "tool_call": false,
+          "limit": { "context": 200000, "output": 16384 }
+        },
+        "claude50sonnet": {
+          "name": "Claude 5 Sonnet",
+          "tool_call": false,
+          "limit": { "context": 200000, "output": 16384 }
+        },
+        "claude50opus": {
+          "name": "Claude 5 Opus",
+          "tool_call": false,
+          "limit": { "context": 200000, "output": 16384 }
+        },
+        "gpt54": {
+          "name": "GPT-5.4",
+          "tool_call": false,
+          "limit": { "context": 200000, "output": 16384 }
+        },
+        "gpt5": {
+          "name": "GPT-5",
+          "tool_call": false,
+          "limit": { "context": 200000, "output": 16384 }
+        },
+        "gemini35flash": {
+          "name": "Gemini 3.5 Flash",
+          "tool_call": false,
+          "limit": { "context": 200000, "output": 16384 }
+        },
+        "deepseek-default": {
+          "name": "DeepSeek Default",
+          "tool_call": false,
+          "limit": { "context": 128000, "output": 8192 }
+        },
+        "deepseek-expert": {
+          "name": "DeepSeek Expert",
+          "tool_call": false,
+          "limit": { "context": 128000, "output": 8192 }
+        },
+        "deepseek-r1": {
+          "name": "DeepSeek R1",
+          "tool_call": false,
+          "limit": { "context": 128000, "output": 8192 }
+        },
+        "deepseek-search": {
+          "name": "DeepSeek Search",
+          "tool_call": false,
+          "limit": { "context": 128000, "output": 8192 }
+        },
+        "deepseek-vision": {
+          "name": "DeepSeek Vision",
+          "tool_call": false,
+          "limit": { "context": 128000, "output": 8192 }
+        }
+      }
+    },
+    "motif": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "Motif (unofficial)",
+      "options": {
+        "baseURL": "http://localhost:8890/v1/motif",
+        "apiKey": "ppx-local"
+      },
+      "models": {
+        "motif": {
+          "name": "Motif",
+          "tool_call": false,
+          "limit": { "context": 128000, "output": 16384 }
+        }
+      }
+    },
+    "kimi": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "Kimi (unofficial)",
+      "options": {
+        "baseURL": "http://localhost:8890/v1/kimi",
+        "apiKey": "ppx-local"
+      },
+      "models": {
+        "kimi": {
+          "name": "Kimi",
+          "tool_call": false,
+          "limit": { "context": 200000, "output": 16384 }
+        }
+      }
+    },
+    "qwen": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "Qwen (unofficial)",
+      "options": {
+        "baseURL": "http://localhost:8890/v1/qwen",
+        "apiKey": "ppx-local"
+      },
+      "models": {
+        "qwen3.8-max": {
+          "name": "Qwen 3.8 Max",
+          "tool_call": false,
+          "limit": { "context": 200000, "output": 16384 }
+        }
+      }
+    },
+    "glm": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "GLM (unofficial)",
+      "options": {
+        "baseURL": "http://localhost:8890/v1/glm",
+        "apiKey": "ppx-local"
+      },
+      "models": {
+        "glm-5.3": {
+          "name": "GLM 5.3",
+          "tool_call": false,
+          "limit": { "context": 200000, "output": 16384 }
+        }
+      }
+    }
+  },
+
+  // Injects the opencode session id into every request so the API
+  // maps each opencode conversation to one provider thread.
+  "plugin": [".opencode/plugin/session-header.ts"],
+
   // Loop protection: hard-stop repeated identical tool calls (doom loops).
   // opencode fires doom_loop detection on 3+ consecutive identical calls and
   // would default to "ask"; denying it halts the loop at the process level
