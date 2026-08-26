@@ -7,13 +7,36 @@ module when the session's active language is Python (module 12).
 - Assume Python 3.12 unless the project states otherwise.
 - **Type annotations are required** on all function signatures (parameters + return type). `Any` requires an inline `# pyright: ignore` comment with a written reason.
 - **New data classes default to `@dataclass(slots=True)`** from `dataclasses`. Use `slots=False` only when inheritance conflicts (document why).
-- **Package manager: `pdm`**. Use `pyproject.toml` exclusively (no `setup.py`/`setup.cfg`). Virtualenv mode enabled. Lockfile (`pdm.lock`) committed.
+- **Tooling detection first (existing projects).** In an existing Python
+  project, detect the active toolchain from marker files before running any
+  install/add/lint/test command and route every Python command through it:
+  - `pdm` — `pdm.lock`, `[tool.pdm]` in `pyproject.toml`, or `.pdm-python`
+    present: use `pdm install`, `pdm add`, `pdm run <cmd>`.
+  - `poetry` — `poetry.lock` or `[tool.poetry]` in `pyproject.toml`: use
+    `poetry install`, `poetry add`, `poetry run <cmd>`.
+  - `uv` — `uv.lock` or `[tool.uv]` in `pyproject.toml`: use `uv sync`,
+    `uv add`, `uv run <cmd>`.
+  - bare venv — `.venv/`, `venv/`, or `env/` containing an interpreter: invoke
+    that interpreter directly (`<venv>\Scripts\python.exe` on Windows,
+    `<venv>/bin/python` elsewhere) instead of the system Python.
+  - Precedence when multiple apply: a configured tool (lockfile or tool table)
+    wins over a bare venv; between tools, `pdm` > `poetry` > `uv`.
+  - Never mix tools in one project (no `pip install` beside poetry/uv/pdm, no
+    `uv add` in a pdm project) and never fall back to the system interpreter
+    while a detected environment exists.
+- **Greenfield default remains `pdm`.** New projects use `pyproject.toml`
+  exclusively (no `setup.py`/`setup.cfg`), virtualenv mode enabled, lockfile
+  (`pdm.lock`) committed.
 - **PDM scripts** defined under `[tool.pdm.scripts]`:
   - `lint` — `ruff check src`
   - `format` — `ruff format src`
   - `typecheck` — `pyright`
   - `test` — `pytest`
   - `dev` — `python -m src.index`
+- **Checks run through the detected runner** regardless of tool: `lint`
+  (`ruff check src`), `format` (`ruff format src`), `typecheck` (`pyright`),
+  `test` (`pytest`) — e.g., `pdm run test`, `poetry run pytest`,
+  `uv run pytest`, or `<venv>\Scripts\python.exe -m pytest` for a bare venv.
 - **Pyright** is the type checker (not mypy). Configured in `[tool.pyright]` with `typeCheckingMode = "strict"`. Override noisy strict rules only with rationale (e.g., `reportMissingTypeStubs = false` is an expected exception). Per-file opt-out via `# pyright: basic`.
 - **DI container: dependency-injector.** Favor constructor injection; wire the
   composition root at the application entry point. Default to transient
