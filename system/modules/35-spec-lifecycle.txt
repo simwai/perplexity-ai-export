@@ -15,7 +15,7 @@ version-drift HALT, and write governance.
   spec artifact as its phase output; the file writes under `SPECS/` happen in
   PATCH (write governance below).
 - A concrete target with no spec request skips SPEC (model-decidable skip,
-  recorded, never a decision prompt – modules 02/08).
+  recorded, never a decision prompt – modules 01/08).
 
 ## Spec artifact
 

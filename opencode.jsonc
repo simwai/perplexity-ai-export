@@ -7,15 +7,25 @@
   // Guarantees the module loader is in every opencode session without relying
   // on the model choosing to read it. Mirrors the AGENTS.md startup instruction.
   // bootstrap.txt is a loader only; canonical rules live in system/modules/.
-  // The routing table, implementation-style core, and execution-mode routing
-  // are pinned so module loading is deterministic — the model never decides
-  // whether to load the map. Entries are explicit paths, never globs.
+  // All ten always-loaded modules from the routing table are pinned so module
+  // loading is fully deterministic – the ~39 KB standing context cost was
+  // weighed against the token-cost refactor and accepted deliberately
+  // (decision 2026-08-26). Stack modules (14-ts, 14-py, ...) stay
+  // diligence-loaded because they are language-dependent. Entries are explicit
+  // paths, never globs.
   "instructions": [
     "AGENTS.md",
     "system/bootstrap.txt",
+    "system/modules/00-persona-system.txt",
+    "system/modules/01-orchestrator.txt",
+    "system/modules/09-failure-guards.txt",
     "system/modules/12-module-routing.txt",
     "system/modules/14-core.txt",
-    "system/modules/30-execution-modes.txt"
+    "system/modules/21-mcp-invocation.txt",
+    "system/modules/30-execution-modes.txt",
+    "system/modules/31-loop-guards.txt",
+    "system/modules/32-filesystem-first.txt",
+    "system/modules/33-commit-and-push-gate.txt"
   ],
 
   // Prefer the read-only BabaSensei planning path by default. The native Build
@@ -183,10 +193,6 @@
       }
     }
   },
-
-  // Injects the opencode session id into every request so the API
-  // maps each opencode conversation to one provider thread.
-  "plugin": [".opencode/plugin/session-header.ts"],
 
   // Loop protection: hard-stop repeated identical tool calls (doom loops).
   // opencode fires doom_loop detection on 3+ consecutive identical calls and

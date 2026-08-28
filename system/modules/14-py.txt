@@ -5,7 +5,7 @@ module when the session's active language is Python (module 12).
 
 - Write Pythonic, readable code with PEP 8 style.
 - Assume Python 3.12 unless the project states otherwise.
-- **Type annotations are required** on all function signatures (parameters + return type). `Any` requires an inline `# pyright: ignore` comment with a written reason.
+- **Type annotations are required** on all function signatures (parameters + return type). `Any` requires an inline `# pyrefly: ignore` comment with a written reason.
 - **New data classes default to `@dataclass(slots=True)`** from `dataclasses`. Use `slots=False` only when inheritance conflicts (document why).
 - **Tooling detection first (existing projects).** In an existing Python
   project, detect the active toolchain from marker files before running any
@@ -30,14 +30,19 @@ module when the session's active language is Python (module 12).
 - **PDM scripts** defined under `[tool.pdm.scripts]`:
   - `lint` — `ruff check src`
   - `format` — `ruff format src`
-  - `typecheck` — `pyright`
+  - `typecheck` — `pyrefly check`
   - `test` — `pytest`
   - `dev` — `python -m src.index`
 - **Checks run through the detected runner** regardless of tool: `lint`
-  (`ruff check src`), `format` (`ruff format src`), `typecheck` (`pyright`),
+  (`ruff check src`), `format` (`ruff format src`), `typecheck` (`pyrefly check`),
   `test` (`pytest`) — e.g., `pdm run test`, `poetry run pytest`,
   `uv run pytest`, or `<venv>\Scripts\python.exe -m pytest` for a bare venv.
-- **Pyright** is the type checker (not mypy). Configured in `[tool.pyright]` with `typeCheckingMode = "strict"`. Override noisy strict rules only with rationale (e.g., `reportMissingTypeStubs = false` is an expected exception). Per-file opt-out via `# pyright: basic`.
+- **Tool role split** (Pylance / Pyrefly / Ruff) so the three tools do not duplicate work or fight each other in the editor or CI:
+  - **Pylance** is the language server / IntelliSense. Configure in the target repo's `.vscode/settings.json`: `python.languageServer: "Pylance"`, `python.analysis.typeCheckingMode: "strict"`. Do not enable Pylance's own type checker when Pyrefly is in use; Pyrefly is the single source of type errors.
+  - **Pyrefly** is the type checker. Configure in `pyproject.toml [tool.pyrefly]`; CLI entry point is `pyrefly check`. Run on save in the editor; full check in CI and pre-commit.
+  - **Ruff** is the lint + format + isort tool (single binary replaces flake8, black, and isort). Configure in `pyproject.toml [tool.ruff]` and `[tool.ruff.lint]` with a sensible default like `select = ["E", "F", "I", "W", "B", "UP"]`. Editor: `charliermarsh.ruff` extension, `[python].editor.defaultFormatter = "charliermarsh.ruff"`, `formatOnSave = true`, `editor.codeActionsOnSave.source.organizeImports = "explicit"` so Ruff handles isort without a separate extension.
+  - **Recommended `.vscode/extensions.json`** `recommendations`: `ms-python.vscode-pylance`, `meta.pyrefly`, `charliermarsh.ruff`. The prompt system does not ship `.vscode/` files; PATCH runs apply this wiring to target repos on demand.
+- **Pyrefly** is the type checker (not Pyright or mypy). Configured in `[tool.pyrefly]` in `pyproject.toml` with `strict = true`. Override noisy strict rules only with rationale. Per-file opt-out via `# pyrefly: ignore[rule]` with a one-line why comment.
 - **DI container: dependency-injector.** Favor constructor injection; wire the
   composition root at the application entry point. Default to transient
   lifetime unless a clear singleton or scoped rationale exists.

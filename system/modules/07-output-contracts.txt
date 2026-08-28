@@ -247,6 +247,10 @@ CHECKLIST. A `[x]` on a status claiming completed review that has not run is a
 false tick and a protocol breach; a `[x]` on a row whose status is `pending` is
 the expected checklist state, not a false tick. The hard/soft-tier lines are
 coverage-scope records (in scope / out of scope), decided at checklist time.
+Soft-tier coverage spans S1–S13 plus the documented extension IDs from modules
+15 and 16 (`S-artifact`, `S-gitattributes`, `S-precommit`): when artifact,
+gitattributes, or pre-commit review is in scope, those extensions fall under
+the soft-tier coverage tick.
 
 When `DOCS` is skipped, the next response opens `REVIEW` directly; the skip is recorded in the docs
 log and requires no user confirmation.

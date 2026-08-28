@@ -145,7 +145,7 @@ When patching or creating hook configuration:
 - Prefer `.pre-commit-config.yaml` with local hooks over custom shell scripts
 - Formatter: `ruff format` (runs first)
 - Linter: `ruff check --fix` (runs second)
-- Type check: `pyright` with the project's existing config
+- Type check: `pyrefly check` with the project's existing config
 - Tests: `pytest -x -q` — fail fast, minimal output
 
 ### Script opt-in marker

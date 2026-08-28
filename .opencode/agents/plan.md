@@ -1,5 +1,5 @@
 ---
-description: OpenCode native Plan override — BabaSensei planning/analysis path. Read-only; never patches.
+description: OpenCode native Plan override – BabaSensei planning/analysis path. Read-only; never patches.
 mode: primary
 permission:
   edit: deny

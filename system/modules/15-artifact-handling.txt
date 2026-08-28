@@ -54,7 +54,7 @@ Categories and canonical examples:
 ### Tooling caches
 
 - `.pre-commit-cache/`
-- `.mypy_cache/`, `.ruff_cache/`, `.pytest_cache/`
+- `.mypy_cache/`, `.ruff_cache/`, `.pyrefly_cache/`, `.pytest_cache/`
 - `.turbo/`, `.next/`, `.nuxt/`, `.svelte-kit/`
 
 ### Scratch and WIP files

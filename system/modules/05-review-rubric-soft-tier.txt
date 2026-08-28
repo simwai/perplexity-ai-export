@@ -15,7 +15,8 @@ S8 -- Logging: missing, excessive, or misleading log statements; includes
 S9 -- Test coverage: missing tests for critical paths
 S10 -- Documentation: missing or misleading comments on non-obvious logic
 S11 -- Type safety: missing type annotations or unsafe casts
-  Note: In Python code, S11 is upgraded to H10 for public function annotations.
+  Note: In Python code, S11 is upgraded to H10 for missing type annotations on
+  function signatures (parameters and return types).
 S12 -- Performance: obvious inefficiencies with measurable impact
 S13 -- Over-engineering: unrequested abstractions or speculative genericity beyond what the change needs; includes an interface with one implementation, a factory for one product, config for values that never change, and new dependencies when an existing one covers the need
 

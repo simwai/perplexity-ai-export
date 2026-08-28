@@ -1,5 +1,5 @@
 ---
-description: OpenCode native Build override — adaptive BabaDev implementation path.
+description: OpenCode native Build override – adaptive BabaDev implementation path.
 mode: primary
 permission:
   edit: allow
