@@ -61,6 +61,7 @@ must be kept in sync:
 - `32-filesystem-first.txt` — SESSION_STATE recovery cross-reference
 - `33-commit-and-push-gate.txt` — edited-file staging source and gate outcome writes
 - `34-fileless-mode.txt` — carrier selection (`FILE_CAPABLE`/`READ_ONLY`)
+- `38-session-file-locks.txt` — `## Edited Files` allow-list source for locks, and `## Locked Files` section owner
 
 ## Fresh-session validity
 
@@ -248,8 +249,19 @@ notes: []
 
 ## Edited Files
 <!-- Append only — one path per edit step, at the per-edit lint-gate recording
-point (modules 06/30). Staging source for the commit/push gate (module 33). -->
+point (modules 06/30). Staging source for the commit/push gate (module 33).
+This list is the authoritative allow-list for `.session-locks/`: a session
+must not hold a lock on any path not recorded here, and module 33's gate
+refuses to stage any path in this list that is not currently locked or
+just-released by this session (module 38). -->
 - <path>
+
+## Locked Files
+<!-- Append on acquisition, mark released on release. Per-entry: path,
+owner (always this session), state (held|released|steal|stale-wait), and
+acquired_at / released_at timestamps. Populated only when module 38 is
+active (PATCH or DIRECT). -->
+- <path> -- <state> -- <ISO timestamp>
 
 ## Commit/Push Gate
 <!-- Filled when the session made file edits, at end of PATCH/DIRECT per module 33 -->
@@ -270,8 +282,9 @@ Optional sections are appended only while their owning surface is active:
 `Backlog`, `Milestones`, and `Current Sprint` during the Scrum pipeline
 (module 22), `Spec Registry` during spec work (module 35), `Drift Report`
 after a DRIFT run (module 36), `MCP Preflight` after the first MCP preflight
-(module 21), `Read Ledger` per read step (module 31), and `Review Progress`
-during REVIEW. The core field set above is the standing state.
+(module 21), `Read Ledger` per read step (module 31), `Review Progress`
+during REVIEW, and `Locked Files` when module 38 is active (PATCH or
+DIRECT). The core field set above is the standing state.
 
 ## Mid-session persona switch protocol
 

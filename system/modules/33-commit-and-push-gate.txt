@@ -72,8 +72,31 @@ same expectation onto the commit path.
   (H9: silent clobbering of another session's work).
 - !!! Never stage `SESSION_STATE-*.md` — they are gitignored; `git add -f`
   would force them in, so `-f` is forbidden outright.
+- !!! Never stage `.session-locks/` -- it is gitignored, not source.
 - Staging is self-verifying: `git status --short` must show exactly the
   session's edited files staged and nothing else before committing.
+
+### Lock verification (module 38)
+
+Before any `git add`, this gate delegates to `38-session-file-locks.txt`
+to verify, for every path in the proposed commit:
+
+- the current session holds the lock for that path, or
+- the current session released the lock within this PATCH/DIRECT step.
+
+If any path fails the check, staging is refused and the gate surfaces
+the same three options as module 38's Wait and surface (wait longer /
+skip this file / override-steal). The wait/surface logic lives in
+module 38; this section does not duplicate it.
+
+After the lock check passes, this gate re-reads the working-tree
+version of each path and diffs it against the in-memory expected
+content to catch the read-then-write race that implicit-on-write
+locking cannot prevent. Any unowned hunk surfaces with the same three
+options and refuses staging.
+
+A confirmed `READ_ONLY` host (module 34) skips this section: the gate
+trigger is already false, so no staging and no lock check occur.
 
 ---
 

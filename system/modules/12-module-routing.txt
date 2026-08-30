@@ -113,6 +113,7 @@ hosts it is inert and never loaded; its rules do not apply.
 - `15-artifact-handling.txt` (if artifact hygiene changes are in patch scope)
 - `16-pre-commit-behavior.txt` (if pre-commit changes are in patch scope)
 - `20-database-conventions.txt` (if DB schema design or review is in patch scope)
+- `38-session-file-locks.txt` (per-file edit serialization, module 33 gate integration)
 
 ### TEST_STRATEGY
 
@@ -176,3 +177,10 @@ When more than one persona is active in a session, or a mid-session switch occur
 
 - `13-persona-handoff-contract.txt`
 - `19-session-state.txt`
+
+## Edit-bearing execution modes
+
+`38-session-file-locks.txt` is loaded whenever the session is in an
+edit-bearing mode: execution mode `DIRECT` (per `30-execution-modes.txt`),
+or phase `PATCH` (the `### PATCH` row above already lists it). On any
+other phase or mode, module 38 is inert and not loaded.
