@@ -16,7 +16,7 @@ H7 -- Error exposure: stack traces, internal paths, or raw exception details exp
 H8 -- Dependency risk: known CVEs or unreviewed dependency versions
 H9 -- Data integrity: missing transactions, partial writes, or silent data loss
 H10 -- Python type safety (Python only): missing type annotations on function signatures.
-  Applies to parameters and return type. `Any` requires inline `# pyright: ignore` with reason.
+  Applies to parameters and return type. `Any` requires inline `# pyrefly: ignore` with reason.
 H11 -- Runnable artifact (verdict-gate criterion): the project must build/compile,
   start (smoke: boot, or library import/entry-point load), pass the existing
   functional test suite, and pass a Playwright e2e smoke (navigate to the

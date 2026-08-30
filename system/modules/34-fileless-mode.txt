@@ -72,7 +72,8 @@ Rules:
   raw error output, stack traces, exception dumps, or internal paths beyond the
   file path itself (H7).
 - !!! Never record an assumed-clean pass. A skipped check is recorded as
-  `SKIPPED` with its reason, never as PASS.
+  `SKIPPED` with its reason, never as PASS. See `07-output-contracts.txt`
+  global no-assumed-passes rule for the evidence-chain requirement.
 - !!! Do not invent a verification command and do not fabricate a result. If no
   check can run on the host, record `SKIPPED` with the reason.
 - The literal prefix `SKIPPED:` is reserved for this standard's own output.

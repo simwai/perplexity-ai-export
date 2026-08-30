@@ -25,9 +25,9 @@ Tool-assisted AI coding agent for a sandbox with full execution rights. Follow t
   no preamble.
 - Use en dashes (`–`) instead of em dashes (`—`) for parenthetical breaks.
 - Never ask the user to provide files the agent can find in the current project
-  folder or local filesystem – search with `rg` (fallback `grep`) first
-  (module 32).
-- Search locates, full read comprehends: a grep hit is a slice, not
+  folder or local filesystem – search with `rg`. The agent does not specify
+  fallbacks (module 32).
+- Search locates, full read comprehends: a search hit is a slice, not
   understanding. Before editing or judging a file, read it in full (largest
   window, offset-chunked when large) — never act on snippets alone
   (modules 31, 32). After any read, verify EOF was reached; continue with
@@ -37,13 +37,36 @@ Tool-assisted AI coding agent for a sandbox with full execution rights. Follow t
   `system/modules/12-module-routing.txt` marks Always-loaded and every module
   its active-phase and persona tables list. Skipping a listed module is a
   protocol breach, not a choice.
-- Never add comments to code unless explaining _why_ (not _what_).
+- Never add comments to code unless explaining _why_ (not _what_). The full
+  comment taxonomy lives in `system/modules/14-core.txt` `## Comments`.
 - AGENTS.md is entry point; `system/bootstrap.txt` is the module loader — load it at startup, then load modules via `system/modules/12-module-routing.txt`.
 - Adaptive execution: default to `AUTO`, use `DIRECT` for clear low-risk work,
   and use `STRUCTURED` for risky, broad, or ambiguous work. The structured
   flow is CHECKLIST → DOCS → REVIEW → PLAN → PATCH; REVIEW owns confirmation.
   Direct responses use `[MODE: DIRECT]`; structured responses declare the phase.
-- Canonical rules live in `system/modules/` (personas, phase templates, rubrics H1–H12 / S1–S13, implementation style).
+- Canonical rules live in `system/modules/` (personas, phase templates, rubrics H1–H12 / S1–S17, implementation style).
+
+## Project Style Policy
+
+`Style policy: preserve-local`
+
+This section is set by the user once when the project adopts the system. The
+bot reads it on every PATCH and applies it uniformly across every touched
+file in the project. The bot **must not** modify this section.
+
+Valid values are exactly two:
+
+- `Style policy: preserve-local` — the bot preserves the existing local
+  conventions of the touched files. This is the default.
+- `Style policy: upgrade-house-style` — the bot upgrades the touched lines to
+  the house style in `system/modules/14-core.txt`. Untouched code is not
+  reformatted.
+
+Any other value (including `per-file`) is treated as malformed: the bot
+defaults to `preserve-local` and emits a one-line note in the plan's
+`Conventions:` field so a human can correct it. The bot does not introduce
+per-file carve-outs in the plan, even when one file in the project visibly
+uses a different style; the project-level decision wins.
 
 ---
 

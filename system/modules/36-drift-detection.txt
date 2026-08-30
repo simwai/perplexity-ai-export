@@ -44,6 +44,16 @@ diagnosed. DRIFT is a read-only diagnostic: it never writes files.
 - The words `push` and `pull` are NOT used as drift verbs -- they collide with
   the module-33 commit/push gate vocabulary.
 
+## Mitigations on drift findings
+
+Drift findings that require a write (any diverged claim, orphaned mapping, or
+code-exceeds-spec entry) carry a `Mitigations:` block per module 07 -- 2-3
+options, recommended first with `(Recommended)`, one-line pros and cons. The
+mitigation choice is persisted in the session state file under
+`## Findings Mitigations` (module 19) and travels into PLAN via the handoff
+contract. Clean DRIFT reports (no findings, or findings labelled informational
+only) do not carry mitigation blocks.
+
 ## Fresh-eyes review
 
 - Fresh-eyes is a bounded read-only subagent call: the subagent receives the

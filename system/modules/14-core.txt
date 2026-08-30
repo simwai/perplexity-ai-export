@@ -7,6 +7,11 @@ it. Per-stack defaults live in the stack modules: `14-ts.txt`,
 Load the stack module matching the session's active language(s) alongside this
 core module (module 12).
 
+> Per-project style policy is recorded in the target project's `AGENTS.md`
+> (see `## Project Style Policy`). The bot reads it on every PATCH and never
+> edits it. The policy is binary: `preserve-local` or `upgrade-house-style`.
+> There is no per-file override.
+
 ## Greenfield projects (new projects and new files)
 
 When the target is a new project from scratch, or new files being added to a
@@ -45,15 +50,28 @@ conventions section governs.
 - Big-O awareness for hot or scalable paths
 - Security and type safety are first-class concerns
 
-## Existing codebase conventions
+## Local-convention policy
 
-- When editing existing code in DIRECT or PATCH, inspect the touched files and
-  preserve their established local conventions: formatting, naming, structure,
-  comments, error handling, and test patterns.
-- Do not reformat or restructure code that is not part of the change.
-- Deviate from an established local convention only when an exception is
-  explicitly approved or the convention conflicts with a hard safety rule;
-  record any intentional deviation.
+The decision between *preserve local convention* and *upgrade to house style*
+is a **per-project** choice, made once when the target project adopts the
+system. There is no per-file override.
+
+- The decision is recorded in the target project's `AGENTS.md` (see
+  `## Project Style Policy`). Once recorded, the bot **must not** modify that
+  field. If the field is missing or malformed in a target project, the bot
+  defaults to `preserve-local` and emits a one-line note in the plan that the
+  field is unset or invalid, so a human can correct it.
+- The bot reads the project-level decision on every PATCH (loads `AGENTS.md`;
+  the field is a single line under `## Project Style Policy`). It applies the
+  decision **uniformly across every touched file** in that project.
+- When the decision is `upgrade-house-style`: the touched lines are upgraded;
+  the plan's `Conventions:` field names the house-style rules being applied;
+  an upgrade to a touched file is not a reformat of untouched code, only of
+  the lines the change requires. The plan's `## Touched files` block notes
+  any file whose existing style visibly differs from the house style (e.g.,
+  a vendored library), without making that file an exception to the policy.
+- When the decision is `preserve-local`: the existing "preserve local
+  conventions" rule applies.
 - When creating or updating documentation (README, ADR, API docs, changelog,
   release notes), follow the repository's existing documentation conventions
   and tone, not only its Markdown lint configuration.
@@ -61,6 +79,11 @@ conventions section governs.
   conventions (Conventional Commits, ticket or scope prefixes, subject length,
   body style) and follow them. If no convention is established, state the
   chosen format instead of inventing one silently.
+
+Pass-assertion discipline: see `07-output-contracts.txt` global rule. A claim
+that a local convention "looks fine" or "is consistent" is not evidence -- the
+agent must name the inspected lines or cite the command that produced the
+conclusion.
 
 ## Error-handling idiom consistency (all stacks)
 
@@ -101,6 +124,48 @@ The ladder runs after full comprehension, never instead of it (modules 31/32): r
 - Bug fix = root cause, not symptom: grep the callers of the function you touch and fix the shared function once – one guard in the shared function is a smaller diff than a guard in every caller.
 - The shortest working diff wins, but only once the problem is understood – the smallest change in the wrong place is a second bug, not laziness.
 
+## Stepdown rule (S14)
+
+Functions read top-to-bottom. Each function calls functions one level of
+abstraction below it. A function whose first line is a high-level call
+(`fetchUser()`) and whose next line is a low-level call (`parseJwt(token)`)
+without a named intermediate is a stepdown violation. The body of every
+function should be readable as a single sentence at one level of abstraction;
+the supporting helpers carry the next level down. (Martin, *Clean Code* ch. 3
+"One Level of Abstraction per Function" / ch. 11 "The Stepdown Rule: Once
+Again".)
+
+## Newspaper order (S15)
+
+A file reads like a newspaper article: headline first, then increasingly
+fine-grained detail as you scroll. The public API sits at the top, private
+helpers follow, and the reader never has to scroll up to find a called
+function. A file that places a public function below the private helper it
+calls, or splits a related group of functions across the top and bottom, is a
+newspaper-order violation. (Martin, *Clean Code* ch. 5 "The Purpose of
+Formatting" / ch. 11 "The Newspaper Metaphor".)
+
+## Flag arguments and output arguments (S16)
+
+A boolean flag argument almost always means the function does two things; split
+it. An output argument (a function that mutates an argument passed by
+reference) is a hidden side effect; return a value instead. The only
+acceptable uses are integration with APIs that require a mutable handle (rare)
+and fluent builders that return `this` (handled by S17's exception). (Martin,
+*Clean Code* ch. 3 "Function Arguments" / ch. 8 "Function Arguments" — Flag
+Arguments and Output Arguments.)
+
+## Tell, don't ask — Law of Demeter (S17)
+
+A method should not reach through another object to access its parts.
+`customer.wallet.balance.currency` exposes the wallet's internals; the
+behavior belongs on the wallet, called from the customer. Tell the wallet to
+do something; don't ask the wallet for its balance and decide yourself. A
+chain of more than one dot is a Demeter violation unless the chain is a
+fluent-builder return value or a known data-transfer object. (Martin, *Clean
+Code* ch. 6 "Objects and Data Structures" / ch. 12 "Objects and Data
+Structures" — The Law of Demeter.)
+
 ## Minimal verification floor
 
 - Non-trivial new logic (a branch, a loop, a parser, a money/security path) leaves one runnable check behind – the smallest thing that fails if the logic breaks: an assert-based self-check or one small test file. No test frameworks, fixtures, or per-function suites unless asked.
@@ -119,11 +184,95 @@ The ladder runs after full comprehension, never instead of it (modules 31/32): r
 
 ## Comments
 
-- Use comments only for why, constraints, legal notes, or serious warnings.
-- Never comment what the code obviously does.
-- If code is confusing, rename or refactor first.
-- Start comments with a capital letter.
-- Deliberate simplifications that cut a real corner with a known ceiling (global lock, O(n²) scan, naive heuristic) are marked with a `simplify:` comment naming the ceiling and the upgrade path, e.g. `# simplify: global lock – per-account locks if throughput matters`.
+*Reference: Robert C. Martin, Clean Code -- chapter 4 (1st ed., 2008) / chapter
+5 (2nd ed., 2025). The categories below are Martin's, with stack-specific
+markers added on top.*
+
+**Content over prefix.** The rule is what the comment says, not what
+character starts it. Prefix follows the language (`//` in TS/JS/Java/Pine, `#`
+in Python/PowerShell/Bash, `--` in SQL/Lua/Haskell -- automatic, not policed
+here). Stack modules do not re-state the prefix; this is the only place the
+prefix is mentioned.
+
+**Why, not what.** Never restate the next line of code. Never write
+`// increment counter` above `i++`. Comments that fail this rule are an S10
+finding at review time and a per-edit-lint-gate failure at patch time.
+
+**Good comments -- categories that earn a comment (Martin ch. 4 / ch. 5):**
+
+- **Legal comments** -- copyright, license, or authorship headers required by a
+  contract. Place once at the top of the file; never duplicate.
+- **Informative comments** -- provide basic information that the language
+  cannot express (e.g., the regex pattern's meaning, the byte order of a
+  packed struct). Prefer a named constant over a comment when the constant
+  carries the same information.
+- **Explanation of intent** -- why a block of code exists, not what it does.
+  The agent must answer "what would the next reader re-derive without this
+  comment?" in one sentence. Use the marker `// why: <one-line reason>`.
+- **Clarification** -- translate an obscure argument or return value into
+  something readable. Use only when the alternative is worse than the comment
+  (e.g., a standard-library call whose return value is genuinely confusing).
+- **Warning of consequences** -- flag a non-obvious failure mode the caller
+  would otherwise miss. Use the marker `// safety: <one-line consequence>`.
+- **TODO comments** -- actions the author intends to take later, with an owner
+  and a target. Format: `// TODO(<owner>): <what> -- <why deferred>`. A TODO
+  without an owner is disallowed by default (see "Bad comments" below).
+- **Amplification** -- make an otherwise subtle line of code louder. Use
+  sparingly; if the code needs amplification, refactor it first.
+- **Javadocs in public APIs** -- public-API docstrings are required for any
+  function, class, or module that crosses a package or service boundary.
+  Private/internal code does not get a docstring; the name carries the meaning.
+
+**Bad comments -- categories that violate this rule (Martin ch. 4 / ch. 5):**
+
+- **Mumbling** -- a comment that says something without saying anything
+  useful. Always delete.
+- **Redundant comments** -- restate the next line of code in prose. The
+  agent's "why, not what" rule lands here. Always delete.
+- **Misleading comments** -- say one thing while the code does another. Worse
+  than no comment. Delete and fix the code or the comment.
+- **Mandated comments** -- required by a process but not by the code (e.g.,
+  "this function exists"). Delete; the function name is the mandate.
+- **Journal comments** -- change logs at the top of a file ("added by X on
+  Y"). Use git, not a comment.
+- **Noise comments** -- restate the obvious in a noisy way. The agent's
+  "no decorative banners" rule lands here. The agent's specific bans:
+  `// ----- HEYO -----`, `// ==== Section ====`, ASCII art separators,
+  `// some random label` headers, "this method does X" above a method named
+  `doX`.
+- **Scary noise** -- loud markers (e.g.,
+  `////////////////////////////////////////////`) that signal a section by
+  visual weight rather than by structure. Use `// #region LABEL` /
+  `// #endregion` instead. Region tags are the only sanctioned way to mark a
+  section.
+- **TODO without owner** -- `// TODO: fix this` with no owner and no target.
+  Disallowed by default; explicit user approval in the plan is required to use.
+- **Position markers** -- banner comments like `// ACTIONS` placed at arbitrary
+  columns to organize the file. Use a section break, an extract-method
+  refactor, or a region tag.
+- **Closing-brace comments** -- `// } end of while` placed next to a closing
+  brace. Delete; the indentation and a small function carry the meaning.
+- **Attributions and bylines** -- `// Added by Simon` at the top of a function.
+  Use git blame, not a comment.
+- **Commented-out code** -- dead code left as a comment. Delete; git has the
+  history.
+- **HTML in comments** -- `// <b>important</b>` in a code comment. The renderer
+  is not the reader.
+- **Nonlocal information** -- a comment that refers to a system-wide context
+  the reader won't have (e.g., "this corresponds to issue #1234" without a
+  link). Cite the URL inline if the context matters.
+- **Too much information** -- a multi-paragraph essay in a code comment. The
+  file is not a blog.
+- **Function headers** -- a block comment at the top of every function
+  describing what it does. The function name and signature carry the meaning;
+  a docstring is enough.
+- **Javadocs in nonpublic code** -- verbose docstrings on private functions.
+  Required only on public-API boundaries.
+
+Deliberate simplifications that cut a real corner with a known ceiling (global
+lock, O(n²) scan, naive heuristic) are marked with a `simplify:` comment naming
+the ceiling and the upgrade path, e.g.
+`# simplify: global lock -- per-account locks if throughput matters`.
 
 ## Markdown defaults
 
@@ -134,20 +283,26 @@ The ladder runs after full comprehension, never instead of it (modules 31/32): r
 - Do not disable Markdown rules inline or in configuration unless the exception is
   explicitly required and documented.
 
-## Region tags (new projects only)
+## Region tags
 
-- Use `// #region LABEL` / `// #endregion` (or language-equivalent syntax) to group related code in new projects.
-- Do not add region tags to existing codebases unless the file already uses them.
+- Use `// #region LABEL` / `// #endregion` (or language-equivalent syntax) to
+  group related code in greenfield projects. Region tags are also added to an
+  existing file when the project-level style decision is `upgrade-house-style`
+  (see `## Local-convention policy`).
+- Do not add region tags to existing codebases whose project decision is
+  `preserve-local`, unless the file already uses them.
 - Labels should be short, descriptive Title Case, e.g. `// #region Database Layer`.
 
 ## Naming
 
-- Names must reveal intent, usage, and role.
-- Prefer searchable, pronounceable names.
-- Classes are nouns; functions are verbs.
-- Boolean names should read like facts: isX, hasX, areX.
-- In TypeScript class code, prefer underscore-prefixed private fields as a default house style.
-- Prefer LlmProvider over LLMProvider when matching the established codebase style.
+Names must reveal intent, usage, and role. Reference: Robert C. Martin,
+*Clean Code* chapter 2 (1st ed., 2008) / chapter 4 (2nd ed., 2025) —
+"Meaningful Names." Apply the rules there as the house style. The
+project-specific markers that follow are how this system names the same
+ideas: classes are nouns (`UserService`); functions are verbs
+(`calculateTotal`); booleans read like facts (`isAdmin`, `hasPermission`,
+`canRetry`); in TypeScript class code, prefer underscore-prefixed private
+fields as a default house style.
 
 ## File naming
 
@@ -203,8 +358,11 @@ The ladder runs after full comprehension, never instead of it (modules 31/32): r
 ## Command-line and workflow defaults
 
 - Suggest PowerShell commands first when the project is Windows-centric —
-  invoke via `pwsh` 7.6, never Windows PowerShell 5.1.
-- Use rg for search and regex for multi-file replacements when appropriate.
+  invoke in this order: `pwsh` 7.6 first, then Windows PowerShell 5.1, then
+  `cmd`, then `bash`. Default to `pwsh` 7.6 unless the project is pinned to
+  Windows PowerShell 5.1.
+- Use `rg` (ripgrep) for content search.
+- Use regex for multi-file replacements when appropriate.
 - Do not generate files or execute commands unless explicitly asked, except
   during PATCH verification and the per-edit lint gate, where running project
   checks (lint, typecheck, tests) is required by `06-fix-and-patch-protocol.txt`

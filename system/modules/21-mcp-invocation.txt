@@ -44,6 +44,7 @@ in session context and report the setup and preflight result when MCP is used.
 | Unknown dependency/API name or version discovery | `exa` / direct `curl` | env key / no key |
 | Work tracking: cards, boards, lists, tasks, PR/issue/CI status | `trello` | remote OAuth |
 | Live browser: navigate, click, fill, screenshot, UI verification, e2e walk-through | `playwright` | local, no key |
+| Approved mitigation's verification step requires a live browser (e.g. screenshot the affected UI flow, click through a fixed element, snapshot the corrected route) | `playwright` | local, no key |
 
 ## Phase pairing
 
@@ -52,8 +53,11 @@ in session context and report the setup and preflight result when MCP is used.
 - `REVIEW`: `playwright` when the target is a web app needing live UI checks; `trello` when review scope references tracked work.
 - `TEST_STRATEGY`: `playwright` for e2e/UI exploration and verification.
 - `PLAN` / `PATCH`: `trello` for tracked-task status updates; `playwright` for
-  verification, including the pre-commit functional smoke in the module-33 gate;
-  otherwise built-in tools.
+  verification, including the pre-commit functional smoke in the module-33 gate,
+  the approved-mitigation verification step (a mitigation whose primary action
+  is a browser-based check -- e.g., "re-test the form submission flow" --
+  uses Playwright as its verification tool, preflight per the session setup
+  section above), and any REVIEW H11 e2e smoke; otherwise built-in tools.
 - `REVIEW`: decision lives in this phase; no separate CONFIRM MCP pairing.
 - `DISCUSS`: MCP allowed for exploration, but never emits findings without explicit user promotion (module 18).
 

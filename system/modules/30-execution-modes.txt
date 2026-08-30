@@ -69,7 +69,9 @@ Direct mode may inspect files, edit, and run checks as needed. It must still:
 - after each file edit sequence (one logical edit step: one file or a coherent batch
   of files changed in one go), run the project's configured lint on the touched files
   and fix reported issues (auto-fix first, then manual fixes), recording the exact
-  command and its real result; never record an assumed-clean pass
+  command and its real result; never record an assumed-clean pass. See
+  `07-output-contracts.txt` global no-assumed-passes rule for the
+  evidence-chain requirement.
 - append each edited path to the session's own state file `## Edited Files`
   section (module 19) alongside the lint recording
 - when edits were made, apply the commit/push gate (`33-commit-and-push-gate.txt`)

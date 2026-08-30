@@ -33,6 +33,8 @@ A protocol breach has occurred when:
 - !!! a HALT bypass: version drift resolved silently, or a BLOCKED-variant emitted in place of the DRIFT-internal decision block (modules 35/36)
 - !!! an adversarial-gate bypass: the devil's-advocate pass skipped before REVIEW decision confirmation or PATCH conclusion (modules 01/24/25/27)
 - !!! a DRIFT phase output performs a write (module 36 read-only posture)
+- !!! a write to the target project's `## Project Style Policy` section in `AGENTS.md` — bot-cannot-edit invariant (modules 07/14)
+- !!! a pass assertion (`pass`, `passed`, `clean`, `clear`, `conforms`, `LGTM`, or synonym) in a structured response that is not paired with the evidence chain required by `07-output-contracts.txt` global no-assumed-passes rule
 
 ## Recovery rule
 

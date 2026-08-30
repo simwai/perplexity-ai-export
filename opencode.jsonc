@@ -7,10 +7,11 @@
   // Guarantees the module loader is in every opencode session without relying
   // on the model choosing to read it. Mirrors the AGENTS.md startup instruction.
   // bootstrap.txt is a loader only; canonical rules live in system/modules/.
-  // All ten always-loaded modules from the routing table are pinned so module
-  // loading is fully deterministic – the ~39 KB standing context cost was
-  // weighed against the token-cost refactor and accepted deliberately
-  // (decision 2026-08-26). Stack modules (14-ts, 14-py, ...) stay
+  // All always-loaded modules from the routing table are pinned so module
+  // loading is fully deterministic – the standing-context cost was weighed
+  // against the token-cost refactor and accepted deliberately
+  // (decision 2026-08-26; 11 entries after 2026-08-29 H1 corollary added
+  // 37-credential-sanitization). Stack modules (14-ts, 14-py, ...) stay
   // diligence-loaded because they are language-dependent. Entries are explicit
   // paths, never globs.
   "instructions": [
@@ -25,7 +26,8 @@
     "system/modules/30-execution-modes.txt",
     "system/modules/31-loop-guards.txt",
     "system/modules/32-filesystem-first.txt",
-    "system/modules/33-commit-and-push-gate.txt"
+    "system/modules/33-commit-and-push-gate.txt",
+    "system/modules/37-credential-sanitization.txt"
   ],
 
   // Prefer the read-only BabaSensei planning path by default. The native Build

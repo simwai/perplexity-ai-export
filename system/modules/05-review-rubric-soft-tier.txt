@@ -19,6 +19,10 @@ S11 -- Type safety: missing type annotations or unsafe casts
   function signatures (parameters and return types).
 S12 -- Performance: obvious inefficiencies with measurable impact
 S13 -- Over-engineering: unrequested abstractions or speculative genericity beyond what the change needs; includes an interface with one implementation, a factory for one product, config for values that never change, and new dependencies when an existing one covers the need
+S14 -- Stepdown rule: a function's body mixes high-level orchestration with low-level operations. Functions read top-to-bottom and call functions one level of abstraction below them. A function whose first line is a high-level call (`fetchUser()`) and whose next line is a low-level call (`parseJwt(token)`) without a named intermediate is a stepdown violation (Martin, *Clean Code* ch. 3 "One Level of Abstraction per Function" / ch. 11 "The Stepdown Rule: Once Again").
+S15 -- Newspaper order: a file does not read top-to-bottom from public API to private details. A public function appears below the private helper it calls, or a related group of functions is split across the top and bottom of the file. Files read like a newspaper article: headline first, then increasingly fine detail (Martin, *Clean Code* ch. 5 "The Purpose of Formatting" / ch. 11 "The Newspaper Metaphor").
+S16 -- Flag/output arguments: a function takes a boolean flag that selects between two behaviors, or a function mutates an argument passed by reference instead of returning a value. Split the flag-argument function into two; return a value instead of mutating an output argument (Martin, *Clean Code* ch. 3 "Function Arguments" / ch. 8 "Function Arguments" — Flag Arguments and Output Arguments).
+S17 -- Tell, don't ask (Law of Demeter): a method reaches through another object to access its parts (`a.b.c.d`); the behavior belongs on the inner object. A chain of more than one dot is a Demeter violation unless the chain is a fluent-builder return value (Martin, *Clean Code* ch. 6 "Objects and Data Structures" / ch. 12 "Objects and Data Structures" — The Law of Demeter).
 
 ## Usage
 

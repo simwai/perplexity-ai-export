@@ -62,7 +62,7 @@ Before recommending a pre-commit setup, identify:
 
 2. **Existing scripts** — read `package.json` `scripts` section.
    Look for: `format`, `lint`, `typecheck`, `test`, `build`.
-   For Python: look for `[tool.ruff]`, `[tool.pyright]`, `[tool.pytest.ini_options]`
+   For Python: look for `[tool.ruff]`, `[tool.pyrefly]`, `[tool.pytest.ini_options]`
    in `pyproject.toml`.
 
 3. **Existing hook config** — check for `.pre-commit-config.yaml`,

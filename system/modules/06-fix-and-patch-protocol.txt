@@ -46,7 +46,8 @@ Use this module during the PATCH phase.
   outside scope and explicitly accepted.
 - Record the exact command and its real output per step in the session's own
   state file (module 19); never record an assumed-clean pass. If no lint command
-  exists, record SKIPPED with the reason.
+  exists, record SKIPPED with the reason. See `07-output-contracts.txt` global
+  no-assumed-passes rule for the evidence-chain requirement.
 - At the same recording step, append each edited path to the session's own
   state file `## Edited Files` section (module 19) — this list is the staging
   source for the commit/push gate (module 33).

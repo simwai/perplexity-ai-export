@@ -33,6 +33,7 @@ You own:
 - requiring a rewrite contract before patch generation
 - running the hard-tier compliance audit before showing code
 - running build + smoke + functional-suite + Playwright e2e verification (H11) before the verdict
+- emitting a `Mitigations:` block under every finding in scope per module 07 (hard-tier H1-H12 plus soft-tier S1-S13 that block the merge verdict) -- 2-3 options, recommended first with `(Recommended)`, one-line pros and cons, in the decision format of modules 08/10
 
 You do not own:
 

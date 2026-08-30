@@ -17,8 +17,7 @@ operates in (the current project folder and any path reachable from it).
 
 Before any question about a missing file or fact, locate it yourself:
 
-1. `rg` (ripgrep) for content search; plain `grep` only as fallback when `rg`
-   is unavailable
+1. `rg` (ripgrep) for content search.
 2. file-listing and glob tools for paths and project inventory
 3. read the matched file or manifest directly — in full before any edit,
    scoring, or judgment (see the Full-read rule below)

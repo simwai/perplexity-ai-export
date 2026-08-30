@@ -9,6 +9,59 @@ These output contracts apply only in `STRUCTURED` mode. `DIRECT` mode uses
 `[MODE: DIRECT]` and reports the action, diff inspection, and verification
 results without phase templates.
 
+### Omit empty sections (state-driven trim)
+
+A phase response omits any section whose trigger condition is unmet. A template
+is the maximum, not the minimum. Empty `Mitigations:`, `Open questions:`,
+`Cross-team requirements:`, `Validation loop:` blocks are deleted, not emitted
+with placeholders. Specific state-driven omits:
+
+- REVIEW: `Cross-team requirements` is omitted when no cross-team findings are
+  identified. `Validation loop` is omitted when no finding is recorded at
+  confidence <= 70%. `Open questions` is omitted when there are no open
+  questions. The aggregate-batch REVIEW report's "Sections omitted" footer
+  lists the omissions.
+- PATCH: `# Verification` collapses to one line per check (or a single
+  `All checks passed: <list>` line when more than two checks ran and all
+  passed). `# Commit/Push Gate` is one line `N/A -- no edits` when the
+  session made no file edits. `# Compliance Audit` stays verbatim -- that
+  block is mandatory.
+- DRIFT: `Verified claims` is omitted on a clean verdict. `HALT` is omitted
+  when there is no version drift. `Fresh-eyes review` is omitted unless the
+  user requested fresh-eyes.
+- INTAKE / BACKLOG / SPRINT / TASK_PLAN / SPEC / DOCS / BLOCKED / FAILURE:
+  no change.
+
+### No assumed passes (evidence-chain rule)
+
+The words `pass`, `passed`, `clean`, `clear`, `conforms`, `LGTM` (or any
+synonym) only appear in a structured response when paired with an evidence
+chain. The evidence chain is one of:
+
+- a command run with its real output,
+- a `file:line` the agent inspected,
+- a validation-loop pass (module 31) that produced the finding, or
+- an explicit user acceptance recorded in the REVIEW decision section.
+
+"Looks fine" is not evidence. "I checked the file" is not evidence (which file,
+which lines, what specifically). "Standard practice" is not evidence. The
+agent must name the thing it inspected and what it found there.
+
+The rule applies to every structured phase output (REVIEW, PLAN, PATCH, DRIFT,
+TEST_STRATEGY) and to every section that can report a finding or check,
+including: REVIEW `## Findings`, REVIEW `# Verification`, PATCH
+`# Compliance Audit`, PATCH `# Verification`, PATCH `# Commit/Push Gate`,
+DRIFT `## Drift Report`, TEST_STRATEGY `## Test Strategy`.
+
+Verification (build/smoke/tests/Playwright) is the one place the evidence
+chain is naturally present -- the `Build: PASS|FAIL|SKIPPED -- <command> --
+<note>` shape satisfies the rule. Informational statements ("the project
+uses kebab-case throughout") are allowed without per-line evidence when the
+claim is supported by a single concrete example in the same response.
+
+A pass assertion that breaks this rule is a protocol breach
+(`09-failure-guards.txt`).
+
 ## Dual-section output (human + agent)
 
 A structured phase output may split into a plain-language section for the human
@@ -235,7 +288,7 @@ Unlocks next phase only if checklist artifact exists with:
 - batch log
 - pending verdict
 - every checklist-scope checkbox (`[ ]` inventory rows, `[ ] H1 - [ ] H12`,
-  `[ ] S1 - [ ] S13`) flipped to `[x]` — a scope tick claims the listing or
+  `[ ] S1 - [ ] S17`) flipped to `[x]` — a scope tick claims the listing or
   coverage decision was made during CHECKLIST, never the review outcome
 - review-status fields (`pending | reviewing | complete`, verdict) recorded
   accurately and left `pending` where REVIEW has not run
@@ -247,7 +300,7 @@ CHECKLIST. A `[x]` on a status claiming completed review that has not run is a
 false tick and a protocol breach; a `[x]` on a row whose status is `pending` is
 the expected checklist state, not a false tick. The hard/soft-tier lines are
 coverage-scope records (in scope / out of scope), decided at checklist time.
-Soft-tier coverage spans S1–S13 plus the documented extension IDs from modules
+Soft-tier coverage spans S1–S17 plus the documented extension IDs from modules
 15 and 16 (`S-artifact`, `S-gitattributes`, `S-precommit`): when artifact,
 gitattributes, or pre-commit review is in scope, those extensions fall under
 the soft-tier coverage tick.
@@ -277,7 +330,7 @@ Hard tier:
 - [ ] H1 - [ ] H12
 
 Soft tier:
-- [ ] S1 - [ ] S13
+- [ ] S1 - [ ] S17
 
 Verification:
 - Build: pending -- [command]
@@ -383,6 +436,29 @@ Allowed only if:
 - docs evidence exists when docs phase is required
 - review mode is recorded as `interactive` or `consolidated`
 
+### Mitigations on findings
+
+Every emitted finding in `# Findings` that is in scope for remediation carries
+a `Mitigations:` block immediately under the finding line. The block is a
+mini decision prompt in the format of modules 08/10: 2-3 options, recommended
+option first with `(Recommended)`, one-line pros and cons per option, and
+exactly one `Recommended:` line. BabaTester is the one exception -- it emits
+mitigations but omits the `(Recommended)` marker and the `Recommended:` line
+because module 01 excludes it from PLAN/Done declarations.
+
+Scope: a `Mitigations:` block appears on every actionable finding -- hard-tier
+(H1-H12) and soft-tier (S1-S17 plus documented extension IDs from modules 15
+and 16 such as S-artifact, S-gitattributes, S-precommit when those extensions
+are in scope). Findings that are informational only (the reviewer flags them
+but they do not warrant remediation) move to a new `## Informational` heading
+in REVIEW and carry no `Mitigations:` block.
+
+The user's reply is one of: a letter (A/B/C) to pick a mitigation, `skip` to
+accept the finding without a mitigation, or `accept` to record the finding as
+informational. The choice is persisted in the session state file under
+`## Findings Mitigations` (module 19) and travels into PATCH and DRIFT via
+the handoff contract.
+
 !!! REVIEW owns confirmation. There is no standalone CONFIRM phase.
 
 Unlocks `PLAN` (or BabaTester `TEST_STRATEGY`) only if the response contains:
@@ -390,7 +466,6 @@ Unlocks `PLAN` (or BabaTester `TEST_STRATEGY`) only if the response contains:
 - file and batch label
 - confirmed-looking violations list with criterion IDs
 - open questions presented as separate multiple-choice decision blocks, with 2-3 options maximum per question
-- likely passes list
 - decision section with accepted violations, disputed violations, and constraints to preserve
 - verification results recorded (Build, Smoke, Functional suite, Playwright e2e smoke), or H11 explicitly excluded with justification in the decision section
 - and the user explicitly confirmed that decision section
@@ -427,12 +502,25 @@ Batch: [lines X-Y or FULL or AGGREGATE – all files complete] ([N] of [M] for t
 
 Confirmed-looking violations (provisional until the decision section is confirmed):
 - [criterion id] -- [line/range] -- [one-sentence failure] ([confidence]%)
+  - Mitigations:
+    - A. [short action] (Recommended)
+      - Pros: [one line]
+      - Cons: [one line]
+    - B. [short action]
+      - Pros: [one line]
+      - Cons: [one line]
+    - C. [short action, if needed]
+      - Pros: [one line]
+      - Cons: [one line]
 
 Validation loop (run when any finding is at confidence <= 70%):
 - Trigger: [criterion id] -- [confidence]%
 - Passes run: [fingerprint 1] -> [result] / [fingerprint 2] -> [result] / [fingerprint 3] -> [result] (or "terminated early: no new evidence at pass N")
 - Final confidence: [X]%
 - Terminal classification: [confirmed | disputed]
+
+## Informational (when applicable)
+- [criterion id] -- [line/range] -- [one-sentence note]
 
 Open questions:
 - Question: [short question]
@@ -446,9 +534,6 @@ Open questions:
   - C. [option, if needed]
     - Pros: [short pros]
     - Cons: [short cons]
-
-Likely passes:
-- [short note]
 
 Cross-team requirements (if any):
 - [repo/service] -- [priority] -- [short description] (see CHANGES_REQUIRED.md)
@@ -466,6 +551,7 @@ Please confirm:
 - Accepted violations: [list]
 - Disputed violations: [list]
 - Constraints to preserve: [list]
+- Mitigation choices: per finding, reply with A/B/C (pick), `skip`, or `accept` -- one reply per finding. Choices are persisted in `## Findings Mitigations` (module 19).
 
 Next batch:
 - [file path] -- [lines X-Y or FULL] -- [next batch, or "all files complete — confirm aggregate decision before PLAN"]
@@ -616,12 +702,36 @@ Verified claims:
 
 Diverged claims:
 - [claim id] -- [code location] -- [expected vs actual]
+  - Mitigations:
+    - A. [apply: update code to match the spec] (Recommended)
+      - Pros: [one line]
+      - Cons: [one line]
+    - B. [sync: human picks which side wins]
+      - Pros: [one line]
+      - Cons: [one line]
+    - C. [extract: spec needs a new claim] (omit when not viable)
+      - Pros: [one line]
+      - Cons: [one line]
 
 Orphaned mappings:
 - [claim id] -- [mapped location no longer exists]
+  - Mitigations:
+    - A. [apply: re-add the mapped code] (Recommended)
+      - Pros: [one line]
+      - Cons: [one line]
+    - B. [sync: deprecate the claim]
+      - Pros: [one line]
+      - Cons: [one line]
 
 Code-exceeds-spec (extract candidates):
 - [code location] -- [implemented behavior with no claim]
+  - Mitigations:
+    - A. [extract: spec gains a new claim covering this behavior] (Recommended)
+      - Pros: [one line]
+      - Cons: [one line]
+    - B. [apply: remove the unreferenced code]
+      - Pros: [one line]
+      - Cons: [one line]
 
 HALT (only when version drift is detected; never a BLOCKED variant):
 - Recommended fix path: [align header to registry | align registry to header]

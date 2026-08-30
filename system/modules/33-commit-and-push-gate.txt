@@ -23,36 +23,44 @@ and push: ask first, stage the session's own files only, and report per remote.
 
 ## Pre-ask functional verification (Playwright MCP)
 
-Before the ask, when the gate triggers and the repo declares a web-app entry
-point, run a Playwright MCP functional smoke of the session's work. This is the
-gate's verification step: REVIEW already expects a Playwright e2e smoke (H11,
-modules 04/07/27); this step carries the same expectation onto the commit path.
+Before the ask, when the gate triggers, run a Playwright MCP functional smoke
+of the session's work. This is the gate's verification step: REVIEW already
+expects a Playwright e2e smoke (H11, modules 04/07/27); this step carries the
+same expectation onto the commit path.
 
-- App-config trigger: the repo declares a web-app entry point when it has a
-  package.json `dev`/`start` script serving a browser UI, a frontend directory
-  with an established dev workflow, or a documented localhost URL. Detect it
-  with a filesystem search (module 32) — never assume it, never invent it.
+- Trigger (any of):
+  - Web-app entry point: the repo has a `package.json` `dev`/`start` script
+    serving a browser UI, a frontend directory with an established dev
+    workflow, or a documented localhost URL. Detect it with a filesystem
+    search (module 32) -- never assume it, never invent it.
+  - UI-bearing edit: the session's `## Edited Files` (module 19) contains
+    any path matching `*.html`, `*.vue`, `*.tsx`, `*.jsx`, `*.svelte`,
+    `*.css`, `*.scss`, or any path under `components/`, `views/`, `pages/`,
+    `app/routes/`, `src/routes/`. Detection is a single `rg` over the
+    edited-file set -- no shell heuristic, no guessing.
 - Procedure: start the app per its documented entry point (module 28 startup
-  validation — a failed start is FAIL, not SKIPPED), navigate to the app's URL,
+  validation -- a failed start is FAIL, not SKIPPED), navigate to the app's URL,
   click the key flows touched by the session's edits (or the app's primary
   flows when the edits are not UI-specific), and capture snapshot/screenshot
   evidence.
 - Tool safety: use safe browser tools only (`navigate`, `click`, `fill`,
   `snapshot`, `screenshot`). Never use `browser_run_code_unsafe` for a gate
-  smoke — it is RCE-equivalent (module 21). Preflight the server before first
+  smoke -- it is RCE-equivalent (module 21). Preflight the server before first
   invocation per module 21 and record the result in the session's `MCP
   Preflight` ledger (module 19). One smoke pass per gate; re-run only after a
   state change (module 31).
-- Outcome: record `PASS|FAIL|SKIPPED` with a note and the URL in the session's
+- Outcome: record `PASS|FAIL/SKIPPED` with a note and the URL in the session's
   own state file `## Commit/Push Gate` section (`playwright_smoke`, module 19)
   and in the PATCH template's Verification section (module 07).
 - Hard gate: a FAIL holds the ask. Report FAIL and return to fix (module 06
   verification-gate rule); the ask is emitted only after the smoke passes or
   the user explicitly accepts the failure.
-- SKIPPED branches: no web-app entry point -> `SKIPPED: playwright-smoke -- no
-  web-app entry point declared`. Confirmed `READ_ONLY` host -> the smoke is
-  never attempted and reports `SKIPPED: playwright-smoke -- gate trigger is
-  false on a read-only host` (Fileless branch below).
+- SKIPPED branches: neither trigger condition met -> `SKIPPED: playwright-smoke
+  -- no web-app entry point or UI-bearing edit detected`. Confirmed
+  `READ_ONLY` host -> the smoke is never attempted and reports `SKIPPED:
+  playwright-smoke -- gate trigger is false on a read-only host` (Fileless
+  branch below). MCP preflight reports `not_checked` or `unavailable` ->
+  `SKIPPED: playwright-smoke -- server not preflighted`.
 
 ---
 

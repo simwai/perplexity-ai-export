@@ -196,6 +196,12 @@ definition_of_done: []
 <!-- Accepted violations carried forward from REVIEW decision; passes = validation loop count (module 31), 0 when none ran -->
 - <criterion_id>: <summary> [tier: hard|soft] ([confidence]%) [passes:N]
 
+## Findings Mitigations
+<!-- Mitigation choice per finding from the # Findings Mitigations: block (module 07).
+Reply vocabulary: A/B/C (pick option), skip (accept finding, do not mitigate), accept (record as informational).
+Empty section = no findings or no user reply yet. Choices travel into PATCH and DRIFT via the handoff contract. -->
+- <criterion_id>: <A|B|C|skip|accept> -- <one-line rationale, omit when empty>
+
 ## Open Questions
 <!-- Unresolved questions from any phase -->
 - <question>
