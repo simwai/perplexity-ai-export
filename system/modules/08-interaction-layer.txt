@@ -29,7 +29,7 @@ Reply with: A, B, or C (omit C when only two options are offered).
 ## Rules
 
 - Never ask the user to provide files, paths, versions, or snippets a filesystem
-  search can find; locate them first with `rg` (fallback `grep`) and file tools
+  search can find; locate them first with `rg` and file tools
   (module 32).
 - Offer 2-3 options maximum.
 - Put the recommended option first in the list, as option A.

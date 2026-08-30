@@ -24,7 +24,7 @@ Before any question about a missing file or fact, locate it yourself:
 
 ## Search locates, full read comprehends
 
-A grep hit is a slice, not understanding. Locating a file is not the same as
+A search hit is a slice, not understanding. Locating a file is not the same as
 knowing it: a snippet omits imports, local conventions, adjacent error
 handling, docstrings, and the file's overall shape, so judging or editing from
 a match alone causes scope errors (dead-code fixes, duplicated helpers, broken
@@ -55,10 +55,9 @@ have seen bytes the tool truncated. Record the truncation instead.
   `*.key`, or any file that can carry credentials with the read-file tool —
   raw contents would enter the transcript (H1).
 - Read them only via a shell command that emits sanitized output: variable
-  names with values redacted, e.g. `grep -E '^[A-Za-z_][A-Za-z0-9_]*=' .env |
-  sed -E 's/=.*/=<redacted>/'` (PowerShell: `Get-Content .env | ForEach-Object
-  { ($_ -split '=',2)[0] + '=<redacted>' }`). When only names are needed, emit
-  names only.
+  names with values redacted, e.g. `rg -NoHeading -oN '^[A-Za-z_][A-Za-z0-9_]*='
+  .env | sed -E 's/=.*/=<redacted>/'` (PowerShell: `rg --no-heading -o '^[A-Za-z_][A-Za-z0-9_]*=' .env | ForEach-Object { ($_ -split '=',2)[0] + '=<redacted>' }`).
+  When only names are needed, emit names only.
 - Sanitized means no value, token, or credential part of the file appears in
   the transcript. If the command output cannot be verified clean, do not emit
   it.

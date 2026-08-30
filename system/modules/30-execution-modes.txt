@@ -53,7 +53,7 @@ Direct mode may inspect files, edit, and run checks as needed. It must still:
   the target file in full (largest window, offset-chunked when large) before
   editing or judging it (modules 31, 32)
 - never ask the user to provide files or file-adjacent facts a filesystem
-  search can find; locate them first with `rg` (fallback `grep`) and file tools
+  search can find; locate them first with `rg` and file tools
   (module 32)
 - avoid unrelated changes and preserve user work
 - inspect and preserve the touched files' established local conventions

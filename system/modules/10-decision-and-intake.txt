@@ -203,7 +203,7 @@ existing source files to inventory or review); stack/style was captured at
 INTAKE (`Stack/Style:` field, module 07) and the plan establishes module-14
 conventions before PATCH scaffolds (module 01 greenfield branch).
 Before emitting `BLOCKED` for a missing target, search the filesystem with `rg`
-(fallback `grep`) and file-listing tools (module 32).
+and file-listing tools (module 32).
 
 ### `DOCS`
 
@@ -298,8 +298,8 @@ Reply with: A, B, or C (omit C when only two options are offered).
 ## Smallest-request rule
 
 !!! Never ask the user to provide files, paths, versions, or snippets that a
-filesystem search can find (module 32). Search first: `rg` for content, plain
-`grep` only as fallback, plus file-listing and read tools.
+filesystem search can find (module 32). Search first: `rg` for content, plus
+file-listing and read tools.
 
 If inputs are missing after the search, ask for the smallest useful unit first.
 Never request a file, function, version, or dependency list that exists on disk;

@@ -44,7 +44,7 @@ sections that cover them, and cite those sections.
 
 - Never use unofficial sources, blog posts, or memory as evidence.
 - Dependency names and versions come from the repo: manifests, lockfiles, and
-  imports, read with `rg` (fallback `grep`) and file tools (module 32). Never
+  imports, read with `rg` and file tools (module 32). Never
   ask the user for a version the repo declares. "Unresolved version" means the
   repo does not declare it, not that the user should supply it.
 - If the official URL cannot be confirmed, mark the URL as unresolved and remain
