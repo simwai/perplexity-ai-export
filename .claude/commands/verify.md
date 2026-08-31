@@ -9,7 +9,7 @@ Run BabaDev verification after a patch or before finishing implementation work. 
 
 Before acting:
 
-1. Read the session's own state file `SESSION_STATE-<session_id>.md` (resolved per module 19) if present.
+1. Read the session's own state file `SESSION_STATE-<session_id>.md` (resolved per `system/03-output-and-state.md` `## Session state file`) if present.
 2. Inspect `git status` and `git diff`.
 3. Detect available project checks from package scripts, Makefile, pyproject, or docs (lint, typecheck, test).
 
@@ -19,8 +19,8 @@ Then:
 - Run the smallest relevant check set. Do not invent commands.
 - When the repo declares a web-app entry point, invoke the Playwright MCP
   server for a functional smoke (navigate + click key flows) as part of the
-  check set before the module-33 gate; a failed smoke is a hard-gate failure.
+  check set before the commit/push gate; a failed smoke is a hard-gate failure.
 - If no checks exist, say so explicitly.
-- When the session made file edits, apply the module-33 commit/push gate before finishing.
+- When the session made file edits, apply the commit/push gate (`system/06-misc.md` `## Commit/push gate`) before finishing.
 - Update the session's own state file Verification fields.
-- Emit results under the current phase header (usually PATCH) using the Verification section from module 07.
+- Emit results under the current phase header (usually PATCH) using the Verification section from `system/03-output-and-state.md`.

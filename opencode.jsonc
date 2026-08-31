@@ -4,30 +4,21 @@
   // remain the portable copy-paste unit. This file only affects opencode.
   "$schema": "https://opencode.ai/config.json",
 
-  // Guarantees the module loader is in every opencode session without relying
+  // Guarantees the system core is in every opencode session without relying
   // on the model choosing to read it. Mirrors the AGENTS.md startup instruction.
-  // bootstrap.txt is a loader only; canonical rules live in system/modules/.
-  // All always-loaded modules from the routing table are pinned so module
-  // loading is fully deterministic – the standing-context cost was weighed
-  // against the token-cost refactor and accepted deliberately
-  // (decision 2026-08-26; 11 entries after 2026-08-29 H1 corollary added
-  // 37-credential-sanitization). Stack modules (14-ts, 14-py, ...) stay
-  // diligence-loaded because they are language-dependent. Entries are explicit
-  // paths, never globs.
+  // The system is merged (6 files, was 38 modules; 2026-08-31 cycle-removal pass).
+  // All files are pinned so module loading is fully deterministic. Phase-specific
+  // additions are diligence-loaded by the agent reading 00-system.md's load rules.
+  // Entries are explicit paths, never globs.
   "instructions": [
     "AGENTS.md",
-    "system/bootstrap.txt",
-    "system/modules/00-persona-system.txt",
-    "system/modules/01-orchestrator.txt",
-    "system/modules/09-failure-guards.txt",
-    "system/modules/12-module-routing.txt",
-    "system/modules/14-core.txt",
-    "system/modules/21-mcp-invocation.txt",
-    "system/modules/30-execution-modes.txt",
-    "system/modules/31-loop-guards.txt",
-    "system/modules/32-filesystem-first.txt",
-    "system/modules/33-commit-and-push-gate.txt",
-    "system/modules/37-credential-sanitization.txt"
+    "system/00-system.md",
+    "system/01-personas.md",
+    "system/02-decision-prompts.md",
+    "system/03-output-and-state.md",
+    "system/04-rubrics.md",
+    "system/05-impl-style.md",
+    "system/06-misc.md"
   ],
 
   // Prefer the read-only BabaSensei planning path by default. The native Build

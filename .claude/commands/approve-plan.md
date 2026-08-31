@@ -9,9 +9,9 @@ The user is approving the current plan via $ARGUMENTS (optional notes).
 
 Before acting:
 
-1. Read the session's own state file `SESSION_STATE-<session_id>.md` (session_id resolved per `system/modules/19-session-state.txt`) if present.
+1. Read the session's own state file `SESSION_STATE-<session_id>.md` (session_id resolved per `system/03-output-and-state.md` `## Session state file`) if present.
 2. Read the latest PLAN output from the conversation.
-3. Load `system/modules/07-output-contracts.txt` and `system/modules/13-persona-handoff-contract.txt`.
+3. Load `system/03-output-and-state.md` (PLAN template + handoff contract) and `system/01-personas.md` `## Handoff contract`.
 
 Then:
 

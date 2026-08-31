@@ -8,9 +8,8 @@ Resume the prior execution mode from durable session state.
 
 Before acting:
 
-1. Resolve the session's own state file `SESSION_STATE-<session_id>.md` per `system/modules/19-session-state.txt`. If it is missing, emit `[PHASE: BLOCKED]` and ask for the prior phase or a fresh start.
-2. Read `system/modules/18-discuss-mode.txt` and `system/modules/19-session-state.txt` when relevant.
-3. Read `system/modules/30-execution-modes.txt`.
+1. Resolve the session's own state file `SESSION_STATE-<session_id>.md` per `system/03-output-and-state.md` `## Session state file`. If it is missing, emit `[PHASE: BLOCKED]` and ask for the prior phase or a fresh start.
+2. Read `system/06-misc.md` `## Discuss mode` and `system/00-system.md` `## Execution modes` when relevant.
 
 Then:
 

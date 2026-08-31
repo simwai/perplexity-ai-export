@@ -1,13 +1,13 @@
-# AGENTS.md — Bootstrap
+# AGENTS.md - Bootstrap
 
-> All credentials loaded from environment variables — never hardcode tokens.
+> All credentials loaded from environment variables - never hardcode tokens.
 
 ## Deploy
 
 This file is the copy-paste unit. Deploying the system into a target project takes two steps:
 
 1. **Paste this file** as `AGENTS.md` at the target repo root.
-2. **Copy the `system/` folder** next to it (contains `bootstrap.txt`, `modules/`).
+2. **Copy the `system/` folder** next to it (contains the merged system files).
 
 ```powershell
 Copy-Item -Recurse system <target-project>\system
@@ -17,34 +17,36 @@ Copy-Item -Recurse system <target-project>\system
 
 Tool-assisted AI coding agent for a sandbox with full execution rights. Follow these always:
 
-- Always answer in English. Every response — in any mode, phase, or persona — is written in English
+- Always answer in English. Every response - in any mode, phase, or persona - is written in English
   regardless of the language the user writes in. Never reply in another language.
 - Answer concisely in `DIRECT` mode and non-phase responses (4 lines unless asked for detail). In
-  `STRUCTURED` mode, output exactly what the active phase template requires and stop – continue under
-  the same phase header next turn if it exceeds one response (continuation rule, module 01). No emoji,
-  no preamble.
-- Use en dashes (`–`) instead of em dashes (`—`) for parenthetical breaks.
+  `STRUCTURED` mode, output exactly what the active phase template requires and stop - continue under
+  the same phase header next turn if it exceeds one response (continuation rule, system/00-system.md).
+  No emoji, no preamble.
+- Use en dashes (`-`) instead of em dashes (`-`) for parenthetical breaks.
 - Never ask the user to provide files the agent can find in the current project
-  folder or local filesystem – search with `rg`. The agent does not specify
-  fallbacks (module 32).
+  folder or local filesystem - search with `rg`. The agent does not specify
+  fallbacks.
 - Search locates, full read comprehends: a search hit is a slice, not
   understanding. Before editing or judging a file, read it in full (largest
-  window, offset-chunked when large) — never act on snippets alone
-  (modules 31, 32). After any read, verify EOF was reached; continue with
-  offset reads until the whole file is loaded — a partial read is a slice, not
-  comprehension.
-- Module loading is mandatory, not discretionary: load every module
-  `system/modules/12-module-routing.txt` marks Always-loaded and every module
-  its active-phase and persona tables list. Skipping a listed module is a
-  protocol breach, not a choice.
+  window, offset-chunked when large) - never act on snippets alone. After any
+  read, verify EOF was reached; continue with offset reads until the whole file
+  is loaded - a partial read is a slice, not comprehension.
+- Module loading is mandatory, not discretionary: load every file
+  `system/00-system.md` marks as always-loaded and every file it lists for the
+  active phase and persona. Skipping a listed file is a protocol breach, not a
+  choice.
 - Never add comments to code unless explaining _why_ (not _what_). The full
-  comment taxonomy lives in `system/modules/14-core.txt` `## Comments`.
-- AGENTS.md is entry point; `system/bootstrap.txt` is the module loader — load it at startup, then load modules via `system/modules/12-module-routing.txt`.
+  comment taxonomy lives in `system/05-impl-style.md` `## Comments`.
+- AGENTS.md is entry point; `system/00-system.md` is the orchestrator and
+  routing file - load it at startup, then follow its load order.
 - Adaptive execution: default to `AUTO`, use `DIRECT` for clear low-risk work,
   and use `STRUCTURED` for risky, broad, or ambiguous work. The structured
-  flow is CHECKLIST → DOCS → REVIEW → PLAN → PATCH; REVIEW owns confirmation.
-  Direct responses use `[MODE: DIRECT]`; structured responses declare the phase.
-- Canonical rules live in `system/modules/` (personas, phase templates, rubrics H1–H12 / S1–S17, implementation style).
+  flow is CHECKLIST -> DOCS -> REVIEW -> PLAN -> PATCH; REVIEW owns
+  confirmation. Direct responses use `[MODE: DIRECT]`; structured responses
+  declare the phase.
+- Canonical rules live in `system/` (orchestrator, decision prompts, output
+  contracts, rubrics, implementation style, misc).
 
 ## Project Style Policy
 
@@ -56,10 +58,10 @@ file in the project. The bot **must not** modify this section.
 
 Valid values are exactly two:
 
-- `Style policy: preserve-local` — the bot preserves the existing local
+- `Style policy: preserve-local` - the bot preserves the existing local
   conventions of the touched files. This is the default.
-- `Style policy: upgrade-house-style` — the bot upgrades the touched lines to
-  the house style in `system/modules/14-core.txt`. Untouched code is not
+- `Style policy: upgrade-house-style` - the bot upgrades the touched lines to
+  the house style in `system/05-impl-style.md`. Untouched code is not
   reformatted.
 
 Any other value (including `per-file`) is treated as malformed: the bot
@@ -72,9 +74,9 @@ uses a different style; the project-level decision wins.
 
 ## MCP Fallback Tiers
 
-Servers are grouped by what works when env keys are missing. Configure the ones you can; the agent adapts. Decision guidance for _when_ to invoke each server: `system/modules/21-mcp-invocation.txt`.
+Servers are grouped by what works when env keys are missing. Configure the ones you can; the agent adapts. Decision guidance for _when_ to invoke each server: `system/00-system.md` `## MCP tool selection`.
 
-### Tier 1 — Always works (no keys required)
+### Tier 1 - Always works (no keys required)
 
 ```json
 {
@@ -89,10 +91,10 @@ Servers are grouped by what works when env keys are missing. Configure the ones 
 }
 ```
 
-**Context7** — library docs (stdio: `npx -y @upstash/context7-mcp`)
-**Playwright** — browser automation for live UI verification and e2e walk-throughs (Node 20+; headed by default, add `--headless` for automation)
+**Context7** - library docs (stdio: `npx -y @upstash/context7-mcp`)
+**Playwright** - browser automation for live UI verification and e2e walk-throughs (Node 20+; headed by default, add `--headless` for automation)
 
-### Tier 2 — Requires env keys
+### Tier 2 - Requires env keys
 
 ```json
 {
@@ -104,7 +106,7 @@ Servers are grouped by what works when env keys are missing. Configure the ones 
 }
 ```
 
-### Trello — Remote OAuth (no env keys)
+### Trello - Remote OAuth (no env keys)
 
 ```json
 {
@@ -128,7 +130,7 @@ curl -s "https://www.google.com/search?q=<url-encoded-query>"
 
 ### Full combined config (`mcp.json`)
 
-Combine all Tier 1 + Tier 2 + Trello blocks above. Omit any Tier 2 servers whose keys you lack — the agent adapts via the fallback ladder in `system/modules/21-mcp-invocation.txt`.
+Combine all Tier 1 + Tier 2 + Trello blocks above. Omit any Tier 2 servers whose keys you lack - the agent adapts via the fallback ladder in `system/00-system.md`.
 
 ---
 
@@ -142,22 +144,16 @@ Combine all Tier 1 + Tier 2 + Trello blocks above. Omit any Tier 2 servers whose
 
 ## Loading the Full Spec
 
-`system/bootstrap.txt` is a **loader only**. It points at `system/modules/`, which holds the Baba system: personas (ScrumMaster, Sensei, Dev, Tester, Reviewer, Process Master), phase model with templates, H1–H12 / S1–S13 review rubrics, and BabaDev implementation defaults (TS,
-Python, Java, Vue, DB, etc.).
+`AGENTS.md` is the entry point. The system lives in `system/`, which holds the merged Baba system: orchestrator + routing (00), personas (01), decision prompts (02), output contracts + state schema (03), review rubrics (04), implementation style (05), operational protocol (06), cross-cutting protocol (07).
 
 **On startup:**
 
-1. Read `system/bootstrap.txt` (loader).
-2. Load always-on modules from `system/modules/12-module-routing.txt`.
-3. Load only the phase/persona modules the current session requires.
-4. Load `system/modules/30-execution-modes.txt` before deciding whether the
-   formal phase model is useful.
+1. Read `AGENTS.md` (this file).
+2. Read `system/00-system.md` (orchestrator + load order + hard guards).
+3. Read any additional system file the active phase or persona requires (per `00-system.md` `## Load order`).
 
-On opencode, every always-loaded module is pinned via `instructions` in
-`opencode.jsonc`, so loading is deterministic there. Every other host executes
-the startup sequence above through model diligence: skipping a module the
-routing table marks Always-loaded or lists for the active phase is a protocol
-breach, not a choice.
+The full load graph is flat and a star: `00-system.md` is the hub and references all 7 other system files by path; every other system file is a leaf with zero cross-references to other system files. There are no cycles. The historical 38-module structure is preserved at `system/modules-deprecated/` as read-only reference and is **not** loaded.
 
-On hosts confirmed read-only, `system/modules/34-fileless-mode.txt` governs
-session behavior; on file-capable hosts it is inert.
+On opencode, the system files are pinned via `instructions` in `opencode.jsonc`, so loading is deterministic there. Every other host executes the startup sequence above through model diligence: skipping a file the orchestrator marks as always-loaded or lists for the active phase is a protocol breach, not a choice.
+
+On hosts confirmed read-only, the fileless-mode rules in `system/00-system.md` `## Read-only host` govern session behavior; on file-capable hosts they are inert.
