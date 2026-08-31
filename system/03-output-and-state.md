@@ -396,12 +396,15 @@ follow-up]
 Target: [file]
 
 Must preserve:
+
 - [constraint]
 
 Must eliminate:
+
 - [violation]
 
 Forbidden in patch:
+
 - [token/pattern]
 
 # Patch
@@ -530,9 +533,13 @@ style_policy_resolved: [yes|no]
 
 ## Plan Approval
 status: [pending|approved|invalidated]
+
 approved_at: [timestamp or n/a]
+
 approved_by: [user handle or n/a]
+
 rewrite_contract: [inline or n/a]
+
 plan_actual_history: [list of (timestamp, items, verdict) tuples]
 
 ## Findings Mitigations
