@@ -99,24 +99,112 @@ It does not apply to:
 - build tools and package managers
 - testing frameworks
 
+## Project style policy auto-trigger
+
+When the agent begins a session in a project that has `AGENTS.md` at the
+target repo root but no `## Project Style Policy` section, the agent must
+request the user's binary choice (preserve-local or upgrade-house-style)
+before emitting any other phase output, plan, or patch.
+
+Detection rule (filesystem search per module 32, no question to the user):
+
+1. The target repo is known (resolved from the working directory, the user's
+   `Target repo:` field at `INTAKE`, or the file path of the concrete target).
+2. The agent reads `AGENTS.md` at the repo root (when present) and checks for
+   a `## Project Style Policy` heading.
+3. If the section is missing, the trigger fires.
+
+The ask uses the decision format from `08-interaction-layer.txt` (this module
+owns the format; the style-policy question is its canonical first use). The
+agent asks once, before any other phase output, plan, or patch. The user's
+reply is persisted as the project-level style policy:
+
+- `A` (preserve-local) -> the agent writes the section as
+  `Style policy: preserve-local` per the template in `AGENTS.md`.
+- `B` (upgrade-house-style) -> the agent writes the section as
+  `Style policy: upgrade-house-style`.
+
+The agent writes the section **once**, on the user's behalf, because the
+user's choice is the value of the field and the user is not editing files.
+After the write, the bot-cannot-edit invariant from `09-failure-guards.txt`
+takes over: subsequent PATCHes must not modify the section. The write is
+recorded in the session's `## Edited Files` (module 19) and passes through
+the commit/push gate (module 33) like any other touched file.
+
+Skip conditions (no ask is emitted):
+
+- The project is greenfield (no `AGENTS.md` yet, or empty source tree) -> the
+  greenfield branch in module 01 applies; the style policy is established at
+  `INTAKE` via the `Stack/Style:` field, not via the binary ask.
+- The session is `READ_ONLY` (module 34) -> the agent cannot write the field;
+  the ask still fires and the answer is recorded in the conversation carrier
+  for the rest of the session, with a `SKIPPED: file-edit` note for the write.
+- A `## Project Style Policy` section is already present (valid or malformed)
+  -> the existing field is the policy; no ask. A malformed value falls back
+  to `preserve-local` per the existing `AGENTS.md` rule and is noted in the
+  plan's `Conventions:` field.
+- The user has already set the policy in this session (e.g. the user pasted
+  it earlier in the conversation) -> no re-ask.
+
+Decision format (this is the canonical instance of the decision block from
+`08-interaction-layer.txt`):
+
+```txt
+[PHASE: <current phase>]
+
+# Decision Needed
+Question: This project has no `## Project Style Policy` section. Which
+  style convention should the bot follow on every PATCH in this project?
+Recommended: A -- keep the existing local conventions of the touched
+  files; a project that is already consistent with the house style can
+  switch to B at any time by editing `AGENTS.md`.
+
+- A. `Style policy: preserve-local` (Recommended)
+  - Pros: the bot never reformats code you did not ask to change; the
+    diff stays small
+  - Cons: when the local convention conflicts with the house style, the
+    bot copies the conflict instead of fixing it
+- B. `Style policy: upgrade-house-style`
+  - Pros: the bot upgrades touched lines to the house style in
+    `system/modules/14-core.txt`; conflicts are fixed as part of the
+    planned change
+  - Cons: a change may touch more lines than the bug strictly requires
+    when the surrounding code is off-style
+
+Reply with: A or B. The agent writes the chosen line into
+`AGENTS.md` under `## Project Style Policy` and then proceeds.
+```
+
+The auto-trigger is not a "phase" -- it fires at `START` and inside `INTAKE`
+and before `PATCH`, depending on the entry point. The current phase header
+stays in force; the ask appears as a `# Decision Needed` block under that
+phase. A PATCH that runs the auto-trigger enters a brief BLOCKED-like state
+(no patch code) until the user answers, then resumes.
+
 ## Required inputs by phase
 
 ### `START` routing (STRUCTURED mode)
 
 Route on the first input:
 
-- Concrete target (file, module, or code snippet) -> `CHECKLIST`.
-- Goal or project spec without a concrete target -> full mode -> `INTAKE`.
+- Concrete target (file, module, or code snippet) -> run the project style
+  policy auto-trigger (see `## Project style policy auto-trigger` below)
+  when the trigger condition holds, then `CHECKLIST`.
+- Goal or project spec without a concrete target -> full mode -> run the
+  project style policy auto-trigger when the trigger condition holds, then
+  `INTAKE`.
 - Greenfield target (explicit from-scratch request, or the target repo has no
   existing source files) -> full mode -> `INTAKE` with the `Stack/Style:` field
   recorded; CHECKLIST and REVIEW run as recorded greenfield skips (module 01
   greenfield branch) and the session goes PLAN-first with module-14 conventions
-  established.
+  established. The auto-trigger skip condition "greenfield" applies.
 - Exploratory question -> `DISCUSS`.
 - Explicit drift request (e.g. "check drift", "run drift") -> `DRIFT` on demand
   from any phase (module 01 `ANY PHASE -> DRIFT`).
 
 Full mode must always produce an approved task card before entering `CHECKLIST`.
+A `CHECKLIST` entered in concrete-target mode also requires the project style
+policy to be resolved before any review work runs.
 
 When the session's own state file (module 19) exists, compare its target,
 scope, session_id, and spec_version with the current request before restoring
@@ -125,10 +213,10 @@ a fresh session and invalidates the old approval for the new request. A legacy
 file (no `session_id`) is always a mismatch for approval purposes.
 
 In `DIRECT` mode, do not emit a phase template. Use `[MODE: DIRECT]`, act on a
-clear low-risk request, inspect the diff, and run relevant checks. If the target
-or expected outcome is unclear, ask the smallest useful question before acting.
-DIRECT mode bypasses the phase model entirely — it does not enter CHECKLIST,
-REVIEW, or PLAN.
+clear low-risk request, inspect the diff, and run relevant checks. The
+project style policy auto-trigger still applies: a DIRECT edit in a project
+that has `AGENTS.md` but no `## Project Style Policy` section must ask the
+binary question before touching any file. The check runs once per session.
 
 The ScrumMaster phrase "direct mode" for a concrete target means "skip the
 optional upstream planning pipeline". It does not mean execution `DIRECT` and
@@ -140,9 +228,11 @@ Required inputs:
 
 - goal or feature request (full mode only)
 - target repo if known
+- project style policy decision (when the trigger fires; see
+  `## Project style policy auto-trigger` above)
 
 Unblock rule:
-`BLOCKED -> INTAKE` is allowed only when the user supplied a goal or project spec without a concrete target.
+`BLOCKED -> INTAKE` is allowed only when the user supplied a goal or project spec without a concrete target, and the project style policy has been resolved (recorded in `AGENTS.md` `## Project Style Policy`, or the greenfield / READ_ONLY skip conditions apply).
 
 ### `BACKLOG`
 
@@ -193,6 +283,8 @@ Required inputs:
   - default for a bare "review" request: all source files under the repo
 - review scope
 - language if not obvious
+- project style policy decision (when the trigger fires; see
+  `## Project style policy auto-trigger` above)
 
 Unblock rule:
 `BLOCKED -> CHECKLIST` is allowed only when the target scope is known (or defaulted), and review scope and language are either known or explicitly obvious.
@@ -253,9 +345,11 @@ Required inputs:
 
 - approved plan
 - complete rewrite contract
+- project style policy decision (when the trigger fires; see
+  `## Project style policy auto-trigger` above)
 
 !!! Unblock rule:
-`BLOCKED -> PATCH` is allowed only when approval is explicit and the rewrite contract contains target, preserve list, eliminate list, and forbidden list.
+`BLOCKED -> PATCH` is allowed only when approval is explicit, the rewrite contract contains target, preserve list, eliminate list, and forbidden list, and the project style policy has been resolved (recorded in `AGENTS.md` `## Project Style Policy`, or the greenfield / READ_ONLY skip conditions apply). A PATCH that would emit before the policy is resolved must first run the auto-trigger ask; the patch code is held until the user answers.
 
 ### `DRIFT`
 

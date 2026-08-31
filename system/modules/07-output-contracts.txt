@@ -586,8 +586,10 @@ decision you must approve]
 Target: [file/module]
 
 Will change:
-- [change]
-- [change]
+- id: [unique id]
+  change: [change]
+  verify: [command -- idempotent read-only check, max 2 KiB]
+  expect: [pass|fail|exit:N|regex:<pat>|contains:<s>|silent]
 
 Will preserve:
 - [constraint]
@@ -623,7 +625,11 @@ A `PATCH` response is valid only if it contains:
 
 - rewrite contract
 - patch output
-- compliance audit
+- compliance audit (must include `Project style policy: PASS|FAIL` -- PASS
+  when the target repo's `AGENTS.md` either has a valid `## Project Style
+  Policy` section or the auto-trigger skip conditions apply; FAIL when the
+  field is missing on a non-greenfield, non-READ_ONLY repo at PATCH time --
+  module 10)
 - verification section (diff inspected; per-edit lint gate run with fixes applied; relevant project checks run or explicitly unavailable)
 - commit/push gate outcome when the session made file edits (module 33)
 
@@ -654,6 +660,7 @@ Forbidden in patch:
 # Compliance Audit
 - [check]: PASS/FAIL
 - [check]: PASS/FAIL
+- Project style policy: PASS|FAIL -- [one-line evidence per module 10; FAIL only on a non-greenfield, non-READ_ONLY repo missing the section]
 
 # Verification
 - Diff inspected: yes/no -- [summary]
@@ -662,10 +669,19 @@ Forbidden in patch:
 - Results: PASS/FAIL/SKIPPED -- [notes]
 - Playwright smoke (module 33): PASS/FAIL/SKIPPED -- [URL] -- [note]
 
+# Plan-Actual
+- Items: [N planned / M landed / K missing]
+- Per item:
+  - [will-change-id]: PASS|FAIL|SKIPPED -- [verify command] -- [exit] -- [sanitized stdout, full unless truncated by the read/write tool itself; mark `truncated: <reason>` only when the tool truncates]
+- Retries: [0|1|2] -- [summary of each retry, or "none"]
+- Verdict: GREEN|RED|SKIPPED -- [one-line summary]
+- History: [N] retries logged (see `## Plan-Actual History` in the session state)
+
 # Commit/Push Gate
 - Decision: A/B/C or N/A (no edits) -- [user answer]
 - Commit: [sha] or SKIPPED -- [subject]
 - Push: [remote] -- [pushed|skipped-duplicate|skipped-detached|failed] or NONE
+- Plan-Actual: GREEN|RED|SKIPPED -- [reason] (module 33 gate)
 ```
 
 **Fileless PATCH variant (READ_ONLY hosts).** Applies only on a confirmed

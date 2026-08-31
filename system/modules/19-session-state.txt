@@ -232,6 +232,17 @@ confirmed_at: <ISO timestamp or NONE>
 status: pending|approved|rejected
 approved_at: <ISO timestamp or NONE>
 approved_plan_summary: <NONE or short summary>
+approved_will_change:
+<!-- Per-item records consumed by the Plan-Versus-Actual Gate (module 33).
+     Persisted on approval, never re-parsed from the PLAN response. Each
+     record: {id, change, verify, expect}. expect is one of
+     pass|fail|exit:N|regex:<pat>|contains:<s>|silent (module 33). -->
+- id: <id>
+  change: <one-line change>
+  verify: <command or NONE>
+  expect: <pass|fail|exit:N|regex:<pat>|contains:<s>|silent>
+verify_timeout_seconds: 30
+direct_gate_opt_in: false
 
 ## Rewrite Contract
 <!-- Filled during PLAN phase -->
@@ -253,7 +264,11 @@ point (modules 06/30). Staging source for the commit/push gate (module 33).
 This list is the authoritative allow-list for `.session-locks/`: a session
 must not hold a lock on any path not recorded here, and module 33's gate
 refuses to stage any path in this list that is not currently locked or
-just-released by this session (module 38). -->
+just-released by this session (module 38).
+The project style policy auto-trigger (module 10) appends `AGENTS.md` here
+when it writes the `## Project Style Policy` section on the user's behalf;
+the section is then locked against further bot edits by the invariant in
+`09-failure-guards.txt`. -->
 - <path>
 
 ## Locked Files
@@ -266,12 +281,26 @@ active (PATCH or DIRECT). -->
 ## Commit/Push Gate
 <!-- Filled when the session made file edits, at end of PATCH/DIRECT per module 33 -->
 decision: A|B|C|NONE
+plan_actual: GREEN|RED|SKIPPED -- <reason>
 playwright_smoke: PASS|FAIL|SKIPPED|NONE -- <URL or reason>
 commit_sha: <sha or NONE>
 message_subject: <subject or NONE>
 push_results:
 - <remote> -- <pushed|skipped-duplicate|skipped-detached|failed>
 gate_checked_at: <ISO timestamp or NONE>
+
+## Plan-Actual History
+<!-- Append-only audit log of every Plan-Versus-Actual Gate run (module 33).
+     One entry per run, sanitized values only. Used to audit scope discipline
+     across retry passes. -->
+- retry_index: <0|1|2>
+  ran_at: <ISO timestamp>
+  fail_list:
+  - <will-change id>
+  fix_summary: <one-line summary or NONE>
+  plan_actual_verdict: GREEN|RED|SKIPPED -- <reason>
+  scope_violations:
+  - <path or NONE>
 
 ## Persona Switch Log
 <!-- Append only — never delete entries -->
