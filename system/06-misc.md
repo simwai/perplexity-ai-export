@@ -23,6 +23,8 @@ Patch rules:
 - Eliminate all items in the must-eliminate list.
 - Never include any token from the forbidden list.
 
+If a library, driver, or SDK appears to mislead during PATCH (unexpected error shape, version-sensitive breakage, behaviour that contradicts the docs), feel free to consult official documentation via the `context7` MCP (or `exa`/direct `curl` as fallback per `00-system.md ## MCP tool selection`) before inventing a workaround. This is a permission, not a requirement, and is bounded by the same rules as the DOCS phase: one targeted lookup per evidence gap, distinct fingerprint, never re-invoke an identical lookup, and the bounded deep-dive budget (up to 3 lookups per dependency per PATCH).
+
 ### Per-edit lint gate
 
 Before each file edit sequence, confirm the applicable defaults from `05-impl-style.md` (stack defaults, naming, file naming, local conventions) and apply them to the edit. After each file edit sequence (one logical edit step: one file or a coherent batch of files changed in one go), run the project's configured lint on the touched files before starting the next edit step. Follow the order from `07-protocols.md` `## Pre-commit behavior` section: formatter first (auto-fix), linter second (auto-fix mode where supported), then fix any remaining violations manually. When `.md` files are touched, run the repository's configured markdownlint against them and honor its configuration. Re-run lint after manual fixes. A step may not conclude with outstanding auto-fixable issues.
@@ -31,6 +33,19 @@ If a remaining violation cannot be fixed inside the approved plan's scope, recor
 
 At the same recording step, append each edited path to the session's own state file `## Edited Files` section; this list is the staging source for the commit/push gate. The final Verification gate still runs at the end; the per-edit gate does not replace it.
 
+### Bug-fix regression protocol
+
+A confirmed bug entering PATCH triggers this protocol. A "confirmed bug" is any defect accepted for correction from REVIEW, production feedback, a security finding, an edge-case report, or a failing test surfaced inside the PATCH handoff. The protocol is canonical here; persona obligations in `01-personas.md` and template rows in `03-output-and-state.md` are specializations and must not duplicate this text.
+
+For each confirmed bug, the patch must, in order:
+
+1. **Missed-coverage root cause.** Record one sentence per bug explaining why the existing test layer missed it: missing case, wrong oracle, wrong test layer, fixture or setup gap, skipped or flaky test, or equivalent. The root cause is written before the regression test is added and travels with the PATCH handoff under `## Findings Mitigations` or the equivalent notes field.
+2. **Regression test.** Add the smallest regression test that reproduces the original failure against the unfixed behavior. The test asserts the externally meaningful corrected outcome, not execution alone. A test that passes both before and after the fix is not a regression test and must be replaced.
+3. **Baseline verification (expected FAIL).** Run the new regression test against the unfixed behavior. The expected outcome is FAIL. When genuinely impractical (the bug requires unavailable infrastructure, sensitive data, or a destructive harness), record `SKIPPED -- <reason>` plus the nearest feasible substitute and the residual risk. Silent omission is forbidden.
+4. **Post-fix verification (expected PASS).** After the fix lands, rerun the same regression test. The expected outcome is PASS. When the same practical blocker applies, record `SKIPPED -- <reason>` plus the substitute and the residual risk. Silent omission is forbidden.
+
+A green pre-existing suite is never proof that a confirmed bug is covered. A full-suite result is never a substitute for the targeted regression test above. A PATCH that ships without a recorded root cause, a regression test, and both verification rows is incomplete and the verification gate reports FAIL.
+
 ### Compliance audit
 
 After every patch, emit a compliance audit section. For each must-preserve item: PASS or FAIL. For each must-eliminate item: PASS or FAIL. For each forbidden token: PASS or FAIL. If any audit item is FAIL, do not emit the patch. Return to PLAN phase.
@@ -38,6 +53,13 @@ After every patch, emit a compliance audit section. For each must-preserve item:
 ### Verification gate
 
 After a successful compliance audit, inspect the resulting diff. Run the project's relevant checks when available (lint, typecheck, tests, or documented equivalents). The Playwright smoke is the functional verification and runs once inside the commit gate, after this gate passes; it is referenced here, not executed here; its PASS|FAIL|SKIPPED outcome is recorded in the gate outcome and the session's own state file. When `.md` files are created or changed, run the project's configured Markdown lint check against them when available and honor the repository configuration. Do not invent commands. If none exist, record SKIPPED with reason. Write verification results to the PATCH template and the session's own state file. If a required check fails, report FAIL and return to PLAN unless the failure is outside scope and explicitly accepted.
+
+When the patch contains a confirmed bug, the verification gate runs two extra rows before the diff inspection concludes:
+
+- **Regression baseline (expected FAIL):** PASS|FAIL/SKIPPED -- <command or n/a> -- <note or SKIPPED reason>.
+- **Regression post-fix (expected PASS):** PASS|FAIL/SKIPPED -- <command or n/a> -- <note or SKIPPED reason>.
+
+Each row is mandatory for every confirmed bug in the patch. A row with `SKIPPED` must carry a concrete reason and the nearest feasible substitute; an unjustified `SKIPPED` is a gate FAIL. A full-suite result is not accepted in either row; the row must name the targeted regression test.
 
 ### Commit/push gate (PATCH trigger)
 

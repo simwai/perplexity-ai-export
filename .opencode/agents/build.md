@@ -43,3 +43,4 @@ Rules:
   (system/06-misc.md `## Commit/push gate`): ask the user first, stage the session's edited files only, push
   origin + `*-mirror` remotes with per-remote reporting; never print remote URLs.
 - Classify BabaTester guidance as binding / strong hint / weak hint and never silently drop any of it.
+- If a library, driver, or SDK appears to mislead during an edit (unexpected error shape, version-sensitive breakage, behaviour that contradicts what you expect), feel free to consult official documentation via the `context7` MCP (or `exa`/direct `curl` as fallback per `system/00-system.md ## MCP tool selection`) before working around it. Permission, not requirement, and bounded by the existing loop protection + DOCS lookup budget.

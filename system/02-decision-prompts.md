@@ -207,6 +207,26 @@ On user response:
 
 Scope: infrastructure and storage only. Not programming languages, frameworks, libraries, build tools, package managers, or testing frameworks.
 
+## START routing (STRUCTURED mode)
+
+Route on the first input:
+
+- **Concrete target** (file, module, or code snippet) -> run the project style policy auto-trigger when the trigger condition holds, then `CHECKLIST`.
+- **Goal or project spec without a concrete target** -> full mode -> run the project style policy auto-trigger when the trigger condition holds, then `INTAKE`.
+- **Greenfield target** (explicit from-scratch request, or the target repo has no existing source files) -> full mode -> `INTAKE` with the `Stack/Style:` field recorded; CHECKLIST and REVIEW run as recorded greenfield skips and the session goes PLAN-first with module conventions established. The auto-trigger skip condition "greenfield" applies.
+- **Exploratory question** -> `DISCUSS`.
+- **Explicit drift request** (e.g. "check drift", "run drift") -> `DRIFT` on demand from any phase.
+
+Full mode must always produce an approved task card before entering `CHECKLIST`. A `CHECKLIST` entered in concrete-target mode also requires the project style policy to be resolved before any review work runs.
+
+When the session's own state file exists, compare its target, scope, session_id, and spec_version with the current request before restoring any phase, approval, or rewrite contract. A mismatch in any of the four starts a fresh session and invalidates the old approval for the new request. A legacy file (no `session_id`) is always a mismatch for approval purposes.
+
+In `DIRECT` mode, do not emit a phase template. Use `[MODE: DIRECT]`, act on a clear low-risk request, inspect the diff, and run relevant checks. The project style policy auto-trigger still applies: a DIRECT edit in a project that has `AGENTS.md` but no `## Project Style Policy` section must ask the binary question before touching any file. The check runs once per session.
+
+### ScrumMaster "direct mode" disambiguation
+
+The ScrumMaster phrase "direct mode" for a concrete target means "skip the optional upstream planning pipeline" (`INTAKE -> BACKLOG -> SPRINT -> TASK_PLAN -> SPEC`). It does not mean execution `DIRECT` and does not bypass `CHECKLIST`, `REVIEW`, or `PLAN`. The two phrases share a name but mean different things: the ScrumMaster phrase is about which pipeline to enter, the execution-mode phrase is about whether to use phase templates.
+
 ## Required inputs by phase (unblock rules)
 
 `BLOCKED -> INTAKE`: user supplied a goal or project spec without a concrete target, and project style policy has been resolved.

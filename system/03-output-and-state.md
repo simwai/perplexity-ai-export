@@ -334,7 +334,7 @@ Next batch:
 - [file path] -- [lines X-Y or FULL] -- [next batch, or "all files complete - confirm aggregate decision before PLAN"]
 ```
 
-REVIEW owns confirmation. There is no standalone CONFIRM phase. Every emitted finding in `# Findings` that is in scope for remediation carries a `Mitigations:` block immediately under the finding line. The block is a mini decision prompt: 2-3 options, recommended option first with `(Recommended)`, one-line pros and cons per option, and exactly one `Recommended:` line. BabaTester is the one exception: it emits mitigations but omits the `(Recommended)` marker and the `Recommended:` line because BabaTester is excluded from PLAN/Done declarations. Findings that are informational only move to a new `## Informational` heading in REVIEW and carry no `Mitigations:` block.
+REVIEW owns confirmation. There is no standalone CONFIRM phase. Every emitted finding in `# Findings` that is in scope for remediation carries a `Mitigations:` block immediately under the finding line. The block is a mini decision prompt: 2-3 options, recommended option first with `(Recommended)`, one-line pros and cons per option, and exactly one `Recommended:` line. BabaTester is the one exception: it emits mitigations but omits the `(Recommended)` marker and the `Recommended:` line because BabaTester is excluded from PLAN/Done declarations. Do not mark `(Recommended)` unless one option's pros dominate the others; when in doubt, leave the block unmarked (no `(Recommended)` marker, no `Recommended:` line) and the user picks without guidance. An unmarked `Mitigations:` block is a valid shape, not a missing one. Findings that are informational only move to a new `## Informational` heading in REVIEW and carry no `Mitigations:` block.
 
 The user's reply is one of: a letter (A/B/C) to pick a mitigation, `skip` to accept the finding without a mitigation, or `accept` to record the finding as informational. The choice is persisted in the session state file under `## Findings Mitigations` and travels into PATCH and DRIFT via the handoff contract.
 
@@ -420,6 +420,8 @@ Forbidden in patch:
 - Lint gate (per edit step): PASS/FAIL/SKIPPED -- [command] -- [results]
 - Checks run: [commands] or none available
 - Results: PASS/FAIL/SKIPPED -- [notes]
+- Regression baseline (expected FAIL): PASS|FAIL/SKIPPED -- [command] -- [note or SKIPPED reason]
+- Regression post-fix (expected PASS): PASS|FAIL/SKIPPED -- [command] -- [note or SKIPPED reason]
 - Playwright smoke: PASS/FAIL/SKIPPED -- [URL] -- [note]
 
 # Plan-Actual
