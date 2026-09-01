@@ -34,7 +34,12 @@ Rules:
 - Base the recommendation on the option with the most meaningful pros and fewest meaningful cons, not on option order alone.
 - State the recommendation and the reason before the options.
 - Keep pros and cons to one line each.
-- One response, one format. A response uses either zero or more `# Decision Needed` blocks (up to three, ordered by impact, leading the response) or zero or more open-ended probe questions, but never both. A `# Decision Needed` block must not be preceded, followed, or interrupted by an `## Open question for you` section, a `## Open questions` list, or any other prose question header. When a question has a small enumerable set of reasonable answers, it is a decision and goes in a `# Decision Needed` block. When a question has no enumerable answer set, it is a probe and goes under a single `## Open question for you` header. Probes and decisions do not mix. The probe path is capped the same way: one `## Open question for you` header per response, up to three questions under it. When more than three decisions are needed, defer the rest to a follow-up structured turn: emit the first batch, wait for the user, then emit the next batch under the same phase header in the next turn.
+- One response, one format. A response uses either zero or more `# Decision Needed` blocks (up to two, ordered by impact, leading the response) or zero or more open-ended probe questions, but never both. A `# Decision Needed` block must not be preceded, followed, or interrupted by an `## Open question for you` section, a `## Open questions` list, or any other prose question header. When a question has a small enumerable set of reasonable answers, it is a decision and goes in a `# Decision Needed` block. When a question has no enumerable answer set, it is a probe and goes under a single `## Open question for you` header. Probes and decisions do not mix. The probe path is capped the same way: one `## Open question for you` header per response, up to two questions under it. When more than two decisions are needed, defer the rest to a follow-up structured turn: emit the first batch, wait for the user, then emit the next batch under the same phase header in the next turn.
+- Preferred cadence when a phase needs more than two decisions: emit one decision (or two only when they are clearly
+  independent and the user can answer them in either order), wait for the user's reply, then emit the next decision under
+  the same phase header in the next turn. Repeat until all decisions are resolved. One decision per turn is the safer
+  default; two is the ceiling. The user answers one batch before the agent continues; the agent never stacks the full set
+  in a single response.
 - In consolidated REVIEW mode, use one final decision block for the complete report; do not request confirmation after each batch.
 - Consolidation changes response cadence only. It does not change evidence, coverage, or acceptance requirements.
 - Do not use open-ended questions or a custom-answer fallback when a multiple-choice decision is possible.
@@ -106,7 +111,7 @@ Recommended: A
 Reply with: A or B.
 ```
 
-Anti-pattern 3 - over-cap (this fails because the cap is three decisions per response; emitting five forces the user to scan five blocks and increases the chance of a missed question):
+Anti-pattern 3 - over-cap (this fails because the cap is two decisions per response; emitting three or more forces the user to scan three blocks and increases the chance of a missed question):
 
 ```txt
 [PHASE: PLAN]
@@ -117,10 +122,6 @@ Question: q1?
 Question: q2?
 # Decision Needed
 Question: q3?
-# Decision Needed
-Question: q4?
-# Decision Needed
-Question: q5?
 ```
 
 ## Smallest-request rule
@@ -129,29 +130,40 @@ Never ask the user to provide files, paths, versions, or snippets that a filesys
 
 ## Project style policy auto-trigger
 
-When the agent begins a session in a project that has `AGENTS.md` at the target repo root but no `## Project Style Policy` section, the agent must request the user's binary choice (preserve-local or upgrade-house-style) before emitting any other phase output, plan, or patch.
+When the agent begins a session in a project, it checks for a dedicated style policy artifact: `STYLE_POLICY.md` at the target repo root.
 
 Detection rule (filesystem search, no question to the user):
 
 1. The target repo is known (resolved from the working directory, the user's `Target repo:` field at `INTAKE`, or the file path of the concrete target).
-2. The agent reads `AGENTS.md` at the repo root (when present) and checks for a `## Project Style Policy` heading.
-3. If the section is missing, the trigger fires.
+2. The agent searches for `STYLE_POLICY.md` at the repo root.
+3. If the artifact is missing, the trigger fires.
 
-The ask uses the decision format above (this file owns the format; the style-policy question is its canonical first use). The agent asks once, before any other phase output, plan, or patch. The user's reply is persisted as the project-level style policy:
+The ask uses the decision format above (this file owns the format; the style-policy question is its canonical first use). The agent asks once, before any other phase output, plan, or patch. The user's reply is persisted to the dedicated artifact:
 
-- `A` (preserve-local) -> the agent writes the section as `Style policy: preserve-local` per the template in `AGENTS.md`.
-- `B` (upgrade-house-style) -> the agent writes the section as `Style policy: upgrade-house-style`.
+- `A` (preserve-local)  -> agent writes `policy: preserve-local` to `STYLE_POLICY.md` (frontmatter only)
+- `B` (upgrade-house-style) -> agent writes `policy: upgrade-house-style` to `STYLE_POLICY.md` (frontmatter only)
 
-The agent writes the section once, on the user's behalf, because the user's choice is the value of the field and the user is not editing files. After the write, the bot-cannot-edit invariant takes over: subsequent PATCHes must not modify the section. The write is recorded in the session's `## Edited Files` and passes through the commit/push gate like any other touched file.
+The artifact is a markdown file with frontmatter only:
+
+```markdown
+---
+policy: preserve-local
+---
+```
+
+No other content. Subsequent sessions read this artifact; the ask never fires again while the artifact exists.
 
 Skip conditions (no ask is emitted):
 
 - The project is greenfield (no `AGENTS.md` yet, or empty source tree) -> the greenfield branch applies; the style policy is established at `INTAKE` via the `Stack/Style:` field, not via the binary ask.
-- The session is `READ_ONLY` -> the agent cannot write the field; the ask still fires and the answer is recorded in the conversation carrier for the rest of the session, with a `SKIPPED: file-edit` note for the write.
-- A `## Project Style Policy` section is already present (valid or malformed) -> the existing field is the policy; no ask. A malformed value falls back to `preserve-local` and is noted in the plan's `Conventions:` field.
+- A `STYLE_POLICY.md` artifact already exists -> the existing policy is used; no ask.
 - The user has already set the policy in this session -> no re-ask.
 
-The auto-trigger is not a "phase"; it fires at `START` and inside `INTAKE` and before `PATCH`, depending on the entry point. The current phase header stays in force; the ask appears as a `# Decision Needed` block under that phase. A PATCH that runs the auto-trigger enters a brief BLOCKED-like state (no patch code) until the user answers, then resumes.
+`READ_ONLY` hosts: the ask fires if artifact is missing; the write is recorded as `SKIPPED: file-edit -- no write access; policy recorded in conversation carrier`.
+
+The auto-trigger fires at `START` and inside `INTAKE` and before `PATCH`, depending on entry point. Current phase header stays in force; the ask appears as a `# Decision Needed` block under that phase. A PATCH that runs the auto-trigger enters a brief BLOCKED-like state until user answers, then resumes.
+
+The existing `## Project Style Policy` section in `AGENTS.md` is IGNORED — it is not read, not written, and carries no authority. It may be removed by a separate cleanup pass.
 
 ## Stack compatibility check (BLOCKED variant)
 
@@ -221,7 +233,7 @@ Full mode must always produce an approved task card before entering `CHECKLIST`.
 
 When the session's own state file exists, compare its target, scope, session_id, and spec_version with the current request before restoring any phase, approval, or rewrite contract. A mismatch in any of the four starts a fresh session and invalidates the old approval for the new request. A legacy file (no `session_id`) is always a mismatch for approval purposes.
 
-In `DIRECT` mode, do not emit a phase template. Use `[MODE: DIRECT]`, act on a clear low-risk request, inspect the diff, and run relevant checks. The project style policy auto-trigger still applies: a DIRECT edit in a project that has `AGENTS.md` but no `## Project Style Policy` section must ask the binary question before touching any file. The check runs once per session.
+In `DIRECT` mode, do not emit a phase template. Use `[MODE: DIRECT]`, act on a clear low-risk request, inspect the diff, and run relevant checks. The project style policy auto-trigger still applies: a DIRECT edit in a project that has `AGENTS.md` but no `STYLE_POLICY.md` artifact must ask the binary question before touching any file. The check runs once per session.
 
 ### ScrumMaster "direct mode" disambiguation
 
@@ -247,6 +259,6 @@ The ScrumMaster phrase "direct mode" for a concrete target means "skip the optio
 
 `BLOCKED -> PLAN`: user confirmed the REVIEW decision section, accepted violations and preservation constraints are both explicit lists.
 
-`BLOCKED -> PATCH`: approval explicit, rewrite contract contains target/preserve/eliminate/forbidden, project style policy resolved (recorded in `AGENTS.md` `## Project Style Policy`, or greenfield/READ_ONLY skip conditions apply). A PATCH that would emit before the policy is resolved must first run the auto-trigger ask; the patch code is held until the user answers.
+`BLOCKED -> PATCH`: approval explicit, rewrite contract contains target/preserve/eliminate/forbidden, project style policy resolved (recorded in `STYLE_POLICY.md`, or greenfield/READ_ONLY skip conditions apply). A PATCH that would emit before the policy is resolved must first run the auto-trigger ask; the patch code is held until the user answers.
 
 `BLOCKED -> DRIFT`: spec exists on disk (or user explicitly requested drift analysis) and the phase can run read-only. A version-drift HALT is a DRIFT-internal decision block with exactly one recommended fix path; never a BLOCKED variant, never a silent fix.

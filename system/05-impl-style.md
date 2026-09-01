@@ -1,6 +1,6 @@
 # 05-impl-style
 
-Implementation style core. Stack variants are inline sections below; pick the one matching the session's active language. Apply these defaults to every PATCH unless the target repo's `## Project Style Policy` section or the INTAKE `Stack/Style:` field overrides them.
+Implementation style core. Stack variants are inline sections below; pick the one matching the session's active language. Apply these defaults to every PATCH unless the target repo's `STYLE_POLICY.md` artifact or the INTAKE `Stack/Style:` field overrides them.
 
 ## General principles
 
@@ -31,8 +31,8 @@ This is the one case where "defaults" are binding rather than advisory: a greenf
 
 The decision between *preserve local convention* and *upgrade to house style* is a **per-project** choice, made once when the target project adopts the system. There is no per-file override.
 
-- The decision is recorded in the target project's `AGENTS.md` (see `## Project Style Policy`). Once recorded, the bot **must not** modify that field. If the field is missing or malformed in a target project, the bot defaults to `preserve-local` and emits a one-line note in the plan that the field is unset or invalid, so a human can correct it.
-- The bot reads the project-level decision on every PATCH (loads `AGENTS.md`; the field is a single line under `## Project Style Policy`). It applies the decision **uniformly across every touched file** in that project.
+- The decision is recorded in the target project's `STYLE_POLICY.md` artifact. Once recorded, the bot **must not** modify that artifact. If the artifact is missing or malformed in a target project, the bot defaults to `preserve-local` and emits a one-line note in the plan that the field is unset or invalid, so a human can correct it.
+- The bot reads the project-level decision on every PATCH (loads `STYLE_POLICY.md`; the field is a single line in frontmatter). It applies the decision **uniformly across every touched file** in that project.
 - When the decision is `upgrade-house-style`: the touched lines are upgraded; the plan's `Conventions:` field names the house-style rules being applied; an upgrade to a touched file is not a reformat of untouched code, only of the lines the change requires. The plan's `## Touched files` block notes any file whose existing style visibly differs from the house style (e.g., a vendored library), without making that file an exception to the policy.
 - When the decision is `preserve-local`: the existing "preserve local conventions" rule applies.
 - When creating or updating documentation (README, ADR, API docs, changelog, release notes), follow the repository's existing documentation conventions and tone, not only its Markdown lint configuration.
@@ -143,6 +143,7 @@ A method should not reach through another object to access its parts. `customer.
 - **Too much information** -- a multi-paragraph essay in a code comment. The file is not a blog.
 - **Function headers** -- a block comment at the top of every function describing what it does. The function name and signature carry the meaning; a docstring is enough.
 - **Docstrings in nonpublic code** -- verbose docstrings on private functions. Required only on public-API boundaries.
+- **Markup in comments/docstrings** -- no Markdown, reST, or other rendering markup (`*`, `_`, ` ` `, ` `` `, `>`, `#`, `[]()`, etc.) inside code comments or docstrings. Plain prose only. Exception: when a documentation generation library (Sphinx, pdoc, TypeDoc, JSDoc, Doxygen, rustdoc, etc.) is explicitly configured in the project and its format requires specific markup, that markup is allowed and the project's tooling config is the source of truth.
 
 Deliberate simplifications that cut a real corner with a known ceiling (global lock, O(n^2) scan, naive heuristic) are marked with a `simplify:` comment naming the ceiling and the upgrade path, e.g. `# simplify: global lock -- per-account locks if throughput matters`.
 
@@ -225,7 +226,7 @@ Names must reveal intent, usage, and role. Reference: Robert C. Martin, *Clean C
 
 ## Style floor
 
-The defaults above are a floor, not a ceiling. They never replace the per-edit lint gate or the project checks; they are the minimum, not the maximum. The project style policy in `AGENTS.md` (`preserve-local` or `upgrade-house-style`) controls how the floor interacts with the file's existing style.
+The defaults above are a floor, not a ceiling. They never replace the per-edit lint gate or the project checks; they are the minimum, not the maximum. The project style policy in `STYLE_POLICY.md` (`preserve-local` or `upgrade-house-style`) controls how the floor interacts with the file's existing style.
 
 ## Stack: TypeScript / JavaScript
 

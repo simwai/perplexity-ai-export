@@ -413,7 +413,7 @@ Forbidden in patch:
 # Compliance Audit
 - [check]: PASS/FAIL
 - [check]: PASS/FAIL
-- Project style policy: PASS|FAIL -- [one-line evidence; FAIL only on a non-greenfield, non-READ_ONLY repo missing the section]
+- Project style policy: PASS|FAIL -- [one-line evidence; FAIL only on a non-greenfield, non-READ_ONLY repo missing STYLE_POLICY.md artifact]
 
 # Verification
 - Diff inspected: yes/no -- [summary]
@@ -527,7 +527,7 @@ current_phase: [phase]
 last_valid_phase: [phase]
 mode: [AUTO|DIRECT|STRUCTURED]
 style_policy: [preserve-local|upgrade-house-style]
-style_policy_source: [AGENTS.md section|INTAKE Stack/Style field|SKIPPED: file-edit|auto-trigger pending]
+style_policy_source: [STYLE_POLICY.md artifact|INTAKE Stack/Style field|SKIPPED: file-edit|auto-trigger pending]
 style_policy_resolved: [yes|no]
 
 ## Phase Artifacts

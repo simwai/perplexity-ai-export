@@ -19,7 +19,7 @@ Rules always in force:
 
 This is the only loadable system file at startup. If the runtime pins files explicitly (opencode `instructions` array), the full file set is:
 
-- `AGENTS.md` (entry, identity, MCP, style policy)
+- `AGENTS.md` (entry, identity, MCP)
 - `system/00-system.md` (this file: orchestrator, routing, guards, load rules, operational protocol)
 - `system/01-personas.md` (personas, handoff contract, persona depth)
 - `system/02-decision-prompts.md` (decision format, intake routing, project style policy auto-trigger)
@@ -181,7 +181,7 @@ In `DIRECT` mode, do not force the request through `CHECKLIST`, `REVIEW`, or `PL
 - No SPEC output before the spec artifact structure is followed.
 - No `SPECS/` write outside PATCH.
 - No DRIFT output with a write; DRIFT is read-only.
-- No write to the target project's `## Project Style Policy` section in `AGENTS.md`.
+- No write to `STYLE_POLICY.md` (or configured artifact) outside the auto-trigger flow.
 - No pass assertion (`pass`, `passed`, `clean`, `clear`, `conforms`, `LGTM`, synonym) without the evidence chain (command + real output, or `file:line` inspected, or validation-loop pass, or explicit user acceptance).
 - Decision prompts from `02-decision-prompts.md` are binding output, not stylistic guidance. A response uses either up to three `# Decision Needed` blocks or one `## Open question for you` header, never both. Prose-only question lists in place of the format are a protocol breach. Format mixing in a single response is a protocol breach.
 - No list items stacked without a blank line between them. Every list in a structured response separates each item from the next by exactly one blank line. Correct shape: each item on its own line, one blank line between items, then the next item. Failure shape: items run-on as a single paragraph (the line break is treated as a separator the rendered text does not have). Scope: bullet lists, numbered lists, and `key: value` sequences inside any plan-approval, rewrite-contract, or session-state block. The literal stack of `key: value` lines in the `## Plan Approval` template and the `# Rewrite Contract` template is also a list and gets the rule.
@@ -255,7 +255,7 @@ A protocol breach has occurred when:
 - a HALT bypass: version drift resolved silently, or a BLOCKED-variant emitted in place of the DRIFT-internal decision block
 - an adversarial-gate bypass: the devil's-advocate pass skipped before REVIEW decision confirmation or PATCH conclusion
 - a DRIFT phase output performs a write
-- a write to the target project's `## Project Style Policy` section in `AGENTS.md`
+- a write to `STYLE_POLICY.md` (or configured artifact) outside the auto-trigger flow
 - a pass assertion in a structured response that is not paired with the required evidence chain
 
 ## Loop protection (doom loops)
@@ -416,7 +416,7 @@ Use in every phase, every persona, and every execution mode. The credential sani
 
 ### Hard rules
 
-- Never run `git remote -v`, `git remote get-url <name>`, or any other git subcommand whose output contains a remote URL. Remote URLs in this repo's configuration embed live OAuth2 tokens (GitLab) and personal access tokens (Azure DevOps). One unsanitized call leaks credentials into the transcript for the rest of the session.
+- Never run unsanitized `git remote -v`, `git remote get-url <name>`, or any other git subcommand whose output contains a remote URL. Remote URLs in this repo's configuration embed live OAuth2 tokens (GitLab) and personal access tokens (Azure DevOps). One unsanitized call leaks credentials into the transcript for the rest of the session.
 - Never print raw `git push` output to the transcript. PowerShell 5.1 and many shells prefix the URL on a `To <url>` line even when the call itself succeeds. The exit code and branch pointer are enough; the URL is not.
 - Never stage, commit, or push any file that contains a credential, a `.env` value, a `*.pem`, or a `*.key`.
 - Never read `.env`, `.env.*` (except `.env.example`), `secrets/`, `*.pem`, `*.key`, or any file that can carry credentials with the read-file tool; raw contents would enter the transcript (H1). Read them only via a shell command that emits sanitized output: variable names with values redacted. When only names are needed, emit names only. Sanitized means no value, token, or credential part of the file appears in the transcript. If the command output cannot be verified clean, do not emit it.
@@ -426,6 +426,8 @@ Use in every phase, every persona, and every execution mode. The credential sani
 
 - **Names only**: `git remote` (one remote per line, no URLs). Acceptable as a discovery primitive; the result is a list of remote names.
 - **Sanitized full listing, when a full URL inventory is genuinely needed** (PowerShell example): `git remote -v | ForEach-Object { $_ -replace '://[^/@]*@', '://<redacted>@' }`. Verify the output contains no credential material (`oauth2:`, `x-access-token:`, `:<token>@`, query-string tokens) before it enters the transcript. If the sanitized output still contains a credential, do not emit it.
+
+- **Sanitized get‑url, when a full URL inventory is genuinely needed** (PowerShell example): `git remote get-url <name> | ForEach-Object { $_ -replace '://[^/@]*@', '://<redacted>@' }`. Verify the output contains no credential material (`oauth2:`, `x-access-token:`, `:<token>@`, query-string tokens) before it enters the transcript. If the sanitized output still contains a credential, do not emit it.
 
 ### Push output handling
 

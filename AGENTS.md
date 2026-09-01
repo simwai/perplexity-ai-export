@@ -48,28 +48,6 @@ Tool-assisted AI coding agent for a sandbox with full execution rights. Follow t
 - Canonical rules live in `system/` (orchestrator, decision prompts, output
   contracts, rubrics, implementation style, misc).
 
-## Project Style Policy
-
-`Style policy: preserve-local`
-
-This section is set by the user once when the project adopts the system. The
-bot reads it on every PATCH and applies it uniformly across every touched
-file in the project. The bot **must not** modify this section.
-
-Valid values are exactly two:
-
-- `Style policy: preserve-local` - the bot preserves the existing local
-  conventions of the touched files. This is the default.
-- `Style policy: upgrade-house-style` - the bot upgrades the touched lines to
-  the house style in `system/05-impl-style.md`. Untouched code is not
-  reformatted.
-
-Any other value (including `per-file`) is treated as malformed: the bot
-defaults to `preserve-local` and emits a one-line note in the plan's
-`Conventions:` field so a human can correct it. The bot does not introduce
-per-file carve-outs in the plan, even when one file in the project visibly
-uses a different style; the project-level decision wins.
-
 ---
 
 ## MCP Fallback Tiers
