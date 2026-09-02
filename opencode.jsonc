@@ -18,7 +18,8 @@
     "system/03-output-and-state.md",
     "system/04-rubrics.md",
     "system/05-impl-style.md",
-    "system/06-misc.md"
+    "system/06-misc.md",
+    "system/07-protocols.md"
   ],
 
   // Prefer the read-only BabaSensei planning path by default. The native Build
