@@ -199,14 +199,14 @@ The gate cannot statically prove a tautology. The PATCH `## Plan-Actual` block m
 
 ### Lock verification
 
-Before any `git add`, this gate delegates to `07-protocols.md` `## Session file locks` to verify, for every path in the proposed commit:
+Before any `git add`, this gate calls `scripts/session-locks.ps1` functions `Verify-LocksForStagedFiles` and `ReReadAndDiffStagedFiles` to verify, for every path in the proposed commit:
 
-- the current session holds the lock for that path, or
+- the current session holds the lock for that path (per-file or dependency lock), or
 - the current session released the lock within this PATCH/DIRECT step.
 
 If any path fails the check, staging is refused and the gate surfaces the same three options as Wait and surface (wait longer / skip this file / override-steal). The wait/surface logic lives in `07-protocols.md`; this section does not duplicate it.
 
-After the lock check passes, this gate re-reads the working-tree version of each path and diffs it against the in-memory expected content to catch the read-then-write race that implicit-on-write locking cannot prevent. Any unowned hunk surfaces with the same three options and refuses staging.
+After the lock check passes, the gate re-reads the working-tree version of each path and diffs it against the in-memory expected content to catch the read-then-write race that implicit-on-write locking cannot prevent. Any unowned hunk surfaces with the same three options and refuses staging.
 
 A confirmed `READ_ONLY` host skips this section: the gate trigger is already false, so no staging and no lock check occur.
 

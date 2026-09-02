@@ -31,7 +31,9 @@ This is the one case where "defaults" are binding rather than advisory: a greenf
 
 The decision between *preserve local convention* and *upgrade to house style* is a **per-project** choice, made once when the target project adopts the system. There is no per-file override.
 
-- The decision is recorded in the target project's `STYLE_POLICY.md` artifact. Once recorded, the bot **must not** modify that artifact. If the artifact is missing or malformed in a target project, the bot defaults to `preserve-local` and emits a one-line note in the plan that the field is unset or invalid, so a human can correct it.
+- The decision is recorded in the target project's `STYLE_POLICY.md` artifact. Once recorded, the bot **must not** modify that artifact.
+- If the artifact is missing or malformed in a target project, the bot runs the auto-trigger ask from `02-decision-prompts.md` (which recommends `preserve-local` as option A) and proceeds with the result.
+- If the user declines the ask or the ask cannot run, the bot defaults to `preserve-local` and emits a one-line note in the plan that the field is unset or invalid, so a human can correct it.
 - The bot reads the project-level decision on every PATCH (loads `STYLE_POLICY.md`; the field is a single line in frontmatter). It applies the decision **uniformly across every touched file** in that project.
 - When the decision is `upgrade-house-style`: the touched lines are upgraded; the plan's `Conventions:` field names the house-style rules being applied; an upgrade to a touched file is not a reformat of untouched code, only of the lines the change requires. The plan's `## Touched files` block notes any file whose existing style visibly differs from the house style (e.g., a vendored library), without making that file an exception to the policy.
 - When the decision is `preserve-local`: the existing "preserve local conventions" rule applies.

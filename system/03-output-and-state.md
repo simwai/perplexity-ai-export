@@ -79,7 +79,7 @@ The `Reason` field is mandatory. It must not be blank, placeholder-only, or a ge
 
 # Project Intake
 Goal: [what the user wants to achieve]
-Stack/Style: [language/stack] -- [module 14 defaults | user-specified conventions]
+Stack/Style: [language/stack] -- [05-impl-style.md defaults | user-specified conventions]
 Scope:
 - In: [in scope]
 - Out: [out of scope]
@@ -185,10 +185,37 @@ Pre-review docs log:
 Docs phase: [needed | skipped] -- [one-line reason]
 
 Hard tier:
-- [ ] H1 - [ ] H12
+- [ ] H1
+- [ ] H2
+- [ ] H3
+- [ ] H4
+- [ ] H5
+- [ ] H6
+- [ ] H7
+- [ ] H8
+- [ ] H9
+- [ ] H10
+- [ ] H11
+- [ ] H12
 
 Soft tier:
-- [ ] S1 - [ ] S17
+- [ ] S1
+- [ ] S2
+- [ ] S3
+- [ ] S4
+- [ ] S5
+- [ ] S6
+- [ ] S7
+- [ ] S8
+- [ ] S9
+- [ ] S10
+- [ ] S11
+- [ ] S12
+- [ ] S13
+- [ ] S14
+- [ ] S15
+- [ ] S16
+- [ ] S17
 
 Verification:
 - Build: pending -- [command]
@@ -280,7 +307,7 @@ Batch: [lines X-Y or FULL or AGGREGATE -- all files complete] ([N] of [M] for th
 Confirmed-looking violations (provisional until the decision section is confirmed):
 - [criterion id] -- [line/range] -- [one-sentence failure] ([confidence]%)
   - Mitigations:
-    - A. [short action] (Recommended)
+    - **A.** [short action] (Recommended)
       - Pros: [one line]
       - Cons: [one line]
     - B. [short action]
@@ -299,20 +326,13 @@ Validation loop (run when any finding is at confidence <= 70%):
 ## Informational (when applicable)
 - [criterion id] -- [line/range] -- [one-sentence note]
 
-Open questions:
-- Question: [short question]
-  Recommended: A -- [one-sentence reason]
-  - A. [recommended option]
-    - Pros: [short pros]
-    - Cons: [short cons]
-  - B. [option]
-    - Pros: [short pros]
-    - Cons: [short cons]
-  - C. [option, if needed]
-    - Pros: [short pros]
-    - Cons: [short cons]
+## Decision Items (if any)
+- Each decision uses `# Decision Needed` format per `02-decision-prompts.md`
+- Recommended option is **fat bolded** as `**A. option**`
+- No open-ended questions permitted
 
 Cross-team requirements (if any):
+<!-- See 07-protocols.md `## Cross-team requirements` for the full entry shape; this template carries the one-line tag only. -->
 - [repo/service] -- [priority] -- [short description] (see CHANGES_REQUIRED.md)
 
 # Verification
@@ -334,7 +354,15 @@ Next batch:
 - [file path] -- [lines X-Y or FULL] -- [next batch, or "all files complete - confirm aggregate decision before PLAN"]
 ```
 
-REVIEW owns confirmation. There is no standalone CONFIRM phase. Every emitted finding in `# Findings` that is in scope for remediation carries a `Mitigations:` block immediately under the finding line. The block is a mini decision prompt: 2-3 options, recommended option first with `(Recommended)`, one-line pros and cons per option, and exactly one `Recommended:` line. BabaTester is the one exception: it emits mitigations but omits the `(Recommended)` marker and the `Recommended:` line because BabaTester is excluded from PLAN/Done declarations. Do not mark `(Recommended)` unless one option's pros dominate the others; when in doubt, leave the block unmarked (no `(Recommended)` marker, no `Recommended:` line) and the user picks without guidance. An unmarked `Mitigations:` block is a valid shape, not a missing one. Findings that are informational only move to a new `## Informational` heading in REVIEW and carry no `Mitigations:` block.
+REVIEW owns confirmation. There is no standalone CONFIRM phase.
+
+Every emitted finding in `# Findings` that is in scope for remediation carries a `Mitigations:` block immediately under the finding line. The block is a mini decision prompt: 2-3 options, recommended option first with `(Recommended)`, and one-line pros and cons per option. The recommended option is rendered as `**A. option text**` (fat bolded, first position) per the Rendering Rule in `02-decision-prompts.md`.
+
+The `Recommended:` line is optional: include it when one option's pros dominate the others; omit it when the block is left unmarked. The two are equivalent in weight; an unmarked `Mitigations:` block is a valid shape, not a missing one.
+
+BabaTester is the one exception: it emits mitigations but omits the `(Recommended)` marker and the `Recommended:` line because BabaTester is excluded from PLAN/Done declarations.
+
+Findings that are informational only move to a new `## Informational` heading in REVIEW and carry no `Mitigations:` block.
 
 The user's reply is one of: a letter (A/B/C) to pick a mitigation, `skip` to accept the finding without a mitigation, or `accept` to record the finding as informational. The choice is persisted in the session state file under `## Findings Mitigations` and travels into PATCH and DRIFT via the handoff contract.
 
@@ -372,7 +400,7 @@ Will preserve:
 
 Conventions:
 - [dominating error-handling/style idiom per touched file, with evidence, and how the plan preserves it]
-- For new files or a new project: [the module-14 defaults being established as conventions -- stack, DI container, error idiom, naming, structure -- or the user override recorded in the INTAKE `Stack/Style:` field]
+- For new files or a new project: [the 05-impl-style.md defaults being established as conventions -- stack, DI container, error idiom, naming, structure -- or the user override recorded in the INTAKE `Stack/Style:` field]
 
 Risks:
 - [risk]
@@ -423,6 +451,8 @@ Forbidden in patch:
 - Regression baseline (expected FAIL): PASS|FAIL/SKIPPED -- [command] -- [note or SKIPPED reason]
 - Regression post-fix (expected PASS): PASS|FAIL/SKIPPED -- [command] -- [note or SKIPPED reason]
 - Playwright smoke: PASS/FAIL/SKIPPED -- [URL] -- [note]
+- Lock acquisition: PASS/FAIL/SKIPPED -- [per-file|dependency] -- [held|released|skipped] -- [note]
+- Lock verification (commit gate): PASS/FAIL/SKIPPED -- [command] -- [notes]
 
 # Plan-Actual
 - Items: [N planned / M landed / K missing]
@@ -564,6 +594,12 @@ plan_actual_history: [list of (timestamp, items, verdict) tuples]
 
 ## Plan-Actual History
 - [timestamp] -- [N planned / M landed / K missing] -- [verdict]
+
+## Locked Paths
+### Per-file
+- [flat-name] -- [owner] -- [acquired_at] -- [status: held|released]
+### Dependency
+- [root flat-name] -- [owner] -- [acquired_at] -- [dependency count] -- [status: held|released]
 
 ## MCP Preflight
 - [server]: [ready|unavailable|not_checked]

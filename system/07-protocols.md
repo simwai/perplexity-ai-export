@@ -412,6 +412,73 @@ The named constants below are the single source of truth and must be referenced 
 - `SESSION_LOCK_WAIT_ATTEMPTS = 3`
 - `SESSION_LOCK_WAIT_INTERVAL_SECONDS = 60`
 
+### Dependency locks
+
+A dependency lock is a stronger claim that covers a file plus its direct dependency graph in both directions (depth 1). It is acquired when the session intends to refactor a file and wants to block concurrent edits to files that import it (reverse dependencies) and files it imports (forward dependencies).
+
+#### Lockable unit
+
+The lockable unit is a file and its dependency set: `{ root file } union { direct importers } union { direct imports }`. The dependency set is computed at acquisition time and recorded in the lock directory.
+
+#### Discovery step
+
+Before acquiring a dependency lock, the session discovers the dependency set:
+
+1. **Reverse dependencies (direct importers):** Files that contain an import statement referencing the target file. Discovered via `rg` over the project's source tree (excluding artifact directories: `node_modules/`, `.venv/`, `venv/`, `env/`, `__pycache__/`, `dist/`, `build/`, `out/`, `.cache/`, `.next/`, `.nuxt/`, `.svelte-kit/`, `.turbo/`, `.mypy_cache/`, `.ruff_cache/`, `.pyrefly_cache/`, `.pytest_cache/`, `coverage/`, `.coverage/`, `test-results/`, `.pre-commit-cache/`).
+2. **Forward dependencies (direct imports):** Files that the target file imports. Discovered by parsing the target file's import statements and resolving relative paths against the project's source tree (same exclusions).
+
+The discovery is stack-agnostic; the surface picks the tool (default `rg`). The worklist is cached in the session state file to avoid re-discovery on re-acquisition.
+
+#### Lock directory layout
+
+A dependency lock uses the same directory structure as a per-file lock, with one additional file:
+
+- `.session-locks/<flat-name>.lock/owner` - session id
+- `.session-locks/<flat-name>.lock/acquired_at` - ISO-8601 UTC timestamp
+- `.session-locks/<flat-name>.lock/dependencies.txt` - newline-separated flat names of every file in the dependency set, including the root file
+
+The presence of `dependencies.txt` distinguishes a dependency lock from a per-file lock.
+
+#### Block rule (interaction matrix)
+
+| Holder \ Requester | Per-file lock on Y | Dependency lock on X |
+|---|---|---|
+| Per-file lock on Y | Wait/skip/override-steal | **No block** - per-file does not block dependency acquisition on X |
+| Dependency lock on X (covers Y) | Wait/skip/override-steal | Wait/skip/override-steal |
+
+A dependency lock on X blocks another session's per-file acquisition on any file in X's dependency set. A per-file lock on Y does NOT block a dependency lock acquisition on X (where Y is in X's dependency set), because the dependency lock is the canonical claim and acquires first.
+
+#### Stale and wait behavior
+
+Identical to per-file locks: `SESSION_LOCK_TTL_MINUTES = 30`, `SESSION_LOCK_WAIT_ATTEMPTS = 3`, `SESSION_LOCK_WAIT_INTERVAL_SECONDS = 60`. Stale locks surface the same three options plus "Contact the peer". No auto-steal.
+
+#### Release
+
+After successful patch verification for the root file, the dependency lock is released. The lock covers the whole dependency set; releasing it makes all covered files available to peers.
+
+#### Session state file recording
+
+The session state file uses `## Locked Paths` with two subsections:
+
+```markdown
+## Locked Paths
+### Per-file
+- [flat-name] -- [owner] -- [acquired_at] -- [status: held|released]
+### Dependency
+- [root flat-name] -- [owner] -- [acquired_at] -- [dependency count] -- [status: held|released]
+```
+
+Legacy state files with `## Locked Files` continue to be readable as per-file only.
+
+#### Commit/push gate integration
+
+The commit/push gate verifies both lock types:
+
+- For a per-file lock: the session must hold the per-file lock on that exact file.
+- For a dependency lock: the session must hold the dependency lock whose `dependencies.txt` covers the staged file.
+
+After the lock check, the re-read-and-diff step runs on every staged file to catch the read-then-write race.
+
 ## Spec lifecycle
 
 A spec is a living artifact under `SPECS/`. Each spec has a registry entry (frontmatter) and a body (`spec.md`).

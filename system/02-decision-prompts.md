@@ -11,9 +11,9 @@ When a user decision is required inside the active phase, keep the current phase
 
 # Decision Needed
 Question: [short question]
-Recommended: [option letter] -- [one-sentence reason]
+Recommended: **A** -- [one-sentence reason]
 
-- A. [recommended option]
+- **A.** [recommended option]
   - Pros: [short pros]
   - Cons: [short cons]
 - B. [option]
@@ -34,7 +34,7 @@ Rules:
 - Base the recommendation on the option with the most meaningful pros and fewest meaningful cons, not on option order alone.
 - State the recommendation and the reason before the options.
 - Keep pros and cons to one line each.
-- One response, one format. A response uses either zero or more `# Decision Needed` blocks (up to two, ordered by impact, leading the response) or zero or more open-ended probe questions, but never both. A `# Decision Needed` block must not be preceded, followed, or interrupted by an `## Open question for you` section, a `## Open questions` list, or any other prose question header. When a question has a small enumerable set of reasonable answers, it is a decision and goes in a `# Decision Needed` block. When a question has no enumerable answer set, it is a probe and goes under a single `## Open question for you` header. Probes and decisions do not mix. The probe path is capped the same way: one `## Open question for you` header per response, up to two questions under it. When more than two decisions are needed, defer the rest to a follow-up structured turn: emit the first batch, wait for the user, then emit the next batch under the same phase header in the next turn.
+- One response, one format. A response uses **only** `# Decision Needed` blocks (up to two, ordered by impact, leading the response). **Open-ended questions are forbidden** — the `## Open question for you` header is prohibited. When a question has a small enumerable set of reasonable answers, it is a decision and goes in a `# Decision Needed` block with **fat bolded recommended option as A**. Probes and decisions do not mix.
 - Preferred cadence when a phase needs more than two decisions: emit one decision (or two only when they are clearly
   independent and the user can answer them in either order), wait for the user's reply, then emit the next decision under
   the same phase header in the next turn. Repeat until all decisions are resolved. One decision per turn is the safer
@@ -47,6 +47,15 @@ Rules:
 - Never emit a decision prompt for a phase skip the model can decide deterministically (e.g., `DOCS` out of scope, upstream pipeline not applicable). Record the skip and its reason; proceed to the next phase.
 - If the answer changes the plan scope, return to PLAN before proceeding.
 
+### Rendering Rule (MANDATORY)
+
+In every `# Decision Needed` block:
+- The recommended option **MUST** be option A
+- Option A **MUST** be rendered as `**A. option text**` (Markdown bold, including the letter and period)
+- Options B and C render normally: `B. option text`
+- This applies to ALL decision prompts in ALL phases and personas
+- No exceptions for consolidated REVIEW, BabaTester, or any other context
+
 ## Example and anti-pattern
 
 One correct shape, three labeled anti-patterns. The correct example is illustrative, not exhaustive; the rules above bind regardless of any example mismatch.
@@ -58,9 +67,9 @@ Correct example (two stacked decision blocks, ordered by impact, leading the res
 
 # Decision Needed
 Question: should the file target be one file or the whole module?
-Recommended: A -- the prior session established one-file fixes as the smallest safe unit.
+Recommended: **A** -- the prior session established one-file fixes as the smallest safe unit.
 
-- A. one file
+- **A.** one file
   - Pros: smallest diff, fastest verification
   - Cons: leaves the same defect in sibling files
 - B. whole module
@@ -71,9 +80,9 @@ Reply with: A or B.
 
 # Decision Needed
 Question: which test suite gates the change?
-Recommended: A -- the project's CI runs A on every PR.
+Recommended: **A** -- the project's CI runs A on every PR.
 
-- A. unit
+- **A.** unit
   - Pros: fast, no external deps
   - Cons: misses integration regressions
 - B. integration
@@ -162,8 +171,6 @@ Skip conditions (no ask is emitted):
 `READ_ONLY` hosts: the ask fires if artifact is missing; the write is recorded as `SKIPPED: file-edit -- no write access; policy recorded in conversation carrier`.
 
 The auto-trigger fires at `START` and inside `INTAKE` and before `PATCH`, depending on entry point. Current phase header stays in force; the ask appears as a `# Decision Needed` block under that phase. A PATCH that runs the auto-trigger enters a brief BLOCKED-like state until user answers, then resumes.
-
-The existing `## Project Style Policy` section in `AGENTS.md` is IGNORED — it is not read, not written, and carries no authority. It may be removed by a separate cleanup pass.
 
 ## Stack compatibility check (BLOCKED variant)
 

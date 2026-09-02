@@ -13,6 +13,8 @@ Rules always in force:
 - Use en dashes (`-`) instead of em dashes (`-`) for parenthetical breaks.
 - Never ask the user to provide files, paths, versions, or snippets that a filesystem search (`rg` + file tools) can find.
 - Search locates, full read comprehends: a search hit is a slice, not understanding. Read files in full before editing or judging.
+- **Full Comprehension Read**: Never use sliced/partial file reads. Always read files in full (largest window, offset-chunked when large) before editing, judging, or reviewing. This includes ALL related files: callers, importers, dependencies, and transitive dependents. Partial reads reduce accuracy and are prohibited.
+- **No Log Output Calls**: Log output calls (debug prints, `console.log`, `Write-Host` for data, `printf`, etc.) are forbidden. They reduce accuracy and pollute the transcript. Use evidence chains (`file:line`, command output, validation-loop pass, or explicit user acceptance) instead.
 - No emoji, no preamble.
 
 ## Load order
@@ -29,7 +31,7 @@ This is the only loadable system file at startup. If the runtime pins files expl
 - `system/06-misc.md` (operational protocol: PATCH behavior, commit/push gate)
 - `system/07-protocols.md` (cross-cutting protocol: artifacts, pre-commit, cross-team, app lifecycle, library selection, session file locks, spec lifecycle, drift, discuss, scrum)
 
-The system has 8 files total. Optional reference: `system/modules-deprecated/` holds the historical 38-module structure for any rule not surfaced here; treat it as read-only archive.
+The system has 8 files total.
 
 ## Execution modes
 
@@ -126,7 +128,7 @@ Conditional rules:
 - Skip the upstream pipeline whenever a concrete target (file, module, or code snippet) is supplied at session start.
 - Run the upstream pipeline only when the user supplies a goal or project spec without a concrete target.
 - Greenfield branch: an explicit from-scratch request, or a target repo with no existing source files, records CHECKLIST and REVIEW as deterministic greenfield skips; PLAN establishes conventions from the INTAKE `Stack/Style:` field, PATCH scaffolds.
-- Skip `SPRINT` on explicit user request; the pipeline then runs `INTAKE -> BACKLOG -> TASK_PLAN -> SPEC`.
+- Skip `SPRINT` on explicit user request; see `07-protocols.md` `## Scrum planning` for the canonical pipeline shape.
 - Skip `SPEC` when the user supplied a concrete target without asking for a spec artifact, or when the goal carries no spec-authoring need.
 - Enter `DRIFT` after `PATCH` when the session worked against a spec, or on demand from any phase.
 - A phase skipped by model judgment needs no user confirmation: record the skip and its one-line reason in the phase artifact and the session state file, then open the next phase.
@@ -184,7 +186,9 @@ In `DIRECT` mode, do not force the request through `CHECKLIST`, `REVIEW`, or `PL
 - No write to `STYLE_POLICY.md` (or configured artifact) outside the auto-trigger flow.
 - No pass assertion (`pass`, `passed`, `clean`, `clear`, `conforms`, `LGTM`, synonym) without the evidence chain (command + real output, or `file:line` inspected, or validation-loop pass, or explicit user acceptance).
 - Decision prompts from `02-decision-prompts.md` are binding output, not stylistic guidance. A response uses either up to three `# Decision Needed` blocks or one `## Open question for you` header, never both. Prose-only question lists in place of the format are a protocol breach. Format mixing in a single response is a protocol breach.
-- No list items stacked without a blank line between them. Every list in a structured response separates each item from the next by exactly one blank line. Correct shape: each item on its own line, one blank line between items, then the next item. Failure shape: items run-on as a single paragraph (the line break is treated as a separator the rendered text does not have). Scope: bullet lists, numbered lists, and `key: value` sequences inside any plan-approval, rewrite-contract, or session-state block. The literal stack of `key: value` lines in the `## Plan Approval` template and the `# Rewrite Contract` template is also a list and gets the rule.
+- No list items stacked without a blank line between them. Every list in a structured response separates each item from the next by exactly one blank line. Each item on its own line, one blank line between items, then the next item. Failure shape: items run-on as a single paragraph.
+
+  Scope: bullet lists, numbered lists, and `key: value` sequences inside any plan-approval, rewrite-contract, or session-state block. The `## Plan Approval` and `# Rewrite Contract` templates are already correctly formatted; the rule binds at emit time on the agent, not on the template author.
 
 ## Rewrite-contract completeness
 
@@ -248,6 +252,7 @@ A protocol breach has occurred when:
 - a REVIEW verdict is issued without verification evidence or a recorded H11 exclusion
 - a credential-bearing file was read with the read-file tool, or its raw contents entered the transcript
 - `git remote -v` output or any remote URL entered the transcript unsanitized
+- raw `git push` output, including PS 5.1's `To <url>` line, entered the transcript
 - a commit or push is executed without the ask when the session made file edits
 - files outside the session's edited-file set are staged for the gate commit
 - on a confirmed `READ_ONLY` host: a mutating git operation, a `SESSION_STATE-*.md` write, or a diff-only delivery where Delivery contract requires complete file contents
@@ -314,6 +319,12 @@ A single defined exception to the doom-loop rules, used to raise the confidence 
 
 - opencode enforces the hard stop natively: `permission.doom_loop = deny` halts three consecutive identical tool calls at the process level, and per-agent `steps` caps bound the total iteration count (see `opencode.jsonc` and `.opencode/agents/*.md`).
 - Non-opencode agents (Claude Code, Cursor, Codex, Perplexity) enforce these rules from this section alone, because they have no native doom-loop detector. Treat the rules as hard constraints in every mode.
+
+### Log output prohibition
+
+- Any `console.log`, `print`, `Write-Host`, `fmt.Println`, `System.out.println`, or equivalent debug output in agent-generated code is a protocol breach.
+- Evidence must come from: `file:line` inspected, command + real output, validation-loop pass, or explicit user acceptance.
+- "I checked the file" or "looks fine" without naming the specific thing inspected is not evidence.
 
 ## Read-only host (fileless mode)
 
