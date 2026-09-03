@@ -1,6 +1,7 @@
 import { execSync } from 'node:child_process'
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
+import { colorino } from 'colorino'
 
 /**
  * Recursively finds all markdown files in a directory, excluding node_modules and .git.
@@ -17,14 +18,13 @@ function getMarkdownFiles(dir, allFiles = []) {
         allFiles.push(name)
       }
     } catch (err) {
-      // Handle cases where statSync might fail (e.g. broken symlinks)
-      console.warn(`Warning: Could not access ${name}: ${err.message}`)
+      colorino.warn(`Warning: Could not access ${name}: ${err.message}`)
     }
   }
   return allFiles
 }
 
-console.log('Searching for markdown files with TOC placeholders...')
+colorino.info('Searching for markdown files with TOC placeholders...')
 
 const allMdFiles = getMarkdownFiles('.')
 const filesToUpdate = allMdFiles.filter((file) => {
@@ -32,26 +32,25 @@ const filesToUpdate = allMdFiles.filter((file) => {
     const content = readFileSync(file, 'utf8')
     return content.includes('<!-- toc -->')
   } catch (err) {
-    console.warn(`Warning: Could not read ${file}: ${err.message}`)
+    colorino.warn(`Warning: Could not read ${file}: ${err.message}`)
     return false
   }
 })
 
 if (filesToUpdate.length === 0) {
-  console.log('No markdown files with "<!-- toc -->" placeholder found.')
+  colorino.info('No markdown files with "<!-- toc -->" placeholder found.')
   process.exit(0)
 }
 
-console.log(`Found ${filesToUpdate.length} file(s) to update.`)
+colorino.info(`Found ${filesToUpdate.length} file(s) to update.`)
 
 filesToUpdate.forEach((file) => {
-  console.log(`Updating TOC for ${file}...`)
+  colorino.info(`Updating TOC for ${file}...`)
   try {
-    // We use npx markdown-toc -i which updates the file in-place
     execSync(`npx markdown-toc -i ${file}`, { stdio: 'inherit' })
   } catch (error) {
-    console.error(`Error updating TOC for ${file}:`, error.message)
+    colorino.error(`Error updating TOC for ${file}:`, error.message)
   }
 })
 
-console.log('TOC update complete.')
+colorino.info('TOC update complete.')

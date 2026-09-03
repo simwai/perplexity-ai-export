@@ -1,5 +1,4 @@
-import chalk from 'chalk'
-import { appendFileSync, mkdirSync, existsSync } from 'node:fs'
+import { createColorino } from 'colorino'
 import { join } from 'node:path'
 
 const IS_DEBUG_MODE =
@@ -9,51 +8,58 @@ const LOG_FILE_TIMESTAMP = new Date().toISOString().replace(/[:.]/g, '-')
 const MAIN_LOG_FILENAME = `main-log-${LOG_FILE_TIMESTAMP}.txt`
 const MAIN_LOG_PATH = join(LOGS_DIRECTORY, MAIN_LOG_FILENAME)
 
-function writeToLogFile(message: string): void {
-  if (!IS_DEBUG_MODE) return
-
-  if (!existsSync(LOGS_DIRECTORY)) {
-    mkdirSync(LOGS_DIRECTORY, { recursive: true })
+const baseLogger = createColorino(
+  {
+    error: '#ff5555',
+    warn: '#ffb86c',
+    info: '#8be9fd',
+    log: '#50fa7b',
+    debug: '#bd93f9',
+    trace: '#6272a4',
+  },
+  {
+    level: 'trace',
+    ...(IS_DEBUG_MODE
+      ? {
+          fileLogging: {
+            path: MAIN_LOG_PATH,
+            maxBytes: 10 * 1024 * 1024,
+            maxFiles: 5,
+            stripAnsi: true,
+          },
+        }
+      : {}),
   }
-
-  const ANSI_ESCAPE_REGEX = /\x1b\[[0-9;]*m/g
-  const plainTextLines = message.replace(ANSI_ESCAPE_REGEX, '')
-  const logTimestamp = new Date().toISOString()
-
-  appendFileSync(MAIN_LOG_PATH, `[${logTimestamp}] ${plainTextLines}\n`)
-}
+)
 
 export const logger = {
   info(...args: unknown[]): void {
-    const message = args.join(' ')
-    console.log(chalk.blue('ℹ'), message)
-    writeToLogFile(`INFO: ${message}`)
+    baseLogger.info('ℹ', ...args)
   },
 
   success(...args: unknown[]): void {
-    const message = args.join(' ')
-    console.log(chalk.green('✓'), message)
-    writeToLogFile(`SUCCESS: ${message}`)
+    baseLogger.log('✓', ...args)
   },
 
   warn(...args: unknown[]): void {
-    const message = args.join(' ')
-    console.log(chalk.yellow('⚠'), message)
-    writeToLogFile(`WARN: ${message}`)
+    baseLogger.warn('⚠', ...args)
   },
 
   error(...args: unknown[]): void {
-    const message = args.join(' ')
-    console.error(chalk.red('✗'), message)
-    writeToLogFile(`ERROR: ${message}`)
+    baseLogger.error('✗', ...args)
   },
 
   debug(...args: unknown[]): void {
     const isVerboseDebug = process.env['DEBUG'] === 'true'
     if (!isVerboseDebug) return
+    baseLogger.debug('›', ...args)
+  },
 
-    const message = args.join(' ')
-    console.log(chalk.gray('›'), message)
-    writeToLogFile(`DEBUG: ${message}`)
+  log(...args: unknown[]): void {
+    baseLogger.log(...args)
+  },
+
+  trace(...args: unknown[]): void {
+    baseLogger.trace(...args)
   },
 }

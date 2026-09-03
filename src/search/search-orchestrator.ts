@@ -3,7 +3,6 @@ import { VectorStore } from './vector-store.js'
 import { logger } from '../utils/logger.js'
 import { type Config } from '../utils/config.js'
 import { RagOrchestrator } from '../ai/rag-orchestrator.js'
-import chalk from 'chalk'
 
 export type SearchMode = 'rg' | 'vector' | 'auto' | 'rag'
 
@@ -97,11 +96,11 @@ export class SearchOrchestrator {
       const { meta, score } = result
       const relevanceScoreLabel = score.toFixed(3)
 
-      const spaceNameDisplay = chalk.green(meta['spaceName'] as string)
-      const arrowSeparator = chalk.gray('›')
-      const titleDisplay = chalk.cyan(meta['title'] as string)
-      const scoreDisplay = chalk.gray(`(${relevanceScoreLabel})`)
-      const pathDisplay = chalk.gray(meta['path'] as string)
+      const spaceNameDisplay = String(meta['spaceName'] ?? '')
+      const arrowSeparator = '›'
+      const titleDisplay = String(meta['title'] ?? '')
+      const scoreDisplay = `(${relevanceScoreLabel})`
+      const pathDisplay = String(meta['path'] ?? '')
 
       logger.info(
         `${spaceNameDisplay} ${arrowSeparator} ${titleDisplay} ${scoreDisplay}\n${pathDisplay}\n`

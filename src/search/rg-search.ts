@@ -3,7 +3,6 @@ import { existsSync } from 'node:fs'
 import { createInterface } from 'node:readline'
 import { type Config } from '../utils/config.js'
 import { logger } from '../utils/logger.js'
-import chalk from 'chalk'
 import { rgPath } from '@vscode/ripgrep'
 
 export interface RgSearchOptions {
@@ -60,7 +59,7 @@ export class RgSearch {
 
       const child = spawn(rgPath, args, {
         cwd: this.config.exportDir,
-        shell: true,
+        shell: false,
         stdio: ['ignore', 'pipe', 'pipe'],
       })
 
@@ -84,7 +83,9 @@ export class RgSearch {
                 text: parsed.data.lines.text,
               })
             }
-          } catch (_) {}
+          } catch (error) {
+            logger.debug(`Failed to parse ripgrep JSON line: ${(error as Error).message}`)
+          }
         })
         child.on('close', () => rl.close())
         child.on('error', () => rl.close())
@@ -96,7 +97,7 @@ export class RgSearch {
         child.stderr.on('data', (data) => {
           const msg = data.toString()
           if (!msg.includes('No such file or directory')) {
-            process.stderr.write(chalk.red(msg))
+            process.stderr.write(msg)
           }
         })
       }

@@ -1,6 +1,5 @@
 import { errorBus } from '../utils/error-bus.js'
 import { select } from '@inquirer/prompts'
-import chalk from 'chalk'
 import { logger } from '../utils/logger.js'
 import { CommandHandler } from './commands.js'
 import { type Config } from '../utils/config.js'
@@ -14,7 +13,7 @@ export class Repl {
   }
 
   async start(): Promise<void> {
-    logger.info(chalk.bold.cyan('\n🔮 Perplexity History Export Tool\n'))
+    logger.info('\n🔮 Perplexity History Export Tool\n')
     logger.info('Select commands to execute. Press Ctrl+C to exit.\n')
 
     while (this.isRunning) {
@@ -76,7 +75,7 @@ export class Repl {
   private terminate(): void {
     if (!this.isRunning) return
     this.isRunning = false
-    logger.info(chalk.cyan('\n👋 Goodbye!\n'))
+    logger.info('\n👋 Goodbye!\n')
     process.exit(0)
   }
 }

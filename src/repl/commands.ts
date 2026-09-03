@@ -13,7 +13,6 @@ import { logger } from '../utils/logger.js'
 import { showHelp } from './help.js'
 import { LibraryDiscovery } from '../scraper/library-discovery.js'
 import { type Config } from '../utils/config.js'
-import chalk from 'chalk'
 
 export class CommandHandler {
   static readonly ScraperError = class extends Error {
@@ -311,9 +310,9 @@ export class CommandHandler {
       return
     }
 
-    logger.info(chalk.bold.cyan('\n💬 History Chat Mode'))
-    logger.info(chalk.gray('Type your questions about your exported conversations.'))
-    logger.info(chalk.gray('Type "exit" or "quit" to return to the main menu.\n'))
+    logger.info('\n💬 History Chat Mode')
+    logger.info('Type your questions about your exported conversations.')
+    logger.info('Type "exit" or "quit" to return to the main menu.\n')
 
     const history: ChatMessage[] = []
     let isChatting = true
@@ -321,7 +320,7 @@ export class CommandHandler {
     while (isChatting) {
       try {
         const query = await input({
-          message: chalk.cyan('chat>'),
+          message: 'chat>',
           validate: (value) => (value.trim().length === 0 ? 'Please enter a message.' : true),
         })
 
@@ -332,10 +331,10 @@ export class CommandHandler {
 
         const response = await this.ragOrchestrator.chat(query, history)
 
-        console.log(`\n${chalk.bold.green('Assistant:')}\n`)
-        console.log(response.content)
-        console.log(
-          `\n${chalk.gray(`Tokens: ${response.usage.totalTokens} (${response.usage.promptTokens} prompt + ${response.usage.completionTokens} completion)`)}\n`
+        logger.log('\nAssistant:\n')
+        logger.log(response.content)
+        logger.info(
+          `\nTokens: ${response.usage.totalTokens} (${response.usage.promptTokens} prompt + ${response.usage.completionTokens} completion)\n`
         )
 
         history.push({ role: 'user', content: query })

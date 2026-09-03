@@ -1,13 +1,12 @@
-import chalk from 'chalk'
 import { logger } from '../utils/logger.js'
 
 export function showHelp(): void {
   const logAction = (actionName: string, actionDescription: string) => {
-    logger.info(chalk.cyan(`  ${actionName}`))
+    logger.info(`  ${actionName}`)
     logger.info(`    ${actionDescription}\n`)
   }
 
-  logger.info(chalk.bold('\n📚 Available Actions:\n'))
+  logger.info('\n📚 Available Actions:\n')
 
   logAction(
     'Start scraper (Library)',
@@ -33,7 +32,7 @@ export function showHelp(): void {
 
   logAction('Exit', 'Close the application.')
 
-  logger.info(chalk.bold('💡 Search & RAG Tips:\n'))
+  logger.info('💡 Search & RAG Tips:\n')
   logger.info(
     '  • RAG: Ask history with Ollama. Combines vector retrieval with AI generation for comprehensive answers.'
   )
@@ -51,7 +50,7 @@ export function showHelp(): void {
   )
   logger.info('  • Exact: Ideal for finding specific phrases or technical terms.\n')
 
-  logger.info(chalk.bold('🏋️  Benchmark:\n'))
+  logger.info('🏋️  Benchmark:\n')
   logger.info(
     '  Run npm run benchmark to measure RAG pipeline latency across a set of test queries.'
   )
