@@ -1,5 +1,5 @@
 import { errorBus } from '../utils/error-bus.js'
-import { LocalIndex } from 'vectra'
+import { LocalIndex, type QueryResult } from 'vectra'
 import { join } from 'node:path'
 import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { type Config } from '../utils/config.js'
@@ -8,6 +8,8 @@ import { OllamaClient } from '../ai/ollama-client.js'
 import { chunkMarkdown } from '../utils/chunking.js'
 
 export type VectorDocMeta = Record<string, string>
+
+export type MetadataFilter = NonNullable<Parameters<LocalIndex['queryItems']>[3]>
 
 export interface VectorSearchResult {
   meta: VectorDocMeta
@@ -88,16 +90,16 @@ export class VectorStore {
 
   async searchWithMetadataFilter(
     query: string,
-    filter: (meta: Record<string, any>) => boolean,
+    filter: MetadataFilter,
     limit = 10
   ): Promise<VectorSearchResult[]> {
     try {
       const queryEmbedding = await this.generateQueryEmbedding(query)
-      const rawResults = await this.vectorIndex.queryItems(
+      const rawResults = await this.vectorIndex.queryItems<VectorDocMeta>(
         queryEmbedding,
         query,
         limit,
-        filter as any
+        filter
       )
       return this.formatVectorSearchResults(rawResults)
     } catch (error) {
@@ -213,7 +215,7 @@ export class VectorStore {
 
         await this.vectorIndex.insertItem({
           vector: currentVector,
-          metadata: batchMetas[i] as Record<string, any>,
+          metadata: batchMetas[i],
         })
       }
     } catch (error) {
@@ -233,13 +235,15 @@ export class VectorStore {
     queryEmbedding: number[],
     queryString: string,
     resultLimit: number
-  ): Promise<any[]> {
-    return this.vectorIndex.queryItems(queryEmbedding, queryString, resultLimit)
+  ): Promise<QueryResult<VectorDocMeta>[]> {
+    return this.vectorIndex.queryItems<VectorDocMeta>(queryEmbedding, queryString, resultLimit)
   }
 
-  private formatVectorSearchResults(rawResults: any[]): VectorSearchResult[] {
+  private formatVectorSearchResults(
+    rawResults: QueryResult<VectorDocMeta>[]
+  ): VectorSearchResult[] {
     return rawResults.map((result) => ({
-      meta: result.item.metadata as VectorDocMeta,
+      meta: result.item.metadata,
       score: result.score,
     }))
   }

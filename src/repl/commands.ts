@@ -4,7 +4,7 @@ import { input, select, confirm } from '@inquirer/prompts'
 import { rmSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { BrowserManager } from '../scraper/browser.js'
-import { CheckpointManager } from '../scraper/checkpoint-manager.js'
+import { CheckpointManager, type ConversationMeta } from '../scraper/checkpoint-manager.js'
 import { WorkerPool } from '../scraper/worker-pool.js'
 import { SearchOrchestrator } from '../search/search-orchestrator.js'
 import { RagOrchestrator } from '../ai/rag-orchestrator.js'
@@ -211,7 +211,7 @@ export class CommandHandler {
 
   private async runExtractionPhase(
     browserManager: BrowserManager,
-    pendingConversations: any[]
+    pendingConversations: ConversationMeta[]
   ): Promise<void> {
     logger.info(`\n=== Phase 2: Parallel Extraction (${pendingConversations.length} pending) ===\n`)
 
