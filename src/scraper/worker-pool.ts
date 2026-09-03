@@ -82,6 +82,7 @@ export class WorkerPool {
   }
 
   async close(): Promise<void> {
+    // why: best-effort teardown; if the context is already gone, Playwright throws and we ignore.
     await this.sharedBrowserContext?.close().catch(() => {})
   }
 
@@ -91,7 +92,7 @@ export class WorkerPool {
     queue: QueueItem[]
   ): Promise<void> {
     try {
-      const result = await worker.extractor.extract(item.meta.url)
+      const result = await worker.extractor.extract(item.meta.url, item.meta.id)
       await this.handleSuccess(worker, item.meta, result)
     } catch (error) {
       await this.handleFailure(worker, item, queue, error)
@@ -141,7 +142,11 @@ export class WorkerPool {
       logger.warn(`Retrying ${item.meta.url} (attempt ${item.attempts}/${MAX_RETRIES})...`)
       queue.push(item)
     } else {
-      errorBus.emitError(`Failed to process ${item.meta.url} after ${MAX_RETRIES} retries`, error)
+      errorBus.emitError(`Failed to process ${item.meta.url} after ${MAX_RETRIES} retries`, error, {
+        url: item.meta.url,
+        attempts: item.attempts,
+        conversationId: item.meta.id,
+      })
     }
   }
 
@@ -149,6 +154,7 @@ export class WorkerPool {
     if (this.isRefreshing) return
     this.isRefreshing = true
     try {
+      // why: best-effort close before re-creating; a stale context is what we are refreshing away.
       await this.sharedBrowserContext?.close().catch(() => {})
       this.sharedBrowserContext = await this.browser.newContext({
         storageState: this.config.authStoragePath,

@@ -1,11 +1,12 @@
 import { join } from 'node:path'
-import { writeFileSync, existsSync, mkdirSync, readdirSync, statSync } from 'node:fs'
+import { writeFileSync, existsSync, mkdirSync, readdirSync, statSync, unlinkSync } from 'node:fs'
 import { pathToFileURL } from 'node:url'
 import { type Config } from '../utils/config.js'
 import type { ExtractedConversation } from '../scraper/conversation-extractor.js'
 import { sanitizeFilename, sanitizeSpaceName } from './sanitizer.js'
 import { type ExportStrategy } from '../exporters/export.strategy.js'
 import { logger } from '../utils/logger.js'
+import { errorMessageOf } from '../utils/extract-error-message.js'
 
 export class ExportOrchestrator {
   static readonly ExportError = class extends Error {
@@ -52,7 +53,7 @@ export class ExportOrchestrator {
             }
           }
         } catch (error) {
-          logger.error(`Failed to load export strategy ${file}: ${error}`)
+          logger.error(`Failed to load export strategy ${file}: ${errorMessageOf(error)}`)
         }
       }
     }
@@ -63,7 +64,7 @@ export class ExportOrchestrator {
         const markdownStrategy = (await import('../exporters/markdown.strategy.js')).default
         this.strategies.push(markdownStrategy)
       } catch (e) {
-        logger.error('Failed to load default markdown strategy', e)
+        logger.error(`Failed to load default markdown strategy: ${errorMessageOf(e)}`)
       }
     }
   }
@@ -84,6 +85,8 @@ export class ExportOrchestrator {
         const safeFileTitle = sanitizeFilename(conversation.title)
         const fileName = `${safeFileTitle} (${conversation.id})${strategy.fileExtension}`
         const destinationFilePath = join(spaceSpecificDirectory, fileName)
+
+        this.cleanupStaleFiles(conversation.id, destinationFilePath, strategy.fileExtension)
 
         const content = strategy.format(conversation)
         writeFileSync(destinationFilePath, content, 'utf-8')
@@ -116,5 +119,72 @@ export class ExportOrchestrator {
     if (!existsSync(this.config.exportDir)) {
       mkdirSync(this.config.exportDir, { recursive: true })
     }
+  }
+
+  private cleanupStaleFiles(
+    conversationId: string,
+    currentFilePath: string,
+    fileExtension: string
+  ): void {
+    try {
+      const suffix = `(${conversationId})${fileExtension}`
+      const searchDirs = new Set<string>([this.config.exportDir])
+
+      for (const strategy of this.strategies) {
+        searchDirs.add(strategy.outputDir(this.config))
+      }
+
+      for (const baseDir of searchDirs) {
+        if (!existsSync(baseDir)) continue
+        for (const staleFile of this.findFilesBySuffix(baseDir, suffix)) {
+          if (staleFile !== currentFilePath) {
+            try {
+              unlinkSync(staleFile)
+              logger.debug(`Cleaned up stale export: ${staleFile}`)
+            } catch (error) {
+              logger.debug(
+                `Failed to clean up stale export ${staleFile}: ${(error as Error).message}`
+              )
+            }
+          }
+        }
+      }
+    } catch (error) {
+      logger.debug(`Failed to scan for stale files: ${(error as Error).message}`)
+    }
+  }
+
+  private findFilesBySuffix(baseDir: string, suffix: string): string[] {
+    const results: string[] = []
+
+    const scanDirectory = (dir: string): void => {
+      let entries: string[]
+      try {
+        entries = readdirSync(dir)
+      } catch {
+        // why: directory may be missing or unreadable mid-walk; treat as empty
+        return
+      }
+
+      for (const entry of entries) {
+        const fullPath = join(dir, entry)
+        let stat
+        try {
+          stat = statSync(fullPath)
+        } catch {
+          // why: entry may be a broken symlink or transient FS race; skip
+          continue
+        }
+
+        if (stat.isDirectory()) {
+          scanDirectory(fullPath)
+        } else if (entry.endsWith(suffix)) {
+          results.push(fullPath)
+        }
+      }
+    }
+
+    scanDirectory(baseDir)
+    return results
   }
 }

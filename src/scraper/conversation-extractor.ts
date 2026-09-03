@@ -6,6 +6,7 @@ import { logger } from '../utils/logger.js'
 import { waitStrategy } from '../utils/wait-strategy.js'
 import { type Config } from '../utils/config.js'
 import { ApiDiagnosticsWriter } from '../utils/api-diagnostics.js'
+import { errorMessageOf } from '../utils/extract-error-message.js'
 import { DEFAULT_API_VERSION } from './api-version.js'
 
 export interface ConversationMessage {
@@ -21,6 +22,14 @@ export interface ExtractedConversation {
   timestamp: Date
   content: string
   messages: ConversationMessage[]
+}
+
+type RawEntry = {
+  thread_title?: string
+  collection_info?: { title?: string }
+  updated_datetime?: string
+  query_str?: string
+  blocks?: Array<{ intended_usage?: string; markdown_block?: { answer?: string } }>
 }
 
 export class ConversationExtractor {
@@ -150,7 +159,7 @@ export class ConversationExtractor {
     )
   }
 
-  async extract(conversationUrl: string): Promise<ExtractedConversation> {
+  async extract(conversationUrl: string, expectedId?: string): Promise<ExtractedConversation> {
     await this.ensureContextIsAlive()
 
     let conversationPage: Page | null = null
@@ -172,7 +181,11 @@ export class ConversationExtractor {
         throw new ConversationExtractor.NoDataError('API response timeout or not found')
       }
 
-      const extractedConversation = this.parseConversationData(capturedApiData, conversationUrl)
+      const extractedConversation = this.parseConversationData(
+        capturedApiData,
+        conversationUrl,
+        expectedId
+      )
       if (!extractedConversation) {
         throw new ConversationExtractor.ParsingError('Failed to parse conversation data')
       }
@@ -184,7 +197,7 @@ export class ConversationExtractor {
     } finally {
       if (conversationPage) {
         await conversationPage.close().catch((closeError) => {
-          logger.warn(`Failed to close page: ${closeError}`)
+          logger.warn(`Failed to close page: ${errorMessageOf(closeError)}`)
         })
       }
     }
@@ -252,6 +265,7 @@ export class ConversationExtractor {
                 errorType: 'zod_error',
                 zodErrorPaths: parseResult.error.issues.map((issue) => issue.path.join('.')),
               })
+              // why: best-effort diagnostics write; must not block the capture pipeline
               .catch(() => {})
           } else {
             const responseData = parseResult.data
@@ -270,8 +284,10 @@ export class ConversationExtractor {
               )
             }
           }
-        } catch (_error) {
-          // Silent catch for JSON parse errors from non-JSON responses
+        } catch (error) {
+          logger.debug(
+            `JSON parse failed for response ${response.url()}: ${(error as Error).message}`
+          )
         }
       })
     })
@@ -307,12 +323,24 @@ export class ConversationExtractor {
   }
 
   private hashEntries(rawEntries: unknown[]): string {
-    const stableJsonString = JSON.stringify(rawEntries, (_key, value) => {
+    const contentOnlyEntries = rawEntries.map((entry) => {
+      // why: API contract returns an object shape; downstream property reads are guarded by zod elsewhere
+      const typedEntry = entry as Record<string, unknown>
+      return {
+        thread_title: typedEntry.thread_title,
+        collection_info: typedEntry.collection_info,
+        query_str: typedEntry.query_str,
+        blocks: typedEntry.blocks,
+      }
+    })
+
+    const stableJsonString = JSON.stringify(contentOnlyEntries, (_key, value) => {
       const isObjectButNotArray = value && typeof value === 'object' && !Array.isArray(value)
       if (isObjectButNotArray) {
         return Object.keys(value)
           .sort()
           .reduce((sortedObj: Record<string, unknown>, currentKey) => {
+            // why: JSON.stringify replacer cannot narrow; the type guard above ensures we have an object
             sortedObj[currentKey] = (value as Record<string, unknown>)[currentKey]
             return sortedObj
           }, {})
@@ -324,7 +352,8 @@ export class ConversationExtractor {
 
   private parseConversationData(
     apiData: unknown,
-    conversationUrl: string
+    conversationUrl: string,
+    expectedId?: string
   ): ExtractedConversation | null {
     try {
       const formattedEntries = this.ensureEntriesFormat(apiData, conversationUrl)
@@ -338,6 +367,7 @@ export class ConversationExtractor {
         if (formattedEntries.length === 0) {
           this.diagnostics
             .writeFailure({ url: conversationUrl, errorType: 'empty_entries' })
+            // why: best-effort diagnostics write; must not block the parse pipeline
             .catch(() => {})
         }
         logger.warn(
@@ -348,7 +378,7 @@ export class ConversationExtractor {
 
       const validatedEntries = entriesValidationResult.data
       const firstEntry = validatedEntries[0]!
-      const conversationId = this.extractIdFromUrl(conversationUrl)
+      const conversationId = expectedId ?? this.extractIdFromUrl(conversationUrl)
 
       const title = firstEntry.thread_title ?? 'Untitled'
       const spaceName = firstEntry.collection_info?.title ?? 'General'
@@ -380,11 +410,13 @@ export class ConversationExtractor {
   private ensureEntriesFormat(data: unknown, url: string): unknown[] {
     if (Array.isArray(data)) return data as unknown[]
 
+    // why: runtime guards below (Array.isArray, property checks) precede the cast
     const dataObject = data as Record<string, unknown>
     if (dataObject && Array.isArray(dataObject.entries)) return dataObject.entries as unknown[]
     if (dataObject && (dataObject.query_str || dataObject.blocks)) return [data]
 
     logger.warn(`Unknown API response shape for ${url}`)
+    // why: best-effort diagnostics write; the parser still returns an empty array
     this.diagnostics.writeFailure({ url, errorType: 'unknown_shape' }).catch(() => {})
     return []
   }
@@ -394,17 +426,22 @@ export class ConversationExtractor {
     return match?.[1] ?? 'unknown'
   }
 
-  private extractTimestamp(firstEntry: any, data: unknown): Date {
-    const rawTimestamp = firstEntry.updated_datetime ?? (data as any)?.updated_datetime
+  private static readonly TimestampCarrierSchema = z.object({
+    updated_datetime: z.string().optional(),
+  })
+
+  private extractTimestamp(firstEntry: RawEntry, data: unknown): Date {
+    const parsed = ConversationExtractor.TimestampCarrierSchema.safeParse(data)
+    const fallbackTimestamp = parsed.success ? parsed.data.updated_datetime : undefined
+    const rawTimestamp = firstEntry.updated_datetime ?? fallbackTimestamp
     return rawTimestamp ? new Date(rawTimestamp) : new Date()
   }
 
-  private parseMessages(entries: unknown[], threadTitle: string): ConversationMessage[] {
+  private parseMessages(entries: RawEntry[], threadTitle: string): ConversationMessage[] {
     const messages: ConversationMessage[] = []
-    const typedEntries = entries as any[]
 
-    for (let i = 0; i < typedEntries.length; i++) {
-      const entry = typedEntries[i]
+    for (let i = 0; i < entries.length; i++) {
+      const entry = entries[i]!
       const question = entry.query_str ?? (i === 0 ? threadTitle : 'Follow‑up')
 
       if (question) {

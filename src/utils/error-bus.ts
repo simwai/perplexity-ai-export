@@ -1,5 +1,6 @@
 import { EventEmitter } from 'node:events'
 import { logger } from './logger.js'
+import { errorMessageOf } from './extract-error-message.js'
 
 export interface AppError {
   message: string
@@ -19,7 +20,7 @@ class ErrorBus extends EventEmitter {
 
       const isDebugEnabled = process.env['DEBUG'] === 'true' || process.env['DEBUG_MODE'] === 'true'
       if (appError.error && isDebugEnabled) {
-        logger.error(String(appError.error))
+        logger.error(errorMessageOf(appError.error))
       }
     })
   }

@@ -61,12 +61,12 @@ export class SearchOrchestrator {
           await this.executeAutoSearch(query, rgOptions)
           break
       }
-    } catch (_error) {
-      if (_error instanceof Error) {
-        const searchFailedErrorMessage = `Search failed: ${_error.message}`
+    } catch (error) {
+      if (error instanceof Error) {
+        const searchFailedErrorMessage = `Search failed: ${error.message}`
         throw new SearchOrchestrator.OrchestratorError(searchFailedErrorMessage)
       }
-      throw _error
+      throw error
     }
   }
 

@@ -2,6 +2,7 @@ import { errorBus } from '../utils/error-bus.js'
 import { z } from 'zod'
 import { type Config } from '../utils/config.js'
 import { logger } from '../utils/logger.js'
+import { errorMessageOf } from '../utils/extract-error-message.js'
 
 const embeddingItemSchema = z.object({ embedding: z.array(z.number()) })
 const openAiFormatSchema = z.object({ data: z.array(embeddingItemSchema) })
@@ -117,7 +118,7 @@ export class OllamaClient {
       await this.embed(['ping'])
       logger.success('Ollama embeddings look good.')
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error)
+      const errorMessage = errorMessageOf(error)
       throw new OllamaClient.OllamaError(`Ollama validation failed: ${errorMessage}`)
     }
   }
@@ -160,7 +161,7 @@ export class OllamaClient {
       const isOllamaError = error instanceof OllamaClient.OllamaError
       if (isOllamaError) throw error
 
-      const errorMessage = error instanceof Error ? error.message : String(error)
+      const errorMessage = errorMessageOf(error)
       throw new OllamaClient.OllamaError(`Network error while calling Ollama: ${errorMessage}`)
     }
   }

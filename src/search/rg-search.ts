@@ -4,6 +4,10 @@ import { createInterface } from 'node:readline'
 import { type Config } from '../utils/config.js'
 import { logger } from '../utils/logger.js'
 import { rgPath } from '@vscode/ripgrep'
+import { errorMessageOf } from '../utils/extract-error-message.js'
+
+// why: ripgrep emits this exact substring on stderr when the binary is missing or unreadable
+const RIPGREP_ENOENT_MESSAGE = 'No such file or directory'
 
 export interface RgSearchOptions {
   pattern: string
@@ -40,6 +44,8 @@ export class RgSearch {
   }
 
   async captureSearchMatches(options: RgSearchOptions): Promise<RgMatch[]> {
+    // why: runRipgrep resolves with RgMatch[] when called with json:true; the union return type
+    // cannot be expressed without a private wrapper, and the runtime contract is enforced below
     return this.runRipgrep(options, { json: true }) as Promise<RgMatch[]>
   }
 
@@ -84,7 +90,7 @@ export class RgSearch {
               })
             }
           } catch (error) {
-            logger.debug(`Failed to parse ripgrep JSON line: ${(error as Error).message}`)
+            logger.debug(`Failed to parse ripgrep JSON line: ${errorMessageOf(error)}`)
           }
         })
         child.on('close', () => rl.close())
@@ -96,7 +102,7 @@ export class RgSearch {
         })
         child.stderr.on('data', (data) => {
           const msg = data.toString()
-          if (!msg.includes('No such file or directory')) {
+          if (!msg.includes(RIPGREP_ENOENT_MESSAGE)) {
             process.stderr.write(msg)
           }
         })

@@ -12,6 +12,7 @@ class DynamicWaitStrategy implements WaitStrategy {
   private static readonly SELECTOR_TIMEOUT_MS = 5000
 
   async afterClick(page: Page): Promise<void> {
+    // why: best-effort wait for network idle; a timeout here just means the click landed on a fast page
     await page
       .waitForLoadState('networkidle', { timeout: DynamicWaitStrategy.NETWORK_IDLE_TIMEOUT_MS })
       .catch(() => {})

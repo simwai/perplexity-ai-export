@@ -1,8 +1,9 @@
 import { chromium, type Browser, type BrowserContext, type Page } from '@playwright/test'
-import { readFileSync, writeFileSync, existsSync, statSync } from 'node:fs'
+import { readFileSync, writeFileSync, existsSync } from 'node:fs'
 import { type Config } from '../utils/config.js'
 import { logger } from '../utils/logger.js'
 import { confirm } from '@inquirer/prompts'
+import { errorMessageOf } from '../utils/extract-error-message.js'
 import { logHttpRequest, logHttpResponse } from '../utils/http-logger.js'
 
 export class BrowserManager {
@@ -85,6 +86,8 @@ export class BrowserManager {
     }
   }
 
+  // why: each .catch(() => {}) below is a best-effort cleanup; if a close races with
+  // a prior failure (e.g. context already gone), Playwright throws and we ignore it.
   async close(): Promise<void> {
     if (this.activePage) {
       await this.activePage.close().catch(() => {})
@@ -127,7 +130,7 @@ export class BrowserManager {
           storageState: storageStateData,
         })
       } catch (error) {
-        logger.warn('Failed to load saved auth state, starting fresh.', error)
+        logger.warn(`Failed to load saved auth state, starting fresh: ${errorMessageOf(error)}`)
         this.activeContext = await this.browserInstance.newContext()
       }
     } else {
@@ -217,6 +220,8 @@ export class BrowserManager {
   }
 
   private async verifyLoginStatus(page: Page): Promise<boolean> {
+    // why: best-effort — a timeout here just means the page is not at a known state;
+    // the session fetch below is the source of truth for login status.
     await page.waitForTimeout(1000).catch(() => {})
     await page.waitForLoadState('domcontentloaded').catch(() => {})
 
@@ -242,6 +247,7 @@ export class BrowserManager {
       const parsed = JSON.parse(trimmed) as Record<string, unknown>
       return Boolean(parsed.user || parsed.expires || parsed.email)
     } catch {
+      // why: malformed JSON in the auth/session response means the user is not logged in.
       return false
     }
   }

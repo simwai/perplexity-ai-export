@@ -37,6 +37,7 @@ function isPromptRequest(url: string, postData: string | null): boolean {
         return true
       }
     } catch {
+      // why: postData is not JSON; fall back to substring scan
       const containsPromptKeyword = PROMPT_KEYWORDS.some((keyword) => postData.includes(keyword))
       if (containsPromptKeyword) {
         return true
@@ -94,6 +95,7 @@ export async function logHttpResponse(response: Response): Promise<void> {
       const jsonResponse = await response.json()
       responseBody = JSON.stringify(jsonResponse, null, 2)
     } catch {
+      // why: response claimed JSON but body was unparseable; record a placeholder for the log
       responseBody = '[COULD NOT PARSE JSON BODY]'
     }
   }

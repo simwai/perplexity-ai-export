@@ -1,8 +1,9 @@
 import type { Page } from '@playwright/test'
 import { logger } from '../utils/logger.js'
 import { DEFAULT_API_VERSION } from './api-version.js'
+import { errorMessageOf } from '../utils/extract-error-message.js'
 
-// ─── Constants ───────────────────────────────────────────────────────────────
+// #region Constants
 
 const BASE_URL = 'https://www.perplexity.ai'
 const LIBRARY_URL = `${BASE_URL}/library`
@@ -24,7 +25,9 @@ const VERSIONED_URL_PATTERNS = [
   '/rest/sidebar',
 ]
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// #endregion Constants
+
+// #region Types
 
 interface RawThread {
   uuid: string
@@ -81,7 +84,9 @@ interface ThreadBatchResponse {
   total: number
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// #endregion Types
+
+// #region Helpers
 
 function extractVersionFromUrl(url: string): string | null {
   const match = url.match(/[?&]version=([\d.]+)/)
@@ -96,7 +101,9 @@ function rawThreadToConversationMeta(thread: RawThread): ConversationMeta {
   }
 }
 
-// ─── Version Detection ────────────────────────────────────────────────────────
+// #endregion Helpers
+
+// #region Version Detection
 
 async function detectApiVersion(page: Page): Promise<string> {
   try {
@@ -114,7 +121,9 @@ async function detectApiVersion(page: Page): Promise<string> {
   }
 }
 
-// ─── Page Readiness ───────────────────────────────────────────────────────────
+// #endregion Version Detection
+
+// #region Page Readiness
 
 /**
  * Wait until the library page has finished its initialization network burst.
@@ -135,7 +144,9 @@ async function waitForLibraryReady(page: Page, timeout = 12_000): Promise<void> 
   await page.waitForTimeout(PAGE_READY_BUFFER_MS)
 }
 
-// ─── API Fetching ─────────────────────────────────────────────────────────────
+// #endregion Page Readiness
+
+// #region API Fetching
 
 async function fetchThreadBatch(
   page: Page,
@@ -178,13 +189,16 @@ async function fetchThreadBatch(
   try {
     parsed = JSON.parse(raw.body)
   } catch {
-    throw new LibraryDiscovery.ApiError(`list_ask_threads: invalid JSON — body: ${raw.body.slice(0, 200)}`)
+    throw new LibraryDiscovery.ApiError(
+      `list_ask_threads: invalid JSON — body: ${raw.body.slice(0, 200)}`
+    )
   }
 
   if (!Array.isArray(parsed)) {
     throw new LibraryDiscovery.ApiError(`list_ask_threads: expected array, got ${typeof parsed}`)
   }
 
+  // why: Array.isArray(parsed) above guarantees an array; per-element shape validated by downstream zod
   const threads = parsed as RawThread[]
   const total = threads[0]?.total_threads ?? 0
 
@@ -234,6 +248,7 @@ async function fetchPinnedThreads(page: Page, version: string): Promise<RawThrea
     return []
   }
 
+  // why: Array.isArray(parsed) above guarantees an array; per-element shape validated by downstream zod
   return parsed as RawThread[]
 }
 
@@ -257,7 +272,9 @@ async function fetchFirstBatch(page: Page, version: string): Promise<ThreadBatch
   )
 }
 
-// ─── Main Discovery ───────────────────────────────────────────────────────────
+// #endregion API Fetching
+
+// #region Main Discovery
 
 export class LibraryDiscovery {
   static readonly DiscoveryError = class extends Error {
@@ -300,15 +317,17 @@ export class LibraryDiscovery {
 
     try {
       firstBatch = await fetchFirstBatch(page, version)
-    } catch (err) {
+    } catch (error) {
       if (pinnedThreads.length > 0) {
-        // Pinned-only library — not an error
-        logger.info('No regular threads found; returning pinned threads only')
+        // why: pinned-only library is a valid empty case, not a real failure
+        logger.info(
+          `No regular threads found; returning pinned threads only: ${errorMessageOf(error)}`
+        )
         const conversations = pinnedThreads.map(rawThreadToConversationMeta)
         logger.success(`Discovered ${conversations.length} threads`)
         return conversations
       }
-      throw err
+      throw error
     }
 
     allThreads.push(...firstBatch.threads)
@@ -348,3 +367,5 @@ export class LibraryDiscovery {
     return conversations
   }
 }
+
+// #endregion Main Discovery
