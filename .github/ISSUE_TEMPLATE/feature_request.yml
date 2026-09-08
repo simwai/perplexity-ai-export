@@ -2,34 +2,71 @@ name: '🚀 Feature Request'
 description: "Propose a novel capability for the system's evolution."
 labels: ['enhancement']
 body:
+  - type: dropdown
+    id: area
+    attributes:
+      label: 'Which area does this affect?'
+      description: 'Pick the subsystem where the new capability would live.'
+      options:
+        - 'Scraper / extraction'
+        - 'Search / RAG / vector index'
+        - 'Ollama / AI synthesis'
+        - 'Authentication / browser context'
+        - 'Configuration / environment'
+        - 'Build / install / packaging'
+        - 'Documentation'
+        - 'Other'
+      default: 0
+    validations:
+      required: false
+  - type: input
+    id: app-version
+    attributes:
+      label: 'App version you are running'
+      description: 'Output of `pnpm run start --version` or the version shown in the REPL banner.'
+      placeholder: '1.1.0'
+    validations:
+      required: false
   - type: markdown
     attributes:
       value: |
-        ### Expanding Cognitive Horizons
-        We are always seeking to enhance the system's intelligence and utility. Please share your vision for its next evolutionary step.
+        Help us understand the request in plain words. Concrete examples and a clear "today vs tomorrow" are worth more than a long essay.
   - type: textarea
     id: problem
     attributes:
       label: 'Conceptual Limitation'
-      description: "Is your request related to a specific gap in the system's current functionality?"
-      placeholder: 'Where does the current system fall short of its potential?'
+      description: 'Describe the gap you hit in plain language. What is hard or impossible today?'
+      placeholder: 'I want to ask a follow-up question against a single thread, but the REPL only searches the full export, so the answer mixes in unrelated context.'
     validations:
       required: true
   - type: textarea
     id: solution
     attributes:
       label: 'Proposed Manifestation'
-      description: "Describe the new capability or utility you'd like to see implemented."
-      placeholder: 'How should this new intelligence behave?'
+      description: 'Describe the behavior you want, ideally with a small CLI or REPL transcript showing the ideal interaction.'
+      placeholder: |
+        In the REPL, after selecting a thread, I would like a "ask this thread" mode:
+
+        > ask: summarize the trade-offs in this thread
+        > model: deepseek-r1
+        > source thread: <id>
+
+        The response should cite only the selected thread.
     validations:
       required: true
   - type: textarea
     id: alternatives
     attributes:
       label: 'Alternative Evolutionary Paths'
-      description: 'Have you considered other methods to achieve this outcome?'
+      description: 'Workarounds you have already tried, or other tools that solve this in a different shape.'
+      placeholder: 'I tried passing --thread-id to the search command, but it only filters results, it does not scope the synthesis.'
+    validations:
+      required: false
   - type: textarea
     id: context
     attributes:
       label: 'Additional Theoretical Context'
-      description: 'Any further conceptual or technical details to help us understand the vision.'
+      description: 'Links, prior art, screenshots, or transcripts. Keep it short.'
+      placeholder: 'See discussion in issue #42. Screenshot of the current REPL flow attached.'
+    validations:
+      required: false

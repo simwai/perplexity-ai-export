@@ -1,46 +1,132 @@
 name: '🐛 Bug Report'
-description: 'Report a discrepancy in the system’s emergent behavior.'
+description: "Report a discrepancy in the system's emergent behavior."
 labels: ['bug']
 body:
   - type: markdown
     attributes:
       value: |
-        ### Architectural Resilience & Error Analysis
-        Before submitting, please ensure you've searched existing issues to avoid redundant cognitive load. We seek to minimize entropy in our issue tracking.
+        Thanks for taking the time to file a clear bug. The more concrete your steps, the faster we can reproduce and fix it.
+
+        Please check existing issues first so we can keep triage signal high.
+  - type: checkboxes
+    id: searched
+    attributes:
+      label: 'Before you start'
+      description: 'Confirm you searched for an existing report.'
+      options:
+        - label: 'I have searched existing issues for this bug and it is not a duplicate'
+          required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: 'Which area is affected?'
+      description: 'Pick the subsystem that misbehaved so the right person sees it first.'
+      options:
+        - 'Scraper / extraction'
+        - 'Search / RAG / vector index'
+        - 'Ollama / AI synthesis'
+        - 'Authentication / browser context'
+        - 'Configuration / environment'
+        - 'Build / install / packaging'
+        - 'Documentation'
+        - 'Other'
+      default: 0
+    validations:
+      required: true
+  - type: input
+    id: app-version
+    attributes:
+      label: 'App version'
+      description: 'Output of `pnpm run start --version` or the version shown in the REPL banner.'
+      placeholder: '1.1.0'
+    validations:
+      required: true
   - type: textarea
     id: description
     attributes:
       label: 'Phenomenological Description'
-      description: 'Describe the unexpected behavior or the discrepancy between current and expected states.'
-      placeholder: 'What specific manifestation failed to align with your expectations?'
+      description: 'A short, plain-language summary of the bug.'
+      placeholder: 'The scraper silently skipped every third thread instead of marking it failed.'
     validations:
       required: true
   - type: textarea
     id: reproduction
     attributes:
       label: 'Causal Sequence (Reproduction)'
-      description: 'Detail the sequence of events that leads to the observed phenomenon.'
+      description: 'Numbered, copy-pasteable steps starting from a clean clone. Each step should be one action.'
       placeholder: |
-        1. Invoke the system via 'npm run dev'
-        2. Initiate 'Start scraper'
-        3. ...
+        1. `pnpm install && pnpm exec playwright install chromium`
+        2. Copy `.env.example` to `.env`, set `HEADLESS=false` and `ENABLE_VECTOR_SEARCH=false`
+        3. `pnpm run dev` and select "Start scraper (Library)"
+        4. Wait for 30 threads to be processed
+        5. Open `exports/` and observe that threads 3, 6, 9 are missing
     validations:
       required: true
   - type: textarea
     id: expected
     attributes:
       label: 'Teleological Goal (Expected Behavior)'
-      description: 'What should the system be manifesting in this context?'
-      placeholder: 'Describe the desired state of existence for this process.'
+      description: 'The behavior you assumed would occur in this context.'
+      placeholder: 'Every thread up to the checkpoint should appear under exports/ with the same folder name as on perplexity.ai.'
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: 'What actually happened?'
+      description: 'The observed behavior, including exact error text, exit code, or wrong output.'
+      placeholder: 'Threads 3, 6, 9 are missing. The REPL logs "checkpoint saved" but no folder exists for them.'
     validations:
       required: true
   - type: textarea
     id: context
     attributes:
       label: 'Environmental Substrate'
-      description: 'OS, Node version, Ollama configuration, and other relevant environmental variables.'
+      description: 'Fill in each line so we can reproduce on the same substrate.'
+      placeholder: |
+        - OS:
+        - Node version (`node --version`):
+        - pnpm version (`pnpm --version`):
+        - App version (see above):
+        - Ollama version (`ollama --version`, if used):
+        - Ollama model (`OLLAMA_MODEL`):
+        - Embedding model (`OLLAMA_EMBED_MODEL`):
+        - HEADLESS setting (`HEADLESS`):
     validations:
       required: true
+  - type: textarea
+    id: config
+    attributes:
+      label: 'Relevant config (optional)'
+      description: 'Paste only the non-secret variables from your .env that differ from .env.example. Do not paste API keys, tokens, or the contents of auth.json.'
+      placeholder: |
+        PARALLEL_WORKERS=2
+        WAIT_MODE=static
+        RATE_LIMIT_MS=3000
+        HYDE_MODE=supplement
+    validations:
+      required: false
+  - type: textarea
+    id: logs
+    attributes:
+      label: 'Log output'
+      description: 'Run with `DEBUG=true` in your .env, reproduce once, then paste the relevant log lines from the terminal output.'
+      placeholder: |
+        [scraper] checkpoint saved at 30 threads
+        [scraper] thread 3 skipped: no response payload
+        [scraper] thread 6 skipped: no response payload
+        [scraper] thread 9 skipped: no response payload
+    validations:
+      required: false
+    render: shell
+  - type: checkboxes
+    id: redaction
+    attributes:
+      label: 'Privacy'
+      description: 'Confirm what you are sharing.'
+      options:
+        - label: 'I redacted API keys, tokens, and any contents from .storage/auth.json'
+          required: true
   - type: textarea
     id: diagnostics
     attributes:
