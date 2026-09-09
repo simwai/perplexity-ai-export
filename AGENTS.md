@@ -73,6 +73,8 @@ Servers are grouped by what works when env keys are missing. Configure the ones 
 **Playwright** - browser automation for live UI verification and e2e walk-throughs (Node 20+; headed by default, add `--headless` for automation)
 **Playwright bootstrap** — run `scripts/ensure-playwright.ps1` before first use or after fresh clones; checks Node ≥ 20, resolves `@playwright/mcp`, installs missing browser binaries.
 
+**OpenCode PTY** — interactive terminal plugin: background processes, multiple sessions, stdin, output regex filter. Auto-installed by OpenCode on next run.
+
 ### Tier 2 - Requires env keys
 
 ```json

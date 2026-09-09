@@ -252,8 +252,6 @@ The ScrumMaster phrase "direct mode" for a concrete target means "skip the optio
 
 ## Required inputs by phase (unblock rules)
 
-`BLOCKED -> STARTUP`: always (every session starts here).
-
 `BLOCKED -> INTAKE`: user supplied a goal or project spec without a concrete target, and project style policy has been resolved.
 
 `BLOCKED -> BACKLOG`: goal, success criteria, and milestone set recorded.

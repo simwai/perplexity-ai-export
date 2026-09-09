@@ -52,24 +52,6 @@ Scope:
 
 The two-section shape is part of the allowed template, not a second output: it does not mix phases and does not violate the phase-header rule. Applies in `STRUCTURED` mode only.
 
-## `STARTUP` template
-
-```txt
-[PHASE: STARTUP]
-
-# Startup Verification
-AGENTS.md: [one specific rule cited]
-00-system.md: [one specific rule cited]
-01-personas.md: [one specific rule cited]
-02-decision-prompts.md: [one specific rule cited]
-03-output-and-state.md: [one specific rule cited]
-04-rubrics.md: [one specific rule cited]
-05-impl-style.md: [one specific rule cited]
-06-misc.md: [one specific rule cited]
-07-protocols.md: [one specific rule cited]
-Status: Complete -- proceeding to next phase
-```
-
 ## `BLOCKED` template
 
 ```txt

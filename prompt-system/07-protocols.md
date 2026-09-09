@@ -504,13 +504,13 @@ Do not adopt the candidate without an explicit exception when it is archived or 
 
 ## Session file locks
 
-Per-file serialization for concurrent editing sessions operating on the same repository checkout. Prevents two sessions from silently bundling each other's uncommitted hunks into one commit by ensuring one file has at most one writer at a time. Loaded for PATCH and DIRECT only. On every other phase this section is inert. On a `READ_ONLY` host, locks are inert.
+Per-file serialization for concurrent editing sessions operating on the same repository checkout. Prevents two sessions from silently bundling each other's uncommitted hunks into one commit by ensuring one file has at most one writer at a time. Loaded for all phases where file writes may occur. On a `READ_ONLY` host, locks are inert.
 Host capability reaches the script via the `BABA_READ_ONLY` environment flag; when set, every script entry point returns Skipped instead of touching the filesystem.
 
 ### Hard rules
 
 - One file, one writer. A session must hold the lock for a file before any write to that file, and must not hold the lock for any file outside its `## Edited Files` ledger.
-- Lock acquisition is implicit on first write, not on read. Reads never acquire locks. The cost of this choice is a read-then-write race that the commit/push gate re-checks at staging time.
+- Lock acquisition is required on **first write in any phase**, not just PATCH. Reads never acquire locks. The cost of this choice is a read-then-write race that the commit/push gate re-checks at staging time.
 - Stale locks are never auto-stolen. Surface the choice to the user.
 - The commit/push gate staging is refused if any path in the proposed commit is not currently locked by this session or released by this session within the current PATCH/DIRECT step.
 - A session never releases a lock whose `owner` is not its own session id. Releasing a peer's lock is a protocol violation and surfaces as BLOCKED.
@@ -528,7 +528,7 @@ The directory's filesystem mtime is never read for liveness; only the `acquired_
 
 ### Detection
 
-At PATCH or DIRECT entry, scan `.session-locks/` and `SESSION_STATE-*.md` to build a list of live peers:
+At any phase entry where file writes may occur, scan `.session-locks/` and `SESSION_STATE-*.md` to build a list of live peers:
 
 - A lock is live when its `acquired_at` is within `SESSION_LOCK_TTL_MINUTES = 30` (named constant).
 - A state file represents a live peer when its latest entry is non-terminal and its `last_active_at` (defined in the 03-output-and-state.md session schema) is within `SESSION_LOCK_TTL_MINUTES = 30`.
