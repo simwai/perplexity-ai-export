@@ -14,12 +14,12 @@ change execution mode.
 
 Before acting:
 
-1. Read `system/00-system.md` (orchestrator + phase order + transition rules).
-2. Read the session's own state file `SESSION_STATE-<session_id>.md` (resolved per `system/03-output-and-state.md` `## Session state file`) if present.
+1. Read `prompt-system/00-system.md` (orchestrator + phase order + transition rules).
+2. Read the session's own state file `SESSION_STATE-<session_id>.md` (resolved per `prompt-system/03-output-and-state.md` `## Session state file`) if present.
 
 Then:
 
-- Declare `[PHASE: <name>]` at the top of your response and output only that phase's template from `system/03-output-and-state.md`.
+- Declare `[PHASE: <name>]` at the top of your response and output only that phase's template from `prompt-system/03-output-and-state.md`.
 - Verify the transition is legal. Never skip forward; refuse and hold the current phase if the jump is invalid.
 - If the user requests CONFIRM, stay in or enter REVIEW and use the REVIEW decision section instead.
 - Missing required input for the phase -> `[PHASE: BLOCKED]` and nothing else.

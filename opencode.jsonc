@@ -1,7 +1,7 @@
 {
-  // opencode-native config for the Baba prompt system.
-  // Inert for other agents (Claude Code, Cursor, Codex) — AGENTS.md + system/
-  // remain the portable copy-paste unit. This file only affects opencode.
+// opencode-native config for the Baba prompt system.
+// Inert for other agents (Claude Code, Cursor, Codex) — AGENTS.md + prompt-system/
+// remain the portable copy-paste unit. This file only affects opencode.
   "$schema": "https://opencode.ai/config.json",
 
   // Guarantees the system core is in every opencode session without relying
@@ -12,14 +12,14 @@
   // Entries are explicit paths, never globs.
   "instructions": [
     "AGENTS.md",
-    "system/00-system.md",
-    "system/01-personas.md",
-    "system/02-decision-prompts.md",
-    "system/03-output-and-state.md",
-    "system/04-rubrics.md",
-    "system/05-impl-style.md",
-    "system/06-misc.md",
-    "system/07-protocols.md"
+    "prompt-system/00-system.md",
+    "prompt-system/01-personas.md",
+    "prompt-system/02-decision-prompts.md",
+    "prompt-system/03-output-and-state.md",
+    "prompt-system/04-rubrics.md",
+    "prompt-system/05-impl-style.md",
+    "prompt-system/06-misc.md",
+    "prompt-system/07-protocols.md"
   ],
 
   // Prefer the read-only BabaSensei planning path by default. The native Build
@@ -204,6 +204,15 @@
     "max_bytes": 32768
   },
 
+  // opencode plugins. @latest is fine for personal/dev use; pin a version
+  // when reproducibility matters. subtask2 is PolyForm Noncommercial 1.0.0
+  // — commercial use requires a separate license from spoons-and-mirrors.
+  "plugin": [
+    "@spoons-and-mirrors/subtask2@latest",
+    "opencode-vibeguard@latest",
+    "opencode-adaptive-thinking@latest"
+  ],
+
   // MCP servers mirror the fallback tiers in AGENTS.md, adapted to opencode's
   // schema. Note: opencode interpolates {env:VAR}, NOT ${VAR}.
   // If EXA_API_KEY is absent, remove the exa entry rather than shipping a
@@ -216,7 +225,7 @@
     },
     "playwright": {
       "type": "local",
-      "command": ["npx", "-y", "@playwright/mcp@0.0.79"]
+      "command": ["npx", "-y", "@playwright/mcp@0.0.80"]
     },
     // Tier 2 — requires env key
     "exa": {

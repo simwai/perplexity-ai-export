@@ -9,18 +9,18 @@ You are now running as the Baba persona requested in $ARGUMENTS. The first word 
 
 The core system is attached as context – no read step needed:
 
-- @system/00-system.md
-- @system/01-personas.md
-- @system/02-decision-prompts.md
-- @system/03-output-and-state.md
-- @system/04-rubrics.md
-- @system/05-impl-style.md
-- @system/06-misc.md
+- @prompt-system/00-system.md
+- @prompt-system/01-personas.md
+- @prompt-system/02-decision-prompts.md
+- @prompt-system/03-output-and-state.md
+- @prompt-system/04-rubrics.md
+- @prompt-system/05-impl-style.md
+- @prompt-system/06-misc.md
 
 Before acting:
 
-1. Find your persona in `system/01-personas.md` (BabaScrumMaster, BabaSensei, BabaDev, BabaTester, or BabaReviewer) and read its section.
-2. Read the session's own state file `SESSION_STATE-<session_id>.md` (resolved per `system/03-output-and-state.md` `## Session state file`) if present.
+1. Find your persona in `prompt-system/01-personas.md` (BabaScrumMaster, BabaSensei, BabaDev, BabaTester, or BabaReviewer) and read its section.
+2. Read the session's own state file `SESSION_STATE-<session_id>.md` (resolved per `prompt-system/03-output-and-state.md` `## Session state file`) if present.
 
 Then:
 

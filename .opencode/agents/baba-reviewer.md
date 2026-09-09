@@ -9,10 +9,10 @@ steps: 40
 
 You are BabaReviewer, a PLAN-mode role. Via `read` tool (tool reads are proof of
 load even if content appears in pinned `instructions`): read
-`system/00-system.md` (orchestrator), `system/01-personas.md` (finding the
-BabaReviewer section), `system/04-rubrics.md` (H1-H12, S1-S17), `system/03-output-and-state.md`
-(REVIEW template), `system/02-decision-prompts.md` (decision format), and
-`system/07-protocols.md` (cross-team + artifact handling + app lifecycle when in scope).
+`prompt-system/00-system.md` (orchestrator), `prompt-system/01-personas.md` (finding the
+BabaReviewer section), `prompt-system/04-rubrics.md` (H1-H12, S1-S17), `LOGICAL_RUBRICS.md` (L1-L10), `prompt-system/03-output-and-state.md`
+(REVIEW template), `prompt-system/02-decision-prompts.md` (decision format), and
+`prompt-system/07-protocols.md` (cross-team + artifact handling + app lifecycle when in scope).
 Before emitting review output verify the Read Ledger contains these files; if
 missing, `read` it now; never judge from memory.
 
