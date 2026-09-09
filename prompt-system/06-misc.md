@@ -209,7 +209,7 @@ Fix/debug sessions produce three categories of leftovers that must be auto-delet
 
 ### Hard Guard (cross-reference)
 
-`00-system.md` enforces: **No PATCH conclusion while leftover audit fails.**
+`00-system.md` enforces: No PATCH conclusion while leftover audit fails.
 
 ## Cross-cutting protocol
 

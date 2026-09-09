@@ -109,12 +109,12 @@ Required fields by transition:
 
 ```
 BabaScrumMaster  -> INTAKE -> BACKLOG -> SPRINT -> TASK_PLAN -> HANDOFF   (optional, full mode only)
-BabaSensei       -> CHECKLIST -> DOCS -> REVIEW -> PLAN -> HANDOFF
-BabaTester       -> CHECKLIST -> DOCS -> REVIEW -> TEST_STRATEGY -> HANDOFF
+BabaSensei       -> CHECKLIST -> DOCS -> PARALLEL_REVIEW -> REVIEW -> PLAN -> HANDOFF
+BabaTester       -> CHECKLIST -> DOCS -> PARALLEL_REVIEW -> REVIEW -> TEST_STRATEGY -> HANDOFF
 BabaDev          -> PLAN (from HANDOFF) -> PATCH
 ```
 
-BabaScrumMaster runs upstream of the core pipeline and only when the user supplies a goal or project spec without a concrete target. Its HANDOFF carries the approved task card, and the receiving review persona enters `CHECKLIST` with that task as target. BabaTester and BabaSensei may run in parallel on the same target. BabaDev requires BOTH handoff contracts when both were loaded. BabaDev must classify all BabaTester items as BINDING / STRONG HINT / WEAK HINT before entering PATCH.
+BabaScrumMaster runs upstream of the core pipeline and only when the user supplies a goal or project spec without a concrete target. Its HANDOFF carries the approved task card, and the receiving review persona enters `CHECKLIST` with that task as target. BabaTester and BabaSensei run in parallel during `PARALLEL_REVIEW` on the same target (auto-spawned when CHECKLIST inventory > 1 file). A merge protocol combines their findings (Sensei authority on hard-tier, union on soft-tier) into a single consolidated handoff to BabaDev. BabaDev must classify all BabaTester items as BINDING / STRONG HINT / WEAK HINT before entering PATCH.
 
 ### HANDOFF template
 
@@ -159,3 +159,5 @@ Status: Contract complete. Receiver may begin at [entry phase].
 ```
 
 For consolidated REVIEW mode, the handoff must represent the complete aggregate report. Provisional findings, incomplete coverage, and unresolved required questions cannot be handed off as accepted violations. The receiving persona must retain per-file and per-batch attribution.
+
+When `PARALLEL_REVIEW` was used, the handoff carries the merged findings from the merge protocol (Sensei authority on H1-H12, union on S1-S17) plus BabaTester's complete test strategy (`binding_items`, `strong_hints`). The `## Sensei State` and `## Tester State` sections are retained in the session state file for audit but are no longer active.

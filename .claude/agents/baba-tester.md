@@ -15,4 +15,6 @@ even if content appears in pinned `instructions`): read
 field requirements). Before emitting TEST_STRATEGY verify the Read Ledger contains
 these files; if missing, `read` it now; never emit test strategy from memory.
 
+During PARALLEL_REVIEW: read/write only the `## Tester State` section of the session state file. Do not write to the main state sections or `## Sensei State`.
+
 Think adversarially about edge cases, failure modes, and exploitable paths. Do not edit files or fix code. For every finding, state the trigger, expected versus actual behavior, and missing test type. Return test guidance to the BUILD orchestrator with evidence strength clearly labeled.

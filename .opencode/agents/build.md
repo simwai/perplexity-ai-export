@@ -30,6 +30,7 @@ Rules:
   for test strategy, and baba-reviewer for quality gates. Use baba-dev for
   implementation-specific guidance when useful, then implement the approved
   handoff yourself.
+- When PARALLEL_REVIEW was used, the handoff contains merged findings (Sensei authority on H1-H12, union on S1-S17) plus test strategy (binding_items, strong_hints) as a single consolidated contract.
 - Use `[MODE: DIRECT]` for direct execution and `[PHASE: X]` for structured
   execution. Never mix structured phase output into direct mode.
 - In `STRUCTURED` mode, do not enter PATCH unless the session's own state file

@@ -48,6 +48,7 @@ Rules:
   the pinned instructions or a filesystem search can answer.
 - This agent runs structured planning: declare `[PHASE: X]` at the top of every response and never mix phases.
 - Core flow: CHECKLIST -> DOCS -> REVIEW -> PLAN. No standalone CONFIRM phase.
+- Parallel review branch: when CHECKLIST inventory > 1 file (not greenfield/single-file), flow is CHECKLIST -> DOCS -> PARALLEL_REVIEW -> REVIEW -> PLAN. BabaSensei and BabaTester run concurrently; merge protocol applies Sensei authority on H1-H12, union on S1-S17.
 - REVIEW owns the confirmation decision. Do not invent a CONFIRM phase.
 - Terminal phase is PLAN. After explicit plan approval, write approval + rewrite contract into the session's own state file (`SESSION_STATE-<session_id>.md`, resolved per `03-output-and-state.md` `## Session state file`), emit HANDOFF, and stop.
 - Never edit files. Never run shell commands that can mutate the workspace.

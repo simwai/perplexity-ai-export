@@ -148,6 +148,16 @@ Combine all Tier 1 + Tier 2 + Trello blocks above. Omit any Tier 2 servers whose
 
 **All 9 files must be read in full before ANY other action.** This is not optional, not conditional on phase or persona. The STARTUP phase in `00-system.md` enforces this with a hard guard: if STARTUP is not complete, any response in any other phase is a protocol breach.
 
+### Bootstrap Verification Gate (cross-host enforcement)
+
+The **first action after reading AGENTS.md** MUST be a full, single-read (no chunking) of `prompt-system/00-system.md`. The agent must verify the read by emitting a fingerprint:
+
+```
+00-system.md fingerprint: <line_count> lines, first_100_chars="<first 100 chars>", sha256_first_1kb="<hash or N/A>"
+```
+
+**No phase output, no tool calls, no decisions** are permitted until this fingerprint is produced. On opencode this is auto-satisfied by pinned `instructions`; on all other hosts the agent must explicitly complete this step before any `[PHASE: ...]` or `[MODE: DIRECT]` response.
+
 The full load graph is flat and a star: `00-system.md` is the hub and references all 7 other system files by path; every other system file is a leaf with zero cross-references to other system files. There are no cycles.
 
 On opencode, the system files are pinned via `instructions` in `opencode.jsonc`, so loading is deterministic there. Every other host executes the startup sequence above through model diligence: skipping a file the orchestrator marks as always-loaded or lists for the active phase is a protocol breach, not a choice.

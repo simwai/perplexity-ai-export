@@ -298,6 +298,41 @@ Status:
 - Blocked pending evidence
 ```
 
+## `PARALLEL_REVIEW` template
+
+```txt
+[PHASE: PARALLEL_REVIEW]
+
+# For the human
+[2-4 plain-language sentences: parallel review launched, both personas reviewing concurrently]
+
+# For the agent
+
+# Parallel Progress
+Sensei: [phase] -- [current batch/total] -- [status]
+Tester: [phase] -- [current batch/total] -- [status]
+Merge: [pending|complete]
+
+# Sensei State (partitioned)
+Review cursor: [file:batch]
+Findings: [count] provisional
+Open questions: [count]
+Review decision: [pending|complete]
+
+# Tester State (partitioned)
+Review cursor: [file:batch]
+Findings: [count] provisional
+Test strategy: [draft|complete]
+Binding items: [count]
+Strong hints: [count]
+
+Merge protocol: See 07-protocols.md `## REVIEW Merge Protocol`
+Output: Unified findings written to main session state on merge complete
+```
+
+This phase runs automatically when CHECKLIST inventory > 1 file. Both BabaSensei and BabaTester subagents execute concurrently on partitioned state. The merge step produces unified findings for the consolidated REVIEW phase.
+```
+
 ## `REVIEW` template
 
 ```txt
@@ -312,6 +347,7 @@ the one decision you must confirm]
 # Multi-file progress
 Reviewed: [X/Y] files -- [Z] batches complete
 Review mode: [interactive|consolidated]
+Parallel progress: [sensei: batch N/M, tester: batch N/M | merged: pending|complete]
 
 # Findings
 File: [file path or ALL FILES]
@@ -581,7 +617,7 @@ style_policy_resolved: [yes|no]
 ## Startup Verification
 
 AGENTS.md: [cited rule]
-00-system.md: [cited rule]
+00-system.md: [cited rule] — fingerprint: <line_count> lines, first_100_chars="<first 100 chars>", sha256_first_1kb="<hash or N/A>"
 01-personas.md: [cited rule]
 03-output-and-state.md: [cited rule]
 04-rubrics.md: [cited rule]
@@ -590,6 +626,8 @@ AGENTS.md: [cited rule]
 07-protocols.md: [cited rule]
 08-plan-actual-gate.md: [cited rule]
 Status: [Complete|Incomplete]
+
+**Load rule**: The initial load of all 8 system files at session start MUST read each file in full with NO chunking (single read per file, largest window). Chunking is only allowed for non-system files after STARTUP is complete.
 
 ## Phase Artifacts
 
@@ -656,6 +694,18 @@ plan_actual_history: [list of (timestamp, items, verdict) tuples]
 prior_phase: [phase or n/a]
 spec_version: [x.y.z or n/a]
 
+## Phase Status
+
+phase_status: {sensei: [phase|n/a], tester: [phase|n/a], merge: [pending|complete|n/a]}
+
+## Sensei State
+
+[partitioned session state for BabaSensei during PARALLEL_REVIEW; contains review_cursor, findings, open_questions, review_decision]
+
+## Tester State
+
+[partitioned session state for BabaTester during PARALLEL_REVIEW; contains review_cursor, findings, test_strategy, binding_items, strong_hints]
+
 ## Discovery Evidence
 
 - search_terms: [term1, term2, ...]
@@ -666,6 +716,8 @@ spec_version: [x.y.z or n/a]
 ```
 
 Compare `target`, `scope`, `session_id`, and `spec_version` with the current request before restoring any phase, approval, or rewrite contract. A mismatch in any of the four starts a fresh session and invalidates the old approval for the new request. A legacy file (no `session_id`) is always a mismatch for approval purposes.
+
+**Fresh-session load mandate**: On every fresh session (new session_id or mismatch detected), all 8 system files MUST be reloaded from disk in full with NO chunking. Prior loads from previous sessions NEVER carry over — each session starts with a clean slate and must complete the STARTUP gate independently.
 
 ## Incomplete handoff response
 

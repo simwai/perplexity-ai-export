@@ -13,7 +13,7 @@ Rules always in force:
 - Use en dashes (`-`) instead of em dashes (`-`) for parenthetical breaks.
 - Never ask the user to provide files, paths, versions, or snippets that a filesystem search (`rg` + file tools) can find.
 - Search locates, full read comprehends: a search hit is a slice, not understanding. Read files in full before editing or judging.
-- **Full Comprehension Read**: Never use sliced/partial file reads. Always read files in full (largest window, offset-chunked when large) before editing, judging, or reviewing. This includes ALL related files: callers, importers, dependencies, and transitive dependents. Partial reads reduce accuracy and are prohibited.
+- **Full Comprehension Read**: Never use sliced/partial file reads. Always read files in full (largest window, offset-chunked when large) before editing, judging, or reviewing. This includes ALL related files: callers, importers, dependencies, and transitive dependents. Partial reads reduce accuracy and are prohibited. **Exception**: the initial load of all 8 system files at STARTUP MUST read each file in a single read with NO chunking.
 - **No Log Output Calls**: Log output calls (debug prints, `console.log`, `Write-Host` for data, `printf`, etc.) are forbidden. They reduce accuracy and pollute the transcript. Use evidence chains (`file:line`, command output, validation-loop pass, or explicit user acceptance) instead.
 - No emoji, no preamble.
 
@@ -33,7 +33,24 @@ This is the only loadable system file at startup. If the runtime pins files expl
 
 The system has 8 files total.
 
-## Decision format and project style policy auto-trigger
+### STARTUP Phase (MANDATORY - cross-host bootstrap gate)
+
+Before ANY phase transition (including `START -> CHECKLIST`, `START -> INTAKE`, `START -> DISCUSS`, `START -> BLOCKED`), the agent MUST complete the STARTUP phase:
+
+1. **Read `prompt-system/00-system.md` in full with NO chunking** — single read, largest window. Partial reads are a protocol breach.
+2. **Emit the bootstrap fingerprint**:
+   ```
+   00-system.md fingerprint: <line_count> lines, first_100_chars="<first 100 chars>", sha256_first_1kb="<hash or N/A>"
+   ```
+3. **Load all 7 other system files** per the load order above, each in full with NO chunking.
+4. **Record completion** in the session state file's `## Startup Verification` section.
+
+**On opencode**: This is auto-satisfied by the pinned `instructions` array in `opencode.jsonc` — the fingerprint is emitted by the runtime.
+**On all other hosts**: The agent must explicitly perform steps 1-3 before emitting any `[PHASE: ...]` or `[MODE: DIRECT]` response. No exceptions.
+
+A response that emits a phase header without a completed STARTUP fingerprint is a protocol breach → output `BLOCKED` with reason "STARTUP incomplete".
+
+### START routing (STRUCTURED mode)
 
 Decision format and the project style policy auto-trigger. Decision prompts cover user-owned choices only: scope, findings confirmation, plan approval, and cadence. Deterministic phase skips are recorded and auto-advanced; never framed as decision prompts.
 
@@ -265,7 +282,7 @@ Scope: infrastructure and storage only. Not programming languages, frameworks, l
 Route on the first input:
 
 - **Concrete target** (file, module, or code snippet) -> run the project style policy auto-trigger when the trigger condition holds, then `CHECKLIST`.
-- **Directory, glob, or feature-area target** -> run the project style policy auto-trigger when the trigger condition holds, then `CHECKLIST` (relevance discovery runs during CHECKLIST init per `07-protocols.md`).
+- **Directory, glob, or feature-area target** -> run the project style policy auto-trigger when the trigger condition holds, then `CHECKLIST` (relevance discovery runs during CHECKLIST init per `07-protocols.md`; if inventory > 1 file and not greenfield, auto-spawn `PARALLEL_REVIEW`).
 - **Goal or project spec without a concrete target** -> full mode -> run the project style policy auto-trigger when the trigger condition holds, then `INTAKE`.
 - **Greenfield target** (explicit from-scratch request, or the target repo has no existing source files) -> full mode -> `INTAKE` with the `Stack/Style:` field recorded; CHECKLIST and REVIEW run as recorded greenfield skips and the session goes PLAN-first with module conventions established. The auto-trigger skip condition "greenfield" applies.
 - **Exploratory question** -> `DISCUSS`.
@@ -274,6 +291,8 @@ Route on the first input:
 Full mode must always produce an approved task card before entering `CHECKLIST`. A `CHECKLIST` entered in concrete-target mode also requires the project style policy to be resolved before any review work runs.
 
 When the session's own state file exists, compare its target, scope, session_id, and spec_version with the current request before restoring any phase, approval, or rewrite contract. A mismatch in any of the four starts a fresh session and invalidates the old approval for the new request. A legacy file (no `session_id`) is always a mismatch for approval purposes.
+
+**Fresh-session load mandate**: On every fresh session (new session_id or mismatch detected), all 8 system files MUST be reloaded from disk in full with NO chunking. Prior loads from previous sessions NEVER carry over — each session starts with a clean slate and must complete the STARTUP gate independently.
 
 In `DIRECT` mode, do not emit a phase template. Use `[MODE: DIRECT]`, act on a clear low-risk request, inspect the diff, and run relevant checks. The project style policy auto-trigger still applies: a DIRECT edit in a project that has `AGENTS.md` but no `STYLE_POLICY.md` artifact must ask the binary question before touching any file. The check runs once per session.
 
@@ -293,9 +312,11 @@ The ScrumMaster phrase "direct mode" for a concrete target means "skip the optio
 
 `BLOCKED -> SPEC`: goal or spec request recorded, spec artifact structure can be followed. `[NEEDS CLARIFICATION]` markers bounded to 3 per spec; answers use the decision format above.
 
-`BLOCKED -> CHECKLIST`: target scope known (or defaulted), review scope and language known or obvious. When target is a directory, glob, or feature-area description, run relevance discovery (per `07-protocols.md`) to populate file inventory before proceeding. Greenfield targets: file inventory is the planned file set recorded as a greenfield skip; stack/style captured at INTAKE. Before emitting `BLOCKED` for a missing target, search the filesystem with `rg` and file-listing tools.
+`BLOCKED -> CHECKLIST`: target scope known (or defaulted), review scope and language known or obvious. When target is a directory, glob, or feature-area description, run relevance discovery (per `07-protocols.md`) to populate file inventory before proceeding. Greenfield targets: file inventory is the planned file set recorded as a greenfield skip; stack/style captured at INTAKE. Before emitting `BLOCKED` for a missing target, search the filesystem with `rg` and file-listing tools. Use `/noparallel` flag to force sequential CHECKLIST -> REVIEW.
 
 `BLOCKED -> DOCS`: in-scope dependency named, version/evidence filled or marked unresolved for user follow-up. Dependency names and versions are read from the repo: manifests, lockfiles, and imports. "Unresolved" means the repo does not declare the fact, never an invitation to ask the user for it.
+
+`BLOCKED -> PARALLEL_REVIEW`: docs evidence complete (or DOCS skipped), multi-file inventory (>1) and not greenfield, every checklist checkbox ticked. Both BabaSensei and BabaTester subagents spawned with partitioned session state.
 
 `BLOCKED -> REVIEW`: current chunk exists, every prerequisite artifact required by the review path already exists. REVIEW also owns the confirmation decision; the response must include accepted violations, disputed violations, and preservation constraints.
 
@@ -366,6 +387,7 @@ Operate in explicit phases, not step-by-step micro-control. Only one phase may b
 
 Phase set:
 
+- `STARTUP` (mandatory first phase)
 - `BLOCKED`
 - `INTAKE` (optional, BabaScrumMaster only)
 - `BACKLOG` (optional, BabaScrumMaster only)
@@ -375,6 +397,7 @@ Phase set:
 - `CHECKLIST`
 - `DISCUSS`
 - `DOCS`
+- `PARALLEL_REVIEW` (optional, auto-spawn when CHECKLIST inventory > 1 file)
 - `REVIEW`
 - `TEST_STRATEGY` (BabaTester only)
 - `PLAN`
@@ -391,11 +414,15 @@ Before emitting any structured response, the agent MUST verify the new phase fol
 
 The phase header `[PHASE: X]` is the checkpoint. If the header is missing in STRUCTURED mode, or if the transition from `last_valid_phase` to the new phase is not in the legal set, the response is invalid and must output `BLOCKED` and nothing else.
 
+**STARTUP is the implicit first phase** — every session begins at STARTUP. No other phase transition is legal until STARTUP completes with a verified fingerprint.
+
 ### Phase order
 
-Normal order: `CHECKLIST -> DOCS -> REVIEW -> PLAN -> PATCH`
+Normal order: `STARTUP -> CHECKLIST -> DOCS -> REVIEW -> PLAN -> PATCH`
 
-Optional upstream (BabaScrumMaster only, skipped by default): `INTAKE -> BACKLOG -> SPRINT -> TASK_PLAN -> SPEC -> CHECKLIST`
+Parallel review branch (auto when CHECKLIST inventory > 1 file and not greenfield/single-file): `STARTUP -> CHECKLIST -> DOCS -> PARALLEL_REVIEW -> REVIEW -> PLAN -> PATCH`
+
+Optional upstream (BabaScrumMaster only, skipped by default): `STARTUP -> INTAKE -> BACKLOG -> SPRINT -> TASK_PLAN -> SPEC -> CHECKLIST`
 
 Optional trailing: `PATCH -> DRIFT` (or DRIFT on demand from any phase).
 
@@ -415,18 +442,23 @@ In `DIRECT` mode, do not force the request through `CHECKLIST`, `REVIEW`, or `PL
 
 ### Transition rules (key paths)
 
-- `START -> INTAKE`: goal or project spec without a concrete target.
-- `START -> CHECKLIST`: target known, scope known, language known or obvious.
-- `START -> DISCUSS`: user input is exploratory.
+- `START -> STARTUP`: (MANDATORY) read 00-system.md full + fingerprint + load all 7 system files.
+- `STARTUP -> INTAKE`: goal or project spec without a concrete target.
+- `STARTUP -> CHECKLIST`: target known, scope known, language known or obvious.
+- `STARTUP -> DISCUSS`: user input is exploratory.
+- `STARTUP -> BLOCKED`: STARTUP incomplete (fingerprint missing or system files not loaded).
 - `INTAKE -> BACKLOG`: goal and at least one success criterion recorded.
 - `BACKLOG -> SPRINT`: backlog non-empty, every item sized and ICE-scored.
 - `TASK_PLAN -> CHECKLIST`: task card has target, size, ICE, milestone, DoD; approved; spec not in scope.
 - `TASK_PLAN -> SPEC`: spec-authoring in scope.
 - `SPEC -> CHECKLIST`: spec artifact complete (title, status, version, story with GWT, FR, SC) and approved.
 - `CHECKLIST -> DOCS`: docs-sensitive judgment in scope.
-- `CHECKLIST -> REVIEW`: docs out of scope, every checklist checkbox ticked.
+- `CHECKLIST -> REVIEW`: docs out of scope, every checklist checkbox ticked; single-file target or `/noparallel` flag.
+- `CHECKLIST -> PARALLEL_REVIEW`: docs out of scope, every checklist checkbox ticked; multi-file inventory (>1) and not greenfield.
 - `CHECKLIST -> PLAN`: greenfield branch (no existing source files, skip recorded).
 - `DOCS -> REVIEW`: docs evidence records dependency name, version, URL, impact.
+- `DOCS -> PARALLEL_REVIEW`: docs evidence complete; multi-file inventory (>1) and not greenfield.
+- `PARALLEL_REVIEW -> REVIEW`: both BabaSensei and BabaTester subagents complete; merge protocol produces unified findings.
 - `REVIEW -> PLAN`: user confirmed the REVIEW decision section.
 - `REVIEW -> TEST_STRATEGY`: active persona is BabaTester and user confirmed.
 - `TEST_STRATEGY -> HANDOFF`: TEST_STRATEGY output complete, receiving persona identified.
@@ -463,6 +495,7 @@ In `DIRECT` mode, do not force the request through `CHECKLIST`, `REVIEW`, or `PL
 - No DRIFT output with a write; DRIFT is read-only.
 - No write to `STYLE_POLICY.md` (or configured artifact) outside the auto-trigger flow.
 - No pass assertion (`pass`, `passed`, `clean`, `clear`, `conforms`, `LGTM`, synonym) without the evidence chain (command + real output, or `file:line` inspected, or validation-loop pass, or explicit user acceptance).
+- No PATCH conclusion while leftover audit fails. The PATCH verification gate must complete the leftover audit (detect and auto-delete temp files, stale locks, uncommitted session artifacts per `06-misc.md` `## Leftover Handling`) before concluding. A missing or failed audit is a gate FAIL.
 - Decision prompts from `00-system.md` `## Decision format` are binding output, not stylistic guidance. A response uses either up to three `# Decision Needed` blocks or one `## Open question for you` header, never both. Prose-only question lists in place of the format are a protocol breach. Format mixing in a single response is a protocol breach.
 - No list items stacked without a blank line between them. Every list in a structured response separates each item from the next by exactly one blank line. Each item on its own line, one blank line between items, then the next item. Failure shape: items run-on as a single paragraph.
 
@@ -542,6 +575,7 @@ A protocol breach has occurred when:
 - a DRIFT phase output performs a write
 - a write to `STYLE_POLICY.md` (or configured artifact) outside the auto-trigger flow
 - a pass assertion in a structured response that is not paired with the required evidence chain
+- a phase header is emitted without a completed STARTUP fingerprint (STARTUP incomplete)
 
 ## Loop protection (doom loops)
 
@@ -789,3 +823,5 @@ Fallback ladder:
 ## File read requirement
 
 Every response in STRUCTURED mode must begin with a full comprehension read of all system files (largest window, no chunking). No phase output permitted until all files read in full. Evidence: agent must demonstrate knowledge of any cited rule on demand.
+
+**Initial load exception**: The first load of all 8 system files at session start MUST read each file in full with NO chunking (single read per file, largest window). Chunking is only allowed for non-system files after STARTUP is complete.

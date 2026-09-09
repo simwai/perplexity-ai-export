@@ -973,3 +973,37 @@ A protocol that enhances CHECKLIST file inventory initialization when the target
 - Runs during CHECKLIST initialization, before any checklist ticks.
 - Output pre-populates CHECKLIST `File inventory:` section.
 - Evidence recorded in session state under `## Discovery Evidence`.
+
+## REVIEW Merge Protocol
+
+When `PARALLEL_REVIEW` completes, both BabaSensei and BabaTester subagents have produced findings in their partitioned state sections (`## Sensei State` and `## Tester State`). The merge protocol produces unified findings for the consolidated REVIEW phase.
+
+### Merge Rules
+
+1. **Hard-tier (H1-H12) - Sensei authority**: For any criterion where both personas reported findings on the same file/line range, BabaSensei's verdict takes precedence. The merged finding uses Sensei's confidence, verdict, and mitigation. Tester's finding is recorded as a cross-reference note.
+
+2. **Soft-tier (S1-S17) - Union**: All findings from both personas are included. Duplicate findings (same criterion, same file, overlapping line range) are deduplicated keeping the higher confidence. Non-overlapping findings from either persona are included as-is.
+
+3. **Test strategy items**: BabaTester's `binding_items` and `strong_hints` are preserved in full and carried into the consolidated handoff to BabaDev.
+
+4. **Preservation constraints**: Union of both personas' constraints. Deduplicated by constraint text.
+
+5. **Output**: Unified `accepted_violations`, `excluded_violations`, `preserve_constraints` lists written to the main session state file. Partitioned sections (`## Sensei State`, `## Tester State`) are retained for audit but no longer written to during REVIEW phase.
+
+### Conflict Detection
+
+Conflicts are detected when:
+- Same criterion ID
+- Same file path
+- Overlapping line ranges (any intersection)
+
+Conflicts are resolved per Rule 1 (hard-tier) or Rule 2 (soft-tier) without user intervention. The merge is deterministic and recorded in the session state file under `## Phase Artifacts`.
+
+### Progress Tracking
+
+During PARALLEL_REVIEW, the session state `phase_status` field tracks:
+- `sensei`: current phase (CHECKLIST, DOCS, REVIEW, complete)
+- `tester`: current phase (CHECKLIST, DOCS, REVIEW, complete)
+- `merge`: pending | complete
+
+The REVIEW phase template displays: `Parallel progress: [sensei: batch 3/5, tester: batch 2/4]` or `Parallel progress: [merged: complete]`.
