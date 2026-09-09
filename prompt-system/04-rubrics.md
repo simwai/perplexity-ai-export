@@ -68,7 +68,7 @@ Hard-tier (H1-H12) and soft-tier (S1-S17) review rubrics. Hard-tier items block 
 
 **S19 -- Log Output Calls in agent-generated code: debug prints (`console.log`, `print`, `Write-Host`, `printf`, etc.) left in generated or edited code.** These reduce accuracy and pollute the transcript. Evidence must come from `file:line` inspected, command output, validation-loop pass, or explicit user acceptance per `00-system.md` Loop protection / Log output prohibition.
 
-**S20 -- Decision format violation: using open-ended questions (`## Open question for you`, prose question lists) instead of `# Decision Needed` blocks with fat-bolded recommended option as `**A. option text**`.** Every user decision must use the decision format with 2-3 options, recommended option first as bolded A per `02-decision-prompts.md` Rendering Rule.
+**S20 -- Decision format violation: using open-ended questions (`## Open question for you`, prose question lists) instead of `# Decision Needed` blocks with fat-bolded recommended option as `**A. option text**`.** Every user decision must use the decision format with 2-3 options, recommended option first as bolded A per `00-system.md` Rendering Rule.
 
 ## Documented extension IDs
 

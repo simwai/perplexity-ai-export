@@ -32,7 +32,7 @@ This is the one case where "defaults" are binding rather than advisory: a greenf
 The decision between *preserve local convention* and *upgrade to house style* is a **per-project** choice, made once when the target project adopts the system. There is no per-file override.
 
 - The decision is recorded in the target project's `STYLE_POLICY.md` artifact. Once recorded, the bot **must not** modify that artifact.
-- If the artifact is missing or malformed in a target project, the bot runs the auto-trigger ask from `02-decision-prompts.md` (which recommends `preserve-local` as option A) and proceeds with the result.
+- If the artifact is missing or malformed in a target project, the bot runs the auto-trigger ask from `00-system.md` (which recommends `preserve-local` as option A) and proceeds with the result.
 - If the user declines the ask or the ask cannot run, the bot defaults to `preserve-local` and emits a one-line note in the plan that the field is unset or invalid, so a human can correct it.
 - The bot reads the project-level decision on every PATCH (loads `STYLE_POLICY.md`; the field is a single line in frontmatter). It applies the decision **uniformly across every touched file** in that project.
 - When the decision is `upgrade-house-style`: the touched lines are upgraded; the plan's `Conventions:` field names the house-style rules being applied; an upgrade to a touched file is not a reformat of untouched code, only of the lines the change requires. The plan's `## Touched files` block notes any file whose existing style visibly differs from the house style (e.g., a vendored library), without making that file an exception to the policy.
@@ -77,7 +77,7 @@ The ladder runs after full comprehension, never instead of it: read the task and
 
 ## Stepdown rule (S14)
 
-Functions read top-to-bottom. Each function calls functions one level of abstraction below it. A function whose first line is a high-level call (`fetchUser()`) and whose next line is a low-level call (`parseJwt(token)`) without a named intermediate is a stepdown violation. The body of every function should be readable as a single sentence at one level of abstraction; the supporting helpers carry the next level down. (Martin, *Clean Code* ch. 3 "One Level of Abstraction per Function" / ch. 11 "The Stepdown Rule".)
+Functions read top-to-bottom. Each function calls functions one level of abstraction below it. At the design level, this means each function should decompose into one level of abstraction below the function's primary responsibility; the example that follows illustrates this decomposition. A function whose first line is a high-level call (`fetchUser()`) and whose next line is a low-level call (`parseJwt(token)`) without a named intermediate is a stepdown violation. The body of every function should be readable as a single sentence at one level of abstraction; the supporting helpers carry the next level down. (Martin, *Clean Code* ch. 3 "One Level of Abstraction per Function" / ch. 11 "The Stepdown Rule".)
 
 ## Newspaper order (S15)
 
@@ -128,25 +128,14 @@ A method should not reach through another object to access its parts. `customer.
 
 **Bad comments - categories that violate this rule (Martin ch. 4 / ch. 5):**
 
-- **Mumbling** -- a comment that says something without saying anything useful. Always delete.
-- **Redundant comments** -- restate the next line of code in prose. Always delete.
-- **Comments that duplicate code** -- when a comment says exactly what the code already expresses (e.g., `// set user to null` above `user = null`), the comment is noise and must be deleted. The code is the source of truth.
-- **Misleading comments** -- say one thing while the code does another. Worse than no comment. Delete and fix the code or the comment.
-- **Mandated comments** -- required by a process but not by the code (e.g., "this function exists"). Delete; the function name is the mandate.
-- **Journal comments** -- change logs at the top of a file ("added by X on Y"). Use git, not a comment.
-- **Noise comments** -- restate the obvious in a noisy way. The agent's specific bans: `// ----- HEYO -----`, `// ==== Section ====`, ASCII art separators, `// some random label` headers, "this method does X" above a method named `doX`.
-- **Scary noise** -- loud markers (e.g., `////////////////////////////////////////////`) that signal a section by visual weight rather than by structure. Use `// #region LABEL` / `// #endregion` instead. Region tags are the only sanctioned way to mark a section.
-- **TODO without owner** -- `// TODO: fix this` with no owner and no target. Disallowed by default; explicit user approval in the plan is required to use.
-- **Position markers** -- banner comments like `// ACTIONS` placed at arbitrary columns to organize the file. Use a section break, an extract-method refactor, or a region tag.
-- **Closing-brace comments** -- `// } end of while` placed next to a closing brace. Delete; the indentation and a small function carry the meaning.
-- **Attributions and bylines** -- `// Added by Simon` at the top of a function. Use git blame, not a comment.
-- **Commented-out code** -- dead code left as a comment. Delete; git has the history.
-- **HTML in comments** -- `// <b>important</b>` in a code comment. The renderer is not the reader.
-- **Nonlocal information** -- a comment that refers to a system-wide context the reader won't have (e.g., "this corresponds to issue #1234" without a link). Cite the URL inline if the context matters.
-- **Too much information** -- a multi-paragraph essay in a code comment. The file is not a blog.
-- **Function headers** -- a block comment at the top of every function describing what it does. The function name and signature carry the meaning; a docstring is enough.
-- **Docstrings in nonpublic code** -- verbose docstrings on private functions. Required only on public-API boundaries.
-- **Markup in comments/docstrings** -- no Markdown, reST, or other rendering markup (`*`, `_`, ` ` `, ` `` `, `>`, `#`, `[]()`, etc.) inside code comments or docstrings. Plain prose only. Exception: when a documentation generation library (Sphinx, pdoc, TypeDoc, JSDoc, Doxygen, rustdoc, etc.) is explicitly configured in the project and its format requires specific markup, that markup is allowed and the project's tooling config is the source of truth.
+- **Redundant or duplicative** -- restates the next line of code in prose, or says exactly what the code already expresses (e.g., `// set user to null` above `user = null`). The code is the source of truth. Always delete.
+- **Misleading or wrong** -- says one thing while the code does another. Worse than no comment. Delete and fix the code or the comment.
+- **Noise or formatting abuse** -- restates the obvious in a noisy way, uses loud markers (`////////////////////////////////////////////`), ASCII art separators, `// ==== Section ====`, `// ----- HEYO -----`, or `// some random label` headers. Use `// #region LABEL` / `// #endregion` instead. Region tags are the only sanctioned way to mark a section.
+- **Process artifacts** -- change logs at file top ("added by X on Y"), attributions (`// Added by Simon`), mandated comments required by process not code ("this function exists"), journal comments. Use git, not comments.
+- **Dead or commented-out code** -- dead code left as a comment, commented-out code blocks. Delete; git has the history.
+- **Structural violations** -- function headers (block comment at top of every function), docstrings on private/internal code, closing-brace comments (`// } end of while`), position markers (`// ACTIONS` at arbitrary columns). Use section breaks, extract-method, or region tags.
+- **Nonlocal or excessive context** -- references system-wide context without a link ("corresponds to issue #1234"), multi-paragraph essays, HTML/markup in comments (`// <b>important</b>`, Markdown/reST markup). Plain prose only; cite URLs inline. Exception: documentation generation libraries explicitly configured in the project.
+- **TODO without owner** -- `// TODO: fix this` with no owner and no target. Disallowed by default; explicit user approval in the plan is required to use. Format: `// TODO(<owner>): <what> -- <why deferred>`.
 
 Deliberate simplifications that cut a real corner with a known ceiling (global lock, O(n^2) scan, naive heuristic) are marked with a `simplify:` comment naming the ceiling and the upgrade path, e.g. `# simplify: global lock -- per-account locks if throughput matters`.
 

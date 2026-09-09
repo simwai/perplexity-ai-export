@@ -216,8 +216,7 @@
 
   // MCP servers mirror the fallback tiers in AGENTS.md, adapted to opencode's
   // schema. Note: opencode interpolates {env:VAR}, NOT ${VAR}.
-  // If EXA_API_KEY is absent, remove the exa entry rather than shipping a
-  // server that fails to start.
+  // Exa removed - agent uses Google curl fallback when EXA_API_KEY not set.
   "mcp": {
     // Tier 1 — no keys required
     "context7": {
@@ -228,11 +227,9 @@
       "type": "local",
       "command": ["npx", "-y", "@playwright/mcp@0.0.80"]
     },
-    // Tier 2 — requires env key
-    "exa": {
-      "type": "remote",
-      "url": "https://mcp.exa.ai/mcp",
-      "headers": { "x-api-key": "{env:EXA_API_KEY}" }
+    "playwright-headless": {
+      "type": "local",
+      "command": ["npx", "-y", "@playwright/mcp@0.0.80", "--headless"]
     },
     // Remote OAuth — no key, one-time browser consent via `opencode mcp auth trello`
     "trello": {

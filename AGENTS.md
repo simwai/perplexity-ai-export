@@ -64,18 +64,23 @@ Servers are grouped by what works when env keys are missing. Configure the ones 
   },
   "playwright": {
     "command": "npx",
-    "args": ["-y", "@playwright/mcp@0.0.79"]
+    "args": ["-y", "@playwright/mcp@0.0.80"]
+  },
+  "playwright-headless": {
+    "command": "npx",
+    "args": ["-y", "@playwright/mcp@0.0.80", "--headless"]
   }
 }
 ```
 
 **Context7** - library docs (stdio: `npx -y @upstash/context7-mcp`)
-**Playwright** - browser automation for live UI verification and e2e walk-throughs (Node 20+; headed by default, add `--headless` for automation)
+**Playwright** - browser automation for live UI verification and e2e walk-throughs (Node 20+; headed for testing)
+**Playwright-headless** - headless browser for web search and scraping (Node 20+; `--headless` flag)
 **Playwright bootstrap** — run `scripts/ensure-playwright.ps1` before first use or after fresh clones; checks Node ≥ 20, resolves `@playwright/mcp`, installs missing browser binaries.
 
 **OpenCode PTY** — interactive terminal plugin: background processes, multiple sessions, stdin, output regex filter. Auto-installed by OpenCode on next run.
 
-### Tier 2 - Requires env keys
+### Tier 2 - Requires env keys (optional - only configure if key available)
 
 ```json
 {
@@ -86,6 +91,8 @@ Servers are grouped by what works when env keys are missing. Configure the ones 
   }
 }
 ```
+
+> **Note**: Omit this entire block if `EXA_API_KEY` is not set. The agent will use Google curl search as the no-key fallback per `00-system.md`.
 
 ### Trello - Remote OAuth (no env keys)
 
