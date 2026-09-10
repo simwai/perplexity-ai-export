@@ -116,7 +116,7 @@ bash -c "cp .env.example .env"
 
 - **HEADLESS**: Set to `false` in your `.env` file. **Note:** Headless mode (`true`) is currently non-functional due to Cloudflare Turnstile protection on Perplexity.ai. Using headful mode allows you to complete any challenges manually if they appear.
 - **OLLAMA_URL**: Access point for your local AI engine (default: http://localhost:11434).
-- **OLLAMA_MODEL**: Cognitive model for RAG synthesis (e.g., deepseek-r1).
+- **OLLAMA_MODEL**: Cognitive model for RAG synthesis (default fallback: llama3.1, recommended: deepseek-r1).
 - **OLLAMA_EMBED_MODEL**: Model for generating vector representations (e.g., nomic-embed-text).
 - **ENABLE_VECTOR_SEARCH**: Set to `true` to activate semantic and RAG layers.
 
