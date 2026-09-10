@@ -2,6 +2,7 @@
 
 Operational protocol: PATCH behavior, commit/push gate. Cross-cutting protocol details (artifacts, pre-commit, cross-team, app lifecycle, library selection, session file locks, spec lifecycle, drift, discuss, scrum) live in `07-protocols.md`.
 
+<HIGH_PRIO>
 ## PATCH protocol
 
 Prerequisites: explicit user plan approval; complete rewrite contract.
@@ -49,10 +50,14 @@ A green pre-existing suite is never proof that a confirmed bug is covered. A ful
 ### Compliance audit
 
 After every patch, emit a compliance audit section. For each must-preserve item: PASS or FAIL. For each must-eliminate item: PASS or FAIL. For each forbidden token: PASS or FAIL. If any audit item is FAIL, do not emit the patch. Return to PLAN phase.
+</HIGH_PRIO>
 
+<HIGH_PRIO>
 ### Verification gate
 
 After a successful compliance audit, inspect the resulting diff. Run the project's relevant checks when available (lint, typecheck, tests, or documented equivalents). The Playwright smoke is the functional verification and runs once inside the commit gate, after this gate passes; it is referenced here, not executed here; its PASS|FAIL|SKIPPED outcome is recorded in the gate outcome and the session's own state file. When `.md` files are created or changed, run the project's configured Markdown lint check against them when available and honor the repository configuration. Do not invent commands. If none exist, record SKIPPED with reason. Write verification results to the PATCH template and the session's own state file. If a required check fails, report FAIL and return to PLAN unless the failure is outside scope and explicitly accepted.
+
+**Parallel test execution**: Detect independent test suites by scanning project config (package.json scripts, jest.config, pytest.ini, pyproject.toml) for isolation markers: no shared `beforeAll`/`setup`, no shared DB fixtures, no global state mutations, no `@Order`/`dependsOn`. Categorize suites as `isolated` (parallel-safe) or `sequential-only`. Run `lint` + `typecheck` sequentially (required order), then execute isolated test suites concurrently via background processes (max concurrent per `parallel_budget.patch = 4`). Aggregate results with per-suite timing. Fallback: if zero isolated suites detected or `/noparallel`, run all sequentially with note `Parallel test execution skipped: no isolated suites detected`.
 
 When the patch contains a confirmed bug, the verification gate runs two extra rows before the diff inspection concludes:
 
@@ -60,6 +65,7 @@ When the patch contains a confirmed bug, the verification gate runs two extra ro
 - **Regression post-fix (expected PASS):** PASS|FAIL/SKIPPED -- <command or n/a> -- <note or SKIPPED reason>.
 
 Each row is mandatory for every confirmed bug in the patch. A row with `SKIPPED` must carry a concrete reason and the nearest feasible substitute; an unjustified `SKIPPED` is a gate FAIL. A full-suite result is not accepted in either row; the row must name the targeted regression test.
+</HIGH_PRIO>
 
 ### Commit/push gate (PATCH trigger)
 
@@ -69,9 +75,11 @@ After the Verification gate, when the session made file edits, apply the commit/
 
 Applies only on a confirmed `READ_ONLY` host. `00-system.md` `## Read-only host` owns capability detection, the `SKIPPED-with-reason` standard, the Delivery contract, and all read-only surface behavior. On a read-only host, PATCH follows that contract: delivery of complete file contents replaces file edits, every write/run step reports `SKIPPED: <category> -- <reason>`, recording lands in the in-conversation carrier, and the commit/push gate never triggers. On `FILE_CAPABLE` hosts this branch does not apply.
 
+<HIGH_PRIO>
 ## Commit/push gate (full rules)
 
 The commit/push gate is the final step of PATCH when the session made file edits. It exists to prevent silent file mutations, unsanitized remote URLs in transcripts, and untracked large file commits.
+</HIGH_PRIO>
 
 ### Trigger
 
@@ -181,6 +189,7 @@ In STRUCTURED mode the ask carries the `[PHASE: PATCH]` header; in DIRECT mode i
 - Never run `git clean`, `git reset --hard`, `git checkout --`, `git restore`, or `git stash` (H9: destroys work).
 - The gate is not a phase: it runs inside PATCH after verification and inside DIRECT before completion. The pre-ask smoke above is a gate-internal verification step, never a phase and never a second REVIEW pass.
 
+<HIGH_PRIO>
 ## Leftover Handling
 
 Fix/debug sessions produce three categories of leftovers that must be auto-deleted at the PATCH verification gate. The handling is specified upfront so the agent always knows what to do; no flagging, no escalation, no session failure due to agent uncertainty.
@@ -210,6 +219,7 @@ Fix/debug sessions produce three categories of leftovers that must be auto-delet
 ### Hard Guard (cross-reference)
 
 `00-system.md` enforces: No PATCH conclusion while leftover audit fails.
+</HIGH_PRIO>
 
 ## Cross-cutting protocol
 

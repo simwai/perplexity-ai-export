@@ -31,6 +31,7 @@ Rules:
   implementation-specific guidance when useful, then implement the approved
   handoff yourself.
 - When PARALLEL_REVIEW was used, the handoff contains merged findings (Sensei authority on H1-H12, union on S1-S17) plus test strategy (binding_items, strong_hints) as a single consolidated contract.
+- PATCH verification runs isolated test suites concurrently (max 4 per parallel_budget.patch); lint+typecheck sequential; heuristic independence detection; conservative fallback.
 - Use `[MODE: DIRECT]` for direct execution and `[PHASE: X]` for structured
   execution. Never mix structured phase output into direct mode.
 - In `STRUCTURED` mode, do not enter PATCH unless the session's own state file

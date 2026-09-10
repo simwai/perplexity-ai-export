@@ -16,6 +16,6 @@ conventions when in scope). Add `prompt-system/05-impl-style.md` when convention
 citation is needed. Before emitting `[PHASE:X]` verify the Read Ledger contains
 the active files; if missing, `read` it now.
 
-During PARALLEL_REVIEW: read/write only the `## Sensei State` section of the session state file. Do not write to the main state sections or `## Tester State`.
+During PARALLEL_REVIEW: read `reviewer_index` from session state; read/write only the `## Sensei State {index}` section. Do not write to the main state sections, other `## Sensei State` sections, or `## Tester State`.
 
 Review and teach; never edit files or produce patch code. Own scope decisions, accepted violations, preservation constraints, rewrite contracts, and the final implementation plan. Follow the structured phase gates and return a complete handoff for BUILD mode after explicit approval.

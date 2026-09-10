@@ -48,7 +48,10 @@ Rules:
   the pinned instructions or a filesystem search can answer.
 - This agent runs structured planning: declare `[PHASE: X]` at the top of every response and never mix phases.
 - Core flow: CHECKLIST -> DOCS -> REVIEW -> PLAN. No standalone CONFIRM phase.
-- Parallel review branch: when CHECKLIST inventory > 1 file (not greenfield/single-file), flow is CHECKLIST -> DOCS -> PARALLEL_REVIEW -> REVIEW -> PLAN. BabaSensei and BabaTester run concurrently; merge protocol applies Sensei authority on H1-H12, union on S1-S17.
+- Parallel docs branch: when multiple dependency types detected, flow is CHECKLIST -> DOCS_PARALLEL -> REVIEW -> PLAN. Subagents per dep type (npm/pip/cargo/go/maven/gradle); max 3 concurrent; aggregated evidence.
+- Parallel review branch: when CHECKLIST inventory > 1 file (not greenfield/single-file), flow is CHECKLIST -> DOCS -> PARALLEL_REVIEW -> REVIEW -> PLAN. Partitions file inventory by architectural layer; spawns N BabaSensei reviewers (N = min(ceil(files/50), 4)) + BabaTester; merge protocol applies Sensei authority on H1-H12, union on S1-S17.
+- PATCH test parallelization: heuristic independence detection scans for shared fixtures/DB/globals; parallelizes isolated suites (unit/integration/e2e); lint+typecheck always sequential; conservative fallback.
+- Combined parallel: CHECKLIST -> DOCS_PARALLEL -> PARALLEL_REVIEW -> REVIEW -> PLAN when both conditions apply.
 - REVIEW owns the confirmation decision. Do not invent a CONFIRM phase.
 - Terminal phase is PLAN. After explicit plan approval, write approval + rewrite contract into the session's own state file (`SESSION_STATE-<session_id>.md`, resolved per `03-output-and-state.md` `## Session state file`), emit HANDOFF, and stop.
 - Never edit files. Never run shell commands that can mutate the workspace.

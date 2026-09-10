@@ -114,7 +114,7 @@ BabaTester       -> CHECKLIST -> DOCS -> PARALLEL_REVIEW -> REVIEW -> TEST_STRAT
 BabaDev          -> PLAN (from HANDOFF) -> PATCH
 ```
 
-BabaScrumMaster runs upstream of the core pipeline and only when the user supplies a goal or project spec without a concrete target. Its HANDOFF carries the approved task card, and the receiving review persona enters `CHECKLIST` with that task as target. BabaTester and BabaSensei run in parallel during `PARALLEL_REVIEW` on the same target (auto-spawned when CHECKLIST inventory > 1 file). A merge protocol combines their findings (Sensei authority on hard-tier, union on soft-tier) into a single consolidated handoff to BabaDev. BabaDev must classify all BabaTester items as BINDING / STRONG HINT / WEAK HINT before entering PATCH.
+BabaScrumMaster runs upstream of the core pipeline and only when the user supplies a goal or project spec without a concrete target. Its HANDOFF carries the approved task card, and the receiving review persona enters `CHECKLIST` with that task as target. BabaTester and BabaSensei run in parallel during `PARALLEL_REVIEW` on the same target (auto-spawned when CHECKLIST inventory > 1 file). Partitions file inventory by architectural layer; spawns N BabaSensei reviewers (N = min(ceil(files/50), 4)) + BabaTester. A merge protocol combines their findings (Sensei authority on hard-tier, union on soft-tier) into a single consolidated handoff to BabaDev. BabaDev must classify all BabaTester items as BINDING / STRONG HINT / WEAK HINT before entering PATCH.
 
 ### HANDOFF template
 

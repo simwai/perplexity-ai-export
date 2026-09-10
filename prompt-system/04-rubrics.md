@@ -2,7 +2,7 @@
 
 Hard-tier (H1-H12) and soft-tier (S1-S17) review rubrics. Hard-tier items block the PLAN phase until accepted or excluded with justification in the REVIEW decision section. Soft-tier items are quality concerns; flag and discuss, do not hard-block.
 
-## Hard tier (H1-H12)
+## Hard tier (H1-H12) <HIGH_PRIO>
 
 **H1 -- Security: credentials, tokens, secrets in code or logs.** A credential-bearing file (`.env`, `.env.*`, `secrets/`, `*.pem`, `*.key`) read with the read tool, or its raw contents in the transcript, is a confirmed H1 breach.
 

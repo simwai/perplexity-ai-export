@@ -1,6 +1,6 @@
 # 07-protocols
 
-Cross-cutting protocol details: artifact handling, pre-commit behavior, cross-team requirements, app lifecycle, library selection, session file locks, spec lifecycle, drift detection, discuss mode, and scrum planning. These were merged out of 11 separate deprecated modules; they are protocol detail that PATCH, REVIEW, and PLAN consume.
+Cross-cutting protocol details: artifact handling, pre-commit behavior, cross-team requirements, app lifecycle, library selection, session file locks, spec lifecycle, drift detection, discuss mode, and scrum planning. These were merged out of 11 separate deprecated modules; they are protocol detail that PATCH, REVIEW, and PLAN consume. "PATCH rule" sections below are cross-phase constraints that apply when PATCH touches the relevant domain — the PATCH execution protocol lives in `06-misc.md`.
 
 ## Artifact handling
 
@@ -38,7 +38,7 @@ When a fix plan touches build config, tooling, or environment setup, the plan mu
 - Verify `.env.example` exists if any `.env.*` files are gitignored
 - Verify `node_modules/` or equivalent is excluded if a package manager is in use
 
-### PATCH rule
+### Artifact governance
 
 When emitting a patch that adds or modifies tooling, scripts, or build config:
 
@@ -128,7 +128,7 @@ When a plan includes tooling or script changes:
 - Explicitly separate `pre-commit` hooks (fast: format, lint, tsc, fast unit tests) from `pre-push` hooks (slow: full test suite, heavy type checks)
 - If the project has no hook setup, include a recommendation for one in the plan as an optional but strongly advised step
 
-### PATCH rule (pre-commit)
+### Pre-commit governance
 
 When patching or creating hook configuration:
 
@@ -238,7 +238,7 @@ When a plan includes a dependency on another team:
 - The plan must state whether the current repo's changes can be merged independently or must be gated behind the cross-team change
 - If gated: mark the relevant plan steps as `BLOCKED pending cross-team`
 
-### PATCH rule (cross-team)
+### Cross-team governance
 
 When emitting a patch that has cross-team dependencies:
 
@@ -438,7 +438,7 @@ When a plan introduces or modifies an API surface, the plan must include:
 
 A plan that touches the API without addressing each of the above is incomplete; the PLAN acceptance gate surfaces the gap.
 
-### PATCH rule (API)
+### API contract governance
 
 When emitting a patch that adds or modifies an API surface:
 
@@ -502,6 +502,7 @@ Do not adopt the candidate without an explicit exception when it is archived or 
 - During DOCS, verify the official documentation URL, exact version, and changelog window for the last two major versions when relevant.
 - H8 remains the hard-tier audit for known CVEs and unreviewed dependency versions. This section governs selection before adoption; it does not replace the review rubric.
 
+<HIGH_PRIO>
 ## Session file locks
 
 Per-file serialization for concurrent editing sessions operating on the same repository checkout. Prevents two sessions from silently bundling each other's uncommitted hunks into one commit by ensuring one file has at most one writer at a time. Loaded for all phases where file writes may occur. On a `READ_ONLY` host, locks are inert.
@@ -662,6 +663,7 @@ The commit/push gate verifies both lock types:
 - For a dependency lock: the session must hold the dependency lock whose `dependencies.txt` covers the staged file.
 
 After the lock check, the re-read-and-diff step runs on every staged file to catch the read-then-write race.
+</HIGH_PRIO>
 
 ## Spec lifecycle
 
@@ -976,19 +978,19 @@ A protocol that enhances CHECKLIST file inventory initialization when the target
 
 ## REVIEW Merge Protocol
 
-When `PARALLEL_REVIEW` completes, both BabaSensei and BabaTester subagents have produced findings in their partitioned state sections (`## Sensei State` and `## Tester State`). The merge protocol produces unified findings for the consolidated REVIEW phase.
+When `PARALLEL_REVIEW` completes, N BabaSensei reviewers and BabaTester subagent have produced findings in their partitioned state sections (`## Sensei State 1`, `## Sensei State 2`, ..., `## Sensei State N`, `## Tester State`). The merge protocol produces unified findings for the consolidated REVIEW phase.
 
 ### Merge Rules
 
-1. **Hard-tier (H1-H12) - Sensei authority**: For any criterion where both personas reported findings on the same file/line range, BabaSensei's verdict takes precedence. The merged finding uses Sensei's confidence, verdict, and mitigation. Tester's finding is recorded as a cross-reference note.
+1. **Hard-tier (H1-H12) - Sensei authority**: For any criterion where multiple reviewers reported findings on the same file/line range, the highest-confidence Sensei verdict takes precedence. The merged finding uses that reviewer's confidence, verdict, and mitigation. Other reviewers' findings are recorded as cross-reference notes.
 
-2. **Soft-tier (S1-S17) - Union**: All findings from both personas are included. Duplicate findings (same criterion, same file, overlapping line range) are deduplicated keeping the higher confidence. Non-overlapping findings from either persona are included as-is.
+2. **Soft-tier (S1-S17) - Union**: All findings from all reviewers are included. Duplicate findings (same criterion, same file, overlapping line range) are deduplicated keeping the highest confidence. Non-overlapping findings from any reviewer are included as-is.
 
 3. **Test strategy items**: BabaTester's `binding_items` and `strong_hints` are preserved in full and carried into the consolidated handoff to BabaDev.
 
-4. **Preservation constraints**: Union of both personas' constraints. Deduplicated by constraint text.
+4. **Preservation constraints**: Union of all reviewers' constraints. Deduplicated by constraint text.
 
-5. **Output**: Unified `accepted_violations`, `excluded_violations`, `preserve_constraints` lists written to the main session state file. Partitioned sections (`## Sensei State`, `## Tester State`) are retained for audit but no longer written to during REVIEW phase.
+5. **Output**: Unified `accepted_violations`, `excluded_violations`, `preserve_constraints` lists written to the main session state file. Partitioned sections (`## Sensei State 1..N`, `## Tester State`) are retained for audit but no longer written to during REVIEW phase.
 
 ### Conflict Detection
 
@@ -1006,4 +1008,145 @@ During PARALLEL_REVIEW, the session state `phase_status` field tracks:
 - `tester`: current phase (CHECKLIST, DOCS, REVIEW, complete)
 - `merge`: pending | complete
 
-The REVIEW phase template displays: `Parallel progress: [sensei: batch 3/5, tester: batch 2/4]` or `Parallel progress: [merged: complete]`.
+The REVIEW phase template displays: `Parallel progress: [sensei-1: batch 3/5, sensei-2: batch 2/3, sensei-3: batch 1/2, tester: batch 4/5]` or `Parallel progress: [merged: complete]`.
+
+### Partition Algorithm (Architectural Layer)
+
+1. **Collect file inventory**: From CHECKLIST `File inventory` section
+2. **Classify by layer**: Detect architectural layer from path patterns:
+   - `controllers/`, `handlers/`, `routes/` → controllers
+   - `services/`, `usecases/`, `interactors/` → services
+   - `repositories/`, `dao/`, `data-access/` → repositories
+   - `middleware/`, `interceptors/` → middleware
+   - `components/`, `views/`, `pages/` → components
+   - `hooks/`, `composables/` → hooks
+   - `stores/`, `state/` → stores
+   - `utils/`, `helpers/`, `lib/` → utils
+   - `tests/`, `spec/`, `__tests__/` → tests
+3. **Assign reviewers**: Group files by layer; assign one reviewer per non-empty layer group
+4. **Auto-size**: N = min(ceil(total_files / 50), 4) reviewers (cap at 4)
+5. **Overflow**: If >4 layer groups, merge smallest groups until ≤4 reviewers
+
+Each reviewer receives only its layer's files and writes to its `## Sensei State {index}` section.
+
+## DOCS Parallel Protocol
+
+When `DOCS_PARALLEL` is entered, the in-scope dependencies are partitioned by package manager type (npm, pip, cargo, go, maven, gradle) and subagents are spawned per partition with partitioned evidence collection (max 3 concurrent subagents).
+
+### Partition Algorithm
+
+1. **Collect dependencies**: Read from manifests (package.json, pyproject.toml, Cargo.toml, go.mod, pom.xml, build.gradle) and lockfiles
+2. **Group by type**: Partition into groups by package manager (npm, pip, cargo, go, maven, gradle)
+3. **Assign subagents**: One subagent per non-empty group, up to max 3 concurrent (per `parallel_budget.docs = 3`)
+4. **Queue overflow**: If >3 groups, remaining groups wait for a subagent slot
+
+### Subagent Coordination
+
+Each subagent:
+- Reads/writes only its group's section in `## Lookup State` in session state
+- Runs context7 (primary) or exa/curl (fallback) lookups for its assigned dependencies
+- Records: dependency name, exact version, official docs URL, changelog window checked, key sections consulted with URL+anchor, notes affecting review
+- Respects budget: max 3 lookups per dependency, distinct fingerprints
+- On completion: updates group Status to `complete`, records evidence count
+- On failure: updates group Status to `failed`, records error
+
+### Result Aggregation
+
+After all groups complete (or timeout at 60s per subagent):
+1. **Deduplicate**: If same dependency appears in multiple groups (should not happen), keep highest confidence
+2. **Merge evidence**: Combine all `Verified evidence` entries into single list
+3. **Conflict resolution**: If conflicting versions reported for same dependency, flag in output with both versions noted
+4. **Output**: Write unified evidence to main session state; set `Aggregation: complete`
+
+### Progress Tracking
+
+During DOCS_PARALLEL, session state tracks:
+- `docs_partitions`: active subset of [npm, pip, cargo, go, maven, gradle]
+- Per-group status in `## Lookup State`
+
+Template displays: `Groups: [npm: 3 deps, pip: 2 deps, cargo: 1 dep] -- Active: [pip: 2/2 complete] -- Completed: [npm: complete]`
+
+### Timeout Handling
+
+- Per-subagent timeout: 60 seconds
+- If subagent times out: mark group `failed`, continue with other groups
+- Aggregation proceeds with available evidence; missing groups noted in output
+- User can retry failed groups via `/retry-docs <group>` if needed
+
+### Fallback to Sequential
+
+- Single dependency type detected -> sequential `DOCS` phase (no subagents)
+- `/noparallel` flag -> sequential `DOCS`
+- `parallel_budget.docs = 0` -> sequential `DOCS`
+
+## PATCH Test Parallelization Protocol
+
+When the PATCH verification gate runs, it detects independent test suites and executes them concurrently to reduce total verification time.
+
+### Independence Detection
+
+Before running tests, scan project configuration to identify which test suites are isolated (parallel-safe):
+
+1. **Scan project config**: Read `package.json` (scripts, jest.config), `pyproject.toml` (pytest.ini), `jest.config.js`, `pytest.ini`, `vitest.config.ts`, etc.
+2. **Check isolation markers** (all must be true for a suite to be `isolated`):
+   - No shared `beforeAll` / `setup` / `beforeEach` that mutate global state
+   - No shared database fixtures or test containers
+   - No global state mutations (module-level variables, singletons, caches)
+   - No test ordering dependencies (`@Order`, `dependsOn`, `test.only`, numbered test files)
+   - No shared external resources (ports, temp files, environment variables)
+   - No `test.concurrent` disabled or `maxConcurrency: 1` in config
+3. **Categorize suites**: Each test suite/configuration entry classified as:
+   - `isolated` — safe for parallel execution
+   - `sequential-only` — must run sequentially
+4. **Default conservative**: If detection is ambiguous or config unreadable, mark as `sequential-only`
+
+### Parallel Execution Strategy
+
+1. **Always sequential** (required order):
+   - `lint` (formatter + linter) — must run first, auto-fixes may affect typecheck
+   - `typecheck` (`tsc --noEmit`, `pyrefly check`, `mypy`) — depends on lint output
+2. **Parallel groups** (run concurrently, max `parallel_budget.patch = 4`):
+   - Isolated test suites grouped by type: `unit`, `integration`, `e2e`, `playwright`
+   - Each group runs up to 4 concurrent background processes
+   - Aggregate results with per-suite timing
+3. **Always sequential** (H11 aggregate gate):
+   - Playwright e2e smoke — single run at commit gate
+   - Regression baseline/post-fix — same test, before/after
+
+### Result Aggregation
+
+- Collect exit codes, stdout, timing per suite
+- Report: `Parallel groups: [lint+typecheck: sequential], [unit: parallel 3/3], [integration: sequential], [e2e: sequential] -- total 45s (vs 78s sequential)`
+- If any parallel suite FAIL, mark overall verification FAIL
+
+### Fallback to Sequential
+
+- Zero isolated suites detected -> `Parallel test execution skipped: no isolated suites detected`
+- `/noparallel` flag -> all sequential
+- `parallel_budget.patch = 0` -> all sequential
+- Detection failure (config unreadable, ambiguous) -> all sequential with note
+
+### Configuration Examples
+
+**package.json (Jest)**:
+```json
+{
+  "scripts": {
+    "test:unit": "jest --projects=unit",
+    "test:integration": "jest --projects=integration"
+  },
+  "jest": {
+    "projects": ["unit", "integration"],
+    "maxWorkers": 4
+  }
+}
+```
+
+**pyproject.toml (pytest)**:
+```toml
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests/unit", "tests/integration"]
+```
+
+**Detection heuristic**: If `maxWorkers > 1` or `pytest -n auto` works without shared fixtures, mark as isolated.
