@@ -25,6 +25,7 @@
   * [Key Environment Variables](#key-environment-variables)
 - [Usage Guide](#usage-guide)
   * [Operational Directives](#operational-directives)
+  * [Knowledge Map](#knowledge-map)
 - [RAG Capabilities](#rag-capabilities)
 - [Architecture & Deep Dive](#architecture--deep-dive)
   * [Project Structure](#project-structure)
@@ -141,6 +142,23 @@ pnpm run dev
 - **Build vector index**: Processes Markdown exports into a local vector store.
 - **Reset all data**: Purges checkpoints, authentication data, and the vector index.
 
+### Knowledge Map
+
+Visualize exports as an interactive topic graph (Cytoscape):
+
+```powershell
+# Build the graph from exports/
+pnpm run build:graph
+
+# Serve the map with the regenerate API on http://localhost:9876
+pnpm run serve:map
+```
+
+The map offers Graph and Mindmap views. Mindmap depth (1-5) is adjustable
+in the sidebar and persisted per browser. Topic parents derive from the
+`exports/` directory nesting; wrong parents can be remapped in
+`taxonomy-overrides.yaml` (`child: parent` entries under `parents:`).
+
 ## RAG Capabilities
 
 The RAG modality is engineered for various levels of cognitive inquiry:
@@ -149,11 +167,13 @@ The RAG modality is engineered for various levels of cognitive inquiry:
 - **Granular Retrieval**: "Locate the specific TypeScript pattern I used for the worker pool."
 - **Cross-Thread Integration**: "How has my conceptual understanding of React hooks shifted?"
 
-The pipeline runs three enhancement stages automatically:
+The pipeline runs enhancement stages automatically:
 
 1. **HyDE**: Depending on the `HYDE_MODE` (default: `supplement`), the system may generate a hypothetical answer passage to bridge the lexical gap between questions and historical content. In `supplement` mode, it only activates if initial semantic searches yield weak results.
-2. **Expanded pool**: Precise mode retrieves 35 candidates (up from 20), exhaustive mode retrieves 60.
-3. **Cross-encoder reranking**: A local ONNX model (`Xenova/ms-marco-MiniLM-L-6-v2`) jointly scores each (query, passage) pair and reorders before synthesis. Activates automatically after `pnpm install`. First run downloads ~85MB model, cached thereafter.
+2. **Expanded pool**: Precise mode retrieves 50 candidates (up from 35), exhaustive mode retrieves 80.
+3. **Cross-encoder reranking**: A local ONNX model (`Xenova/ms-marco-MiniLM-L-6-v2`) jointly scores each (query, passage) pair and reorders before synthesis. Includes a permissive threshold (-5.0) with top-20 fallback to guarantee candidates. Activates automatically after `pnpm install`. First run downloads ~85MB model, cached thereafter.
+4. **Granular fact extraction**: MapReduce extracts atomic facts with source-level deduplication, loose-relevance filtering, and robust JSON parsing (per-entry error handling).
+5. **Cited synthesis**: Final answer cites sources by title (e.g., `[which big python projects use pdm...]`) and `History Sources Explored` shows each fact with a preview.
 
 ## Architecture & Deep Dive
 

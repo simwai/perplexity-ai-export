@@ -13,6 +13,8 @@
     "dev": "tsx src/index.ts",
     "start": "node dist/index.js",
     "build": "tsc",
+    "build:graph": "tsx scripts/build-graph.ts",
+    "serve:map": "tsx scripts/serve-with-api.ts",
     "release": "release-it",
     "toc": "node scripts/update-toc.js",
     "type-check": "tsc --noEmit",
@@ -30,6 +32,7 @@
     "benchmark": "tsx src/benchmark.ts"
   },
   "dependencies": {
+    "@adaptivekind/markdown-graph": "0.0.17",
     "@huggingface/transformers": "~3.5.0",
     "@inquirer/prompts": "^8.5.0",
     "@vscode/ripgrep": "^1.17.1",
@@ -38,10 +41,13 @@
     "@vscode/ripgrep-linux-x64": "^1.18.0",
     "@vscode/ripgrep-win32-x64": "^1.18.0",
     "colorino": "1.1.0",
+    "cytoscape": "3.30.0",
+    "cytoscape-dagre": "4.0.1",
     "dotenv": "^17.2.4",
     "inquirer": "^13.2.2",
     "playwright-core": "^1.58.2",
     "sanitize-filename": "^1.6.3",
+    "super-result": "^1.4.0",
     "vectra": "^0.12.3",
     "zod": "^4.3.6"
   },
@@ -66,14 +72,18 @@
     "oxlint": "^1.47.0",
     "postject": "^1.0.0-alpha.6",
     "release-it": "^19.2.4",
+    "serve": "^14.2.6",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3",
     "vitest": "^4.0.18"
   },
   "lint-staged": {
     "*.ts": [
-      "oxlint --fix",
-      "oxfmt"
+      "oxfmt",
+      "oxlint --fix"
+    ],
+    "*.md": [
+      "node scripts/update-toc.js"
     ]
   }
 }

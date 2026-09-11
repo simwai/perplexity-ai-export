@@ -1,0 +1,11 @@
+# Topic parent overrides for the knowledge map (pnpm run build:graph).
+#
+# Parents derive from the exports/ directory nesting by default. Add a
+# `child: parent` entry here only when the folders lie, e.g. a flat export
+# directory that belongs under a topic:
+#
+# parents:
+#   'python': 'programming'
+#   'pdm': 'programming/python'
+
+parents:
