@@ -4,7 +4,7 @@ import { http, HttpResponse } from 'msw'
 import { RagOrchestrator } from '../../src/ai/rag-orchestrator.js'
 import { config } from '../../src/utils/config.js'
 import { VectorStore } from '../../src/search/vector-store.js'
-import { RgSearch } from '../../src/search/rg-search.js'
+import { RipgrepSearch } from '../../src/search/rg-search.js'
 import { logger } from '../../src/utils/logger.js'
 import { ok } from 'super-result'
 
@@ -60,7 +60,7 @@ describe('RagOrchestrator (MSW Mocked)', () => {
     // Mock VectorStore.search to return Result with mock data
     vi.spyOn(VectorStore.prototype, 'search').mockResolvedValue(ok(mockSearchOutcome))
     vi.spyOn(VectorStore.prototype, 'validate').mockResolvedValue(undefined)
-    vi.spyOn(RgSearch.prototype, 'captureSearchMatches').mockResolvedValue([])
+    vi.spyOn(RipgrepSearch.prototype, 'captureSearchMatches').mockResolvedValue([])
 
     // Spy on logger.info since that's where the final answer is written (with ℹ prefix)
     const infoSpy = vi.spyOn(logger, 'info').mockImplementation(() => {})

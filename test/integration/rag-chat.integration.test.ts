@@ -4,7 +4,7 @@ import { http, HttpResponse } from 'msw'
 import { RagOrchestrator } from '../../src/ai/rag-orchestrator.js'
 import { config } from '../../src/utils/config.js'
 import { VectorStore } from '../../src/search/vector-store.js'
-import { RgSearch } from '../../src/search/rg-search.js'
+import { RipgrepSearch } from '../../src/search/rg-search.js'
 
 const mockSearchOutcome = [
   {
@@ -65,7 +65,7 @@ describe('RagOrchestrator Chat (MSW Mocked)', () => {
   it('should process a chat turn successfully', async () => {
     vi.spyOn(VectorStore.prototype, 'search').mockResolvedValue(mockSearchOutcome)
     vi.spyOn(VectorStore.prototype, 'validate').mockResolvedValue(undefined)
-    vi.spyOn(RgSearch.prototype, 'captureSearchMatches').mockResolvedValue([])
+    vi.spyOn(RipgrepSearch.prototype, 'captureSearchMatches').mockResolvedValue([])
 
     const ragOrchestratorInstance = new RagOrchestrator(config)
     const response = await ragOrchestratorInstance.chat('Tell me more', [

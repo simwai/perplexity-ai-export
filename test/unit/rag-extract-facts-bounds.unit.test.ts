@@ -12,7 +12,7 @@ vi.mock('../../src/search/vector-store.js', () => {
 
 vi.mock('../../src/search/rg-search.js', () => {
   return {
-    RgSearch: class {
+    RipgrepSearch: class {
       captureSearchMatches = vi.fn().mockResolvedValue([])
     },
     __esModule: true,

@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { RagOrchestrator } from '../../src/ai/rag-orchestrator.js'
 import { VectorStore } from '../../src/search/vector-store.js'
 import { OllamaClient } from '../../src/ai/ollama-client.js'
-import { RgSearch } from '../../src/search/rg-search.js'
+import { RipgrepSearch } from '../../src/search/rg-search.js'
 import { ok, err } from 'super-result'
 
 vi.mock('../../src/search/vector-store.js')
@@ -30,7 +30,7 @@ describe('RagOrchestrator HyDE Modes', () => {
     orchestrator = new RagOrchestrator(config)
     orchestrator.vectorStore = mockVectorStore
     orchestrator.ollamaClient = mockOllamaClient
-    orchestrator.ripgrep = new RgSearch(config)
+    orchestrator.ripgrep = new RipgrepSearch(config)
 
     // Default mocks - return Result objects
     mockOllamaClient.generate.mockResolvedValue(
