@@ -7,7 +7,7 @@ import { createWaitStrategy } from '../utils/wait-strategy.js'
 import { type Config } from '../utils/config.js'
 import { ApiDiagnosticsWriter } from '../utils/api-diagnostics.js'
 import { errorMessageOf } from '../utils/extract-error-message.js'
-import { makeNamedError } from '../utils/errors.js'
+import { createNamedError } from '../utils/errors.js'
 import { DEFAULT_API_VERSION } from './api-version.js'
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -89,13 +89,13 @@ export class ConversationExtractor {
     updated_datetime: z.string().optional(),
   })
 
-  static readonly ExtractionError = makeNamedError('ExtractionError')
-  static readonly NavigationError = makeNamedError('NavigationError')
-  static readonly NotFoundError = makeNamedError('NotFoundError')
-  static readonly AuthError = makeNamedError('AuthError')
-  static readonly ServerError = makeNamedError('ServerError')
-  static readonly NoDataError = makeNamedError('NoDataError')
-  static readonly ParsingError = makeNamedError('ParsingError')
+  static readonly ExtractionError = createNamedError('ExtractionError')
+  static readonly NavigationError = createNamedError('NavigationError')
+  static readonly NotFoundError = createNamedError('NotFoundError')
+  static readonly AuthError = createNamedError('AuthError')
+  static readonly ServerError = createNamedError('ServerError')
+  static readonly NoDataError = createNamedError('NoDataError')
+  static readonly ParsingError = createNamedError('ParsingError')
 
   private static readonly TIMEOUT_MAX_MS = 30_000
   private static readonly TIMEOUT_MIN_MS = 8_000

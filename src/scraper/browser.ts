@@ -4,7 +4,7 @@ import { type Config } from '../utils/config.js'
 import { logger } from '../utils/logger.js'
 import { confirm } from '@inquirer/prompts'
 import { errorMessageOf } from '../utils/extract-error-message.js'
-import { makeNamedError } from '../utils/errors.js'
+import { createNamedError } from '../utils/errors.js'
 import { ok, err, createResult, type Result } from 'super-result'
 import { logHttpRequest, logHttpResponse } from '../utils/http-logger.js'
 
@@ -12,12 +12,12 @@ const SETTINGS_URL = 'https://www.perplexity.ai/settings'
 const NAVIGATION_TIMEOUT_MS = 15_000
 
 export class BrowserManager {
-  static readonly BrowserLaunchError = makeNamedError('BrowserLaunchError')
-  static readonly AuthError = makeNamedError('AuthError')
-  static readonly ContextError = makeNamedError('ContextError')
-  static readonly NavigationError = makeNamedError('NavigationError')
+  static readonly BrowserLaunchError = createNamedError('BrowserLaunchError')
+  static readonly AuthError = createNamedError('AuthError')
+  static readonly ContextError = createNamedError('ContextError')
+  static readonly NavigationError = createNamedError('NavigationError')
 
-  private readonly R = createResult<Error>((error: unknown) =>
+  private readonly resultFactory = createResult<Error>((error: unknown) =>
     error instanceof Error ? error : new Error(String(error))
   )
 
@@ -103,7 +103,7 @@ export class BrowserManager {
   }
 
   private async launchBrowser(headless: boolean | 'new'): Promise<Result<void, Error>> {
-    return this.R.from(async () => {
+    return this.resultFactory.from(async () => {
       const actualHeadlessValue = headless === 'new' ? true : headless
       this.browserInstance = await chromium.launch({
         headless: actualHeadlessValue,
@@ -167,7 +167,7 @@ export class BrowserManager {
 
     this.activePage = await this.activeContext.newPage()
 
-    return this.R.from(async () => {
+    return this.resultFactory.from(async () => {
       await this.activePage!.goto(SETTINGS_URL, {
         timeout: NAVIGATION_TIMEOUT_MS,
       })
@@ -275,11 +275,13 @@ export class BrowserManager {
     const serializedState = JSON.stringify(currentStorageState, null, 2)
     const tmpPath = `${this.config.authStoragePath}.tmp`
 
-    const writeResult = this.R.from(() => writeFileSync(tmpPath, serializedState))
+    const writeResult = this.resultFactory.from(() => writeFileSync(tmpPath, serializedState))
     if (!writeResult.ok) return writeResult
 
     const fs = await import('node:fs')
-    const renameResult = this.R.from(() => fs.renameSync(tmpPath, this.config.authStoragePath))
+    const renameResult = this.resultFactory.from(() =>
+      fs.renameSync(tmpPath, this.config.authStoragePath)
+    )
     if (!renameResult.ok) return renameResult
 
     return ok(undefined)

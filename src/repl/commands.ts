@@ -11,18 +11,18 @@ import { RagOrchestrator } from '../ai/rag-orchestrator.js'
 import { type ChatMessage } from '../ai/ollama-client.js'
 import { logger } from '../utils/logger.js'
 import { errorMessageOf } from '../utils/extract-error-message.js'
-import { makeNamedError } from '../utils/errors.js'
+import { createNamedError } from '../utils/errors.js'
 import { ok, err, type Result } from 'super-result'
 import { showHelp } from './help.js'
 import { LibraryDiscovery } from '../scraper/library-discovery.js'
 import { type Config } from '../utils/config.js'
 
 export class CommandHandler {
-  static readonly ScraperError = makeNamedError('ScraperError')
-  static readonly SearchError = makeNamedError('SearchError')
-  static readonly VectorizeError = makeNamedError('VectorizeError')
-  static readonly ValidationError = makeNamedError('ValidationError')
-  static readonly ResetError = makeNamedError('ResetError')
+  static readonly ScraperError = createNamedError('ScraperError')
+  static readonly SearchError = createNamedError('SearchError')
+  static readonly VectorizeError = createNamedError('VectorizeError')
+  static readonly ValidationError = createNamedError('ValidationError')
+  static readonly ResetError = createNamedError('ResetError')
 
   private readonly checkpointManager: CheckpointManager
   private readonly searchOrchestrator: SearchOrchestrator

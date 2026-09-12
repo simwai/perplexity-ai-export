@@ -1,4 +1,4 @@
-import { RgSearch, type RgSearchOptions } from './rg-search.js'
+import { RipgrepSearch, type RipgrepSearchOptions } from './rg-search.js'
 import { VectorStore } from './vector-store.js'
 import { logger } from '../utils/logger.js'
 import { type Config } from '../utils/config.js'
@@ -23,16 +23,16 @@ export class ValidationError extends Error {
 }
 
 export class SearchOrchestrator {
-  private readonly rgSearch: RgSearch
+  private readonly rgSearch: RipgrepSearch
   private readonly vectorStore: VectorStore
   private readonly ragOrchestrator: RagOrchestrator
 
-  private readonly R = createResult<SearchOrchestratorError>((error: unknown) =>
+  private readonly resultFactory = createResult<SearchOrchestratorError>((error: unknown) =>
     error instanceof SearchOrchestratorError ? error : new SearchOrchestratorError(String(error))
   )
 
   constructor(private readonly config: Config) {
-    this.rgSearch = new RgSearch(config)
+    this.rgSearch = new RipgrepSearch(config)
     this.vectorStore = new VectorStore(config)
     this.ragOrchestrator = new RagOrchestrator(config)
   }
@@ -59,9 +59,9 @@ export class SearchOrchestrator {
   async search(
     query: string,
     mode: SearchMode,
-    rgOptions: RgSearchOptions
+    rgOptions: RipgrepSearchOptions
   ): Promise<Result<void, SearchOrchestratorError>> {
-    return this.R.from(async () => {
+    return this.resultFactory.from(async () => {
       switch (mode) {
         case 'rg':
           await this.rgSearch.search(rgOptions)
@@ -83,7 +83,7 @@ export class SearchOrchestrator {
     })
   }
 
-  private async executeAutoSearch(query: string, rgOptions: RgSearchOptions): Promise<void> {
+  private async executeAutoSearch(query: string, rgOptions: RipgrepSearchOptions): Promise<void> {
     const LONG_QUERY_WORD_COUNT_THRESHOLD = 5
     const queryWordCount = query.trim().split(/\s+/).length
     const isLongQuery = queryWordCount > LONG_QUERY_WORD_COUNT_THRESHOLD

@@ -33,7 +33,7 @@ export class CheckpointManager {
   private readonly checkpointFilePath: string
   private currentState: CheckpointData
 
-  private readonly R = createResult<Error>((error: unknown) =>
+  private readonly resultFactory = createResult<Error>((error: unknown) =>
     error instanceof Error ? error : new Error(String(error))
   )
 
@@ -144,13 +144,15 @@ export class CheckpointManager {
       })
     }
 
-    const readResult = this.R.from(() => readFileSync(this.checkpointFilePath, 'utf-8'))
+    const readResult = this.resultFactory.from(() => readFileSync(this.checkpointFilePath, 'utf-8'))
     if (!readResult.ok) return readResult
 
-    const parseResult = this.R.from(() => JSON.parse(readResult.value))
+    const parseResult = this.resultFactory.from(() => JSON.parse(readResult.value))
     if (!parseResult.ok) return parseResult
 
-    const validateResult = this.R.from(() => CheckpointDataSchema.parse(parseResult.value))
+    const validateResult = this.resultFactory.from(() =>
+      CheckpointDataSchema.parse(parseResult.value)
+    )
     if (!validateResult.ok) {
       logger.warn(
         `Corrupt checkpoint file at ${this.checkpointFilePath}, resetting to defaults: ${validateResult.error}`
@@ -166,14 +168,16 @@ export class CheckpointManager {
   }
 
   private saveCheckpoint(): Result<void, Error> {
-    const serializeResult = this.R.from(() => JSON.stringify(this.currentState, null, 2))
+    const serializeResult = this.resultFactory.from(() =>
+      JSON.stringify(this.currentState, null, 2)
+    )
     if (!serializeResult.ok) return serializeResult
 
     const tmpPath = `${this.checkpointFilePath}.tmp`
-    const writeResult = this.R.from(() => writeFileSync(tmpPath, serializeResult.value))
+    const writeResult = this.resultFactory.from(() => writeFileSync(tmpPath, serializeResult.value))
     if (!writeResult.ok) return writeResult
 
-    const renameResult = this.R.from(() => renameSync(tmpPath, this.checkpointFilePath))
+    const renameResult = this.resultFactory.from(() => renameSync(tmpPath, this.checkpointFilePath))
     if (!renameResult.ok) return renameResult
 
     return ok(undefined)

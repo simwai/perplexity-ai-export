@@ -30,7 +30,7 @@ export class WorkerPool {
   private sharedBrowserContext: BrowserContext | null = null
   private isRefreshing = false
 
-  private readonly R = createResult<Error>((error: unknown) =>
+  private readonly resultFactory = createResult<Error>((error: unknown) =>
     error instanceof Error ? error : new Error(String(error))
   )
 
@@ -41,7 +41,7 @@ export class WorkerPool {
   ) {}
 
   async initialize(): Promise<Result<void, Error>> {
-    return this.R.from(async () => {
+    return this.resultFactory.from(async () => {
       this.sharedBrowserContext = await this.browser.newContext({
         storageState: this.config.authStoragePath,
       })
@@ -140,7 +140,9 @@ export class WorkerPool {
     const spaceSpecificDirectory = join(outputDir, safeSpaceName)
 
     if (!existsSync(spaceSpecificDirectory)) {
-      const mkdirResult = this.R.from(() => mkdirSync(spaceSpecificDirectory, { recursive: true }))
+      const mkdirResult = this.resultFactory.from(() =>
+        mkdirSync(spaceSpecificDirectory, { recursive: true })
+      )
       if (!mkdirResult.ok)
         return err(new Error(`Failed to create directory: ${errorMessageOf(mkdirResult.error)}`))
     }
@@ -157,14 +159,14 @@ export class WorkerPool {
     const content = headerTitle + metadataBlock + conversation.content
 
     const tmpPath = `${destinationFilePath}.tmp`
-    const writeResult = this.R.from(() => writeFileSync(tmpPath, content, 'utf-8'))
+    const writeResult = this.resultFactory.from(() => writeFileSync(tmpPath, content, 'utf-8'))
     if (!writeResult.ok) return writeResult
 
     const fs = await import('node:fs')
-    const renameResult = this.R.from(() => fs.renameSync(tmpPath, destinationFilePath))
+    const renameResult = this.resultFactory.from(() => fs.renameSync(tmpPath, destinationFilePath))
     if (!renameResult.ok) return renameResult
 
-    const verifyResult = this.R.from(() => {
+    const verifyResult = this.resultFactory.from(() => {
       if (!existsSync(destinationFilePath) || statSync(destinationFilePath).size === 0) {
         return err(new Error(`Exported file is missing or empty: ${destinationFilePath}`))
       }
@@ -207,7 +209,7 @@ export class WorkerPool {
   private async refreshContext(): Promise<void> {
     if (this.isRefreshing) return
     this.isRefreshing = true
-    const result = await this.R.from(async () => {
+    const result = await this.resultFactory.from(async () => {
       // best-effort close before re-creating; a stale context is what we are refreshing away.
       await this.sharedBrowserContext?.close().catch(() => {})
       this.sharedBrowserContext = await this.browser.newContext({

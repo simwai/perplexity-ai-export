@@ -1,6 +1,6 @@
 import { VectorStore, type VectorSearchResult } from '../search/vector-store.js'
 import { OllamaClient, type ChatMessage, type LlmResponse } from './ollama-client.js'
-import { RgSearch } from '../search/rg-search.js'
+import { RipgrepSearch } from '../search/rg-search.js'
 import { logger } from '../utils/logger.js'
 import { join } from 'node:path'
 import { type Config } from '../utils/config.js'
@@ -78,22 +78,22 @@ export class RagOrchestrator {
 
   private readonly ollamaClient: OllamaClient
   private readonly vectorStore: VectorStore
-  private readonly ripgrep: RgSearch
+  private readonly ripgrep: RipgrepSearch
 
-  private readonly R = createResult<OrchestratorError>((error: unknown) =>
+  private readonly resultFactory = createResult<OrchestratorError>((error: unknown) =>
     error instanceof OrchestratorError ? error : new OrchestratorError(String(error))
   )
 
   constructor(private readonly config: Config) {
     this.ollamaClient = new OllamaClient(config)
     this.vectorStore = new VectorStore(config)
-    this.ripgrep = new RgSearch(config)
+    this.ripgrep = new RipgrepSearch(config)
   }
 
   async answerQuestion(question: string): Promise<Result<void, OrchestratorError>> {
     logger.info(`Mightiest RAG is analyzing: "${question}"...`)
 
-    return this.R.from(async () => {
+    return this.resultFactory.from(async () => {
       const plan = await this.developResearchPlan(question)
       const results = await this.executeAdaptiveHybridSearch(plan)
       const rerankedResults = await this.crossEncoderRerank(question, results)
@@ -475,7 +475,7 @@ Return JSON array: [{"fact": "...", "node_id": N}]
           throw new OrchestratorError('No JSON array found in response')
         }
         let parsedJson: unknown
-        const parseResult = this.R.from(() => JSON.parse(match[0]!))
+        const parseResult = this.resultFactory.from(() => JSON.parse(match[0]!))
         if (!parseResult.ok) {
           throw new OrchestratorError(
             `Invalid JSON in response: ${errorMessageOf(parseResult.error)}`

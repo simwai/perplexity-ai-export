@@ -2,7 +2,7 @@ import type { Page } from '@playwright/test'
 import { logger } from '../utils/logger.js'
 import { DEFAULT_API_VERSION } from './api-version.js'
 import { errorMessageOf } from '../utils/extract-error-message.js'
-import { makeNamedError } from '../utils/errors.js'
+import { createNamedError } from '../utils/errors.js'
 import { from, ok, err, type Result } from 'super-result'
 
 // #region Constants
@@ -301,8 +301,8 @@ async function fetchFirstBatch(page: Page, version: string): Promise<ThreadBatch
 // #region Main Discovery
 
 export class LibraryDiscovery {
-  static readonly DiscoveryError = makeNamedError('DiscoveryError')
-  static readonly ApiError = makeNamedError('ApiError')
+  static readonly DiscoveryError = createNamedError('DiscoveryError')
+  static readonly ApiError = createNamedError('ApiError')
 
   async discoverAllConversationsFromLibrary(page: Page): Promise<DiscoveredConversationMeta[]> {
     logger.info('Discovering threads via REST API...')

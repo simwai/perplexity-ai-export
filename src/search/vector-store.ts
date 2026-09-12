@@ -41,7 +41,7 @@ export class SearchError extends Error {
 export class VectorStore {
   private readonly vectorIndex: LocalIndex
   private readonly ollamaClient: OllamaClient
-  private readonly R = createResult<VectorStoreError>((error: unknown) =>
+  private readonly resultFactory = createResult<VectorStoreError>((error: unknown) =>
     error instanceof VectorStoreError ? error : new VectorStoreError(String(error))
   )
 
@@ -111,11 +111,11 @@ export class VectorStore {
   }
 
   private async ensureIndexExists(): Promise<Result<void, VectorStoreError>> {
-    const checkResult = await this.R.from(() => this.vectorIndex.isIndexCreated())
+    const checkResult = await this.resultFactory.from(() => this.vectorIndex.isIndexCreated())
     if (!checkResult.ok) return checkResult
 
     if (!checkResult.value) {
-      const createResult = await this.R.from(() => this.vectorIndex.createIndex())
+      const createResult = await this.resultFactory.from(() => this.vectorIndex.createIndex())
       if (!createResult.ok) return createResult
     }
     return ok(undefined)
@@ -143,7 +143,7 @@ export class VectorStore {
   ): Promise<Result<void, VectorStoreError>> {
     await this.vectorIndex.beginUpdate()
 
-    const batchResult = await this.R.from(async () => {
+    const batchResult = await this.resultFactory.from(async () => {
       const EMBEDDING_BATCH_SIZE = 10
       let pendingTextsToEmbed: string[] = []
       let pendingMetadataToInsert: VectorDocMeta[] = []
@@ -164,11 +164,11 @@ export class VectorStore {
           })
 
           if (pendingTextsToEmbed.length >= EMBEDDING_BATCH_SIZE) {
-            const failure = await this.processAndInsertEmbeddingBatch(
+            const batchFailure = await this.processAndInsertEmbeddingBatch(
               pendingTextsToEmbed,
               pendingMetadataToInsert
             )
-            if (failure) batchFailures.push(failure)
+            if (batchFailure) batchFailures.push(batchFailure)
             pendingTextsToEmbed = []
             pendingMetadataToInsert = []
           }
@@ -180,11 +180,11 @@ export class VectorStore {
       }
 
       if (pendingTextsToEmbed.length > 0) {
-        const failure = await this.processAndInsertEmbeddingBatch(
+        const batchFailure = await this.processAndInsertEmbeddingBatch(
           pendingTextsToEmbed,
           pendingMetadataToInsert
         )
-        if (failure) batchFailures.push(failure)
+        if (batchFailure) batchFailures.push(batchFailure)
       }
 
       if (batchFailures.length > 0) {
@@ -242,17 +242,17 @@ export class VectorStore {
   ): Promise<string | null> {
     const embedResult = await this.ollamaClient.embed(batchTexts)
     if (!embedResult.ok) {
-      const msg = `Batch embedding failed: ${errorMessageOf(embedResult.error)}`
-      errorBus.emitError(msg)
-      return msg
+      const errorMessage = `Batch embedding failed: ${errorMessageOf(embedResult.error)}`
+      errorBus.emitError(errorMessage)
+      return errorMessage
     }
 
     const embeddingVectors = embedResult.value
 
     if (embeddingVectors.length !== batchMetas.length) {
-      const msg = `Embedding count (${embeddingVectors.length}) != metadata count (${batchMetas.length})`
-      errorBus.emitError(msg)
-      return msg
+      const errorMessage = `Embedding count (${embeddingVectors.length}) != metadata count (${batchMetas.length})`
+      errorBus.emitError(errorMessage)
+      return errorMessage
     }
 
     for (let i = 0; i < embeddingVectors.length; i++) {
@@ -288,10 +288,10 @@ export class VectorStore {
     queryString: string,
     resultLimit: number
   ): Promise<Result<QueryResult<VectorDocMeta>[], SearchError>> {
-    const searchR = createResult<SearchError>((error: unknown) =>
+    const searchResultFactory = createResult<SearchError>((error: unknown) =>
       error instanceof SearchError ? error : new SearchError(String(error))
     )
-    return searchR.from(async () => {
+    return searchResultFactory.from(async () => {
       const results = await this.vectorIndex.queryItems<VectorDocMeta>(
         queryEmbedding,
         queryString,
@@ -302,9 +302,9 @@ export class VectorStore {
   }
 
   private formatVectorSearchResults(
-    rawResults: QueryResult<VectorDocMeta>[]
+    queryResults: QueryResult<VectorDocMeta>[]
   ): VectorSearchResult[] {
-    return rawResults.map((result) => ({
+    return queryResults.map((result) => ({
       meta: result.item.metadata,
       score: result.score,
     }))

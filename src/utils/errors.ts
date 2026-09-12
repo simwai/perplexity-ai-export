@@ -1,6 +1,6 @@
 import { errorMessageOf } from './extract-error-message.js'
 
-export function makeNamedError(
+export function createNamedError(
   name: string
 ): new (
   message: string,
@@ -38,7 +38,7 @@ export function extractErrorContext(error: unknown): Record<string, unknown> | u
 }
 
 export function formatErrorForLog(error: unknown): string {
-  const msg = errorMessageOf(error)
+  const errorMessage = errorMessageOf(error)
   const ctx = extractErrorContext(error)
-  return ctx ? `${msg} | context: ${JSON.stringify(ctx)}` : msg
+  return ctx ? `${errorMessage} | context: ${JSON.stringify(ctx)}` : errorMessage
 }

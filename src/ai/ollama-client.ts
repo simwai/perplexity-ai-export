@@ -47,7 +47,7 @@ export class OllamaError extends Error {
 }
 
 export class OllamaClient {
-  private readonly R = createResult<OllamaError>((error: unknown) =>
+  private readonly resultFactory = createResult<OllamaError>((error: unknown) =>
     error instanceof OllamaError ? error : new OllamaError(String(error))
   )
 
@@ -77,7 +77,9 @@ export class OllamaClient {
     const httpResult = await this.performOllamaHttpRequest('/api/generate', requestBody)
     if (!httpResult.ok) return httpResult
 
-    const parseResult = this.R.from(() => generationResponseSchema.parse(httpResult.value))
+    const parseResult = this.resultFactory.from(() =>
+      generationResponseSchema.parse(httpResult.value)
+    )
     if (!parseResult.ok) return parseResult
 
     return ok(parseResult.value.response || '')
@@ -96,7 +98,9 @@ export class OllamaClient {
     const httpResult = await this.performOllamaHttpRequest('/api/generate', requestBody)
     if (!httpResult.ok) return httpResult
 
-    const parseResult = this.R.from(() => generationResponseSchema.parse(httpResult.value))
+    const parseResult = this.resultFactory.from(() =>
+      generationResponseSchema.parse(httpResult.value)
+    )
     if (!parseResult.ok) return parseResult
 
     const data = parseResult.value
@@ -123,7 +127,9 @@ export class OllamaClient {
     const httpResult = await this.performOllamaHttpRequest('/api/chat', requestBody)
     if (!httpResult.ok) return httpResult
 
-    const parseResult = this.R.from(() => generationResponseSchema.parse(httpResult.value))
+    const parseResult = this.resultFactory.from(() =>
+      generationResponseSchema.parse(httpResult.value)
+    )
     if (!parseResult.ok) return parseResult
 
     const data = parseResult.value

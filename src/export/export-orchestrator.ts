@@ -19,7 +19,7 @@ export class ExportError extends Error {
 export class ExportOrchestrator {
   static readonly ExportError = ExportError
 
-  private readonly R = createResult<ExportError>((error: unknown) =>
+  private readonly resultFactory = createResult<ExportError>((error: unknown) =>
     error instanceof ExportError ? error : new ExportError(String(error))
   )
 
@@ -47,7 +47,7 @@ export class ExportOrchestrator {
         (file.endsWith('.strategy.ts') || file.endsWith('.strategy.js')) &&
         !file.endsWith('.d.ts')
       ) {
-        const importResult = await this.R.from(async () => {
+        const importResult = await this.resultFactory.from(async () => {
           const filePath = join(strategiesDir, file)
           const moduleUrl = pathToFileURL(filePath).href
           const strategyModule = await import(moduleUrl)
@@ -86,7 +86,7 @@ export class ExportOrchestrator {
       const spaceSpecificDirectory = join(outputDir, safeSpaceName)
 
       if (!existsSync(spaceSpecificDirectory)) {
-        const mkdirResult = this.R.from(() =>
+        const mkdirResult = this.resultFactory.from(() =>
           mkdirSync(spaceSpecificDirectory, { recursive: true })
         )
         if (!mkdirResult.ok) {
@@ -104,7 +104,9 @@ export class ExportOrchestrator {
       this.cleanupStaleFiles(conversation.id, destinationFilePath, strategy.fileExtension)
 
       const content = strategy.format(conversation)
-      const writeResult = this.R.from(() => writeFileSync(destinationFilePath, content, 'utf-8'))
+      const writeResult = this.resultFactory.from(() =>
+        writeFileSync(destinationFilePath, content, 'utf-8')
+      )
       if (!writeResult.ok) {
         logger.error(
           `Failed to export with ${strategy.name} for ${conversation.id}: ${errorMessageOf(writeResult.error)}`
@@ -112,7 +114,7 @@ export class ExportOrchestrator {
         continue
       }
 
-      const verifyResult = this.R.from(() => {
+      const verifyResult = this.resultFactory.from(() => {
         if (!existsSync(destinationFilePath) || statSync(destinationFilePath).size === 0) {
           return err(
             new ExportOrchestrator.ExportError(
@@ -145,7 +147,7 @@ export class ExportOrchestrator {
 
   private ensureRootExportDirectoryExists(): void {
     if (!existsSync(this.config.exportDir)) {
-      this.R.from(() => mkdirSync(this.config.exportDir, { recursive: true }))
+      this.resultFactory.from(() => mkdirSync(this.config.exportDir, { recursive: true }))
     }
   }
 
@@ -165,7 +167,7 @@ export class ExportOrchestrator {
       if (!existsSync(baseDir)) continue
       for (const staleFile of this.findFilesBySuffix(baseDir, suffix)) {
         if (staleFile !== currentFilePath) {
-          const unlinkResult = this.R.from(() => unlinkSync(staleFile))
+          const unlinkResult = this.resultFactory.from(() => unlinkSync(staleFile))
           if (unlinkResult.ok) {
             logger.debug(`Cleaned up stale export: ${staleFile}`)
           } else {
@@ -182,7 +184,7 @@ export class ExportOrchestrator {
     const results: string[] = []
 
     const scanDirectory = (dir: string): void => {
-      const readDirResult = this.R.from(() => readdirSync(dir))
+      const readDirResult = this.resultFactory.from(() => readdirSync(dir))
       if (!readDirResult.ok) {
         // why: directory may be missing or unreadable mid-walk; treat as empty
         return
@@ -191,7 +193,7 @@ export class ExportOrchestrator {
       const entries = readDirResult.value
       for (const entry of entries) {
         const fullPath = join(dir, entry)
-        const statResult = this.R.from(() => statSync(fullPath))
+        const statResult = this.resultFactory.from(() => statSync(fullPath))
         if (!statResult.ok) {
           // why: entry may be a broken symlink or transient FS race; skip
           continue
