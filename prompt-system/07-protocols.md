@@ -665,6 +665,10 @@ The commit/push gate verifies both lock types:
 - For a dependency lock: the session must hold the dependency lock whose `dependencies.txt` covers the staged file.
 
 After the lock check, the re-read-and-diff step runs on every staged file to catch the read-then-write race.
+
+#### Partial locks
+
+When a partial handoff is in effect, the lock scope covers only the confirmed items' files and their dependency graph. Pending items' files remain unlocked for future review or implementation. The lock directory name and `dependencies.txt` reflect the partial scope, and the session state records the scoped coverage under `## Locked Paths`.
 </HIGH_PRIO>
 
 ## Spec lifecycle
@@ -996,6 +1000,19 @@ When `PARALLEL_REVIEW` completes, N BabaSensei reviewers and BabaTester subagent
 
 6. **Merge audit**: BabaReviewer verifies that rules 1-5 were applied correctly and emits the final merge verdict (`merged: complete` or `merged: FAIL`). Any merge-protocol violation is flagged as a hard-tier finding before the session proceeds to REVIEW.
 
+### Merge Complexity Warning
+
+When N > 8, emit warning: "Merge complexity is high; consider consolidating reviewers."
+When N > 12, emit warning: "Merge may exceed 10 minutes; consider splitting into two review passes."
+
+### Partial Merge
+
+When streaming partial handoffs are active, the merge protocol supports partial output:
+- Confirmed findings merge immediately into unified `accepted_violations`, `excluded_violations`, `preserve_constraints` lists.
+- Pending findings remain in partitioned `## Sensei State N` sections and are not merged until confirmed.
+- The merge verdict includes `merged: partial` when pending items remain.
+- A subsequent merge run consumes the pending partitions and produces `merged: complete`.
+
 ### Conflict Detection
 
 Conflicts are detected when:
@@ -1028,8 +1045,8 @@ The REVIEW phase template displays: `Parallel progress: [sensei-1: batch 3/5, se
    - `utils/`, `helpers/`, `lib/` → utils
    - `tests/`, `spec/`, `__tests__/` → tests
 3. **Assign reviewers**: Group files by layer; assign one reviewer per non-empty layer group
-4. **Auto-size**: N = min(ceil(total_files / 50), 4) reviewers (cap at 4)
-5. **Overflow**: If >4 layer groups, merge smallest groups until ≤4 reviewers
+4. **Auto-size**: N = max(1, ceil(total_files / 20)) reviewers
+5. **Overflow**: If layer groups > N, merge smallest groups until ≤ N reviewers
 
 Each reviewer receives only its layer's files and writes to its `## Sensei State {index}` section.
 

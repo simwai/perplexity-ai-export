@@ -88,6 +88,9 @@ The handing-off persona must include the fields required by the receiver's entry
 | `definition_of_done` | BabaScrumMaster -> review persona | Task definition-of-done list |
 | `spec_version` | Optional, any persona -> any persona | Spec version the work targets (n/a when no spec is in scope) |
 | `drift_findings` | DRIFT -> PLAN/BabaDev | Drift report findings carried forward (n/a when DRIFT did not run) |
+| `partial_handoff` | Optional, any persona -> any persona | Boolean indicating partial vs full handoff |
+| `pending_review_items` | Optional, any persona -> any persona | List of findings still under review |
+| `scope` | Optional, any persona -> any persona | `partial` or `full` |
 
 ### Receiving-persona validation
 
@@ -156,6 +159,10 @@ Milestone: [id or "n/a"]
 Definition of done: [list or "n/a"]
 Spec version: [x.y.z or "n/a"]
 Drift findings: [drift report findings or "n/a -- DRIFT did not run"]
+Partial handoff: [yes|no]
+Pending review items:
+- [finding_id] -- [file] -- [status: reviewing]
+Scope: [partial|full]
 
 Status: Contract complete. Receiver may begin at [entry phase].
 ```

@@ -430,9 +430,11 @@ Normal order: `STARTUP -> CHECKLIST -> DOCS -> REVIEW -> PLAN -> PATCH`
 
 Parallel docs branch (auto when multiple dependency types detected): `STARTUP -> CHECKLIST -> DOCS_PARALLEL -> REVIEW -> PLAN -> PATCH`
 
-Parallel review branch (auto when CHECKLIST inventory > 1 file and not greenfield/single-file): `STARTUP -> CHECKLIST -> DOCS -> PARALLEL_REVIEW -> REVIEW -> PLAN -> PATCH` (partitions file inventory by architectural layer; spawns N BabaSensei reviewers up to 4, plus BabaTester; N = min(ceil(files/50), 4))
+Parallel review branch (auto when CHECKLIST inventory > 1 file and not greenfield/single-file): `STARTUP -> CHECKLIST -> DOCS -> PARALLEL_REVIEW -> REVIEW -> PLAN -> PATCH` (partitions file inventory by architectural layer; spawns N BabaSensei reviewers, plus BabaTester; N = max(1, ceil(files / 20)))
 
 Combined parallel branch: `STARTUP -> CHECKLIST -> DOCS_PARALLEL -> PARALLEL_REVIEW -> REVIEW -> PLAN -> PATCH`
+
+Streaming partial branch: `STARTUP -> CHECKLIST -> DOCS -> REVIEW -> PLAN (partial) -> PATCH (partial)` while REVIEW continues for pending items.
 
 Optional upstream (BabaScrumMaster only, skipped by default): `STARTUP -> INTAKE -> BACKLOG -> SPRINT -> TASK_PLAN -> SPEC -> CHECKLIST`
 
@@ -469,7 +471,7 @@ In `DIRECT` mode, do not force the request through `CHECKLIST`, `REVIEW`, or `PL
 - `CHECKLIST -> DOCS`: docs-sensitive judgment in scope; single dependency type or `/noparallel` flag.
 - `CHECKLIST -> DOCS_PARALLEL`: docs-sensitive judgment in scope; multiple dependency types detected (npm, pip, cargo, go, maven, gradle, etc.).
 - `CHECKLIST -> REVIEW`: docs out of scope, every checklist checkbox ticked; single-file target or `/noparallel` flag.
-- `CHECKLIST -> PARALLEL_REVIEW`: docs out of scope, every checklist checkbox ticked; multi-file inventory (>1) and not greenfield. Partitions file inventory by architectural layer; N = min(ceil(files/50), 4) BabaSensei reviewers + BabaTester.
+- `CHECKLIST -> PARALLEL_REVIEW`: docs out of scope, every checklist checkbox ticked; multi-file inventory (>1) and not greenfield. Partitions file inventory by architectural layer; N = max(1, ceil(files / 20)) BabaSensei reviewers + BabaTester.
 - `CHECKLIST -> PLAN`: greenfield branch (no existing source files, skip recorded).
 - `DOCS -> REVIEW`: docs evidence records dependency name, version, URL, impact.
 - `DOCS -> PARALLEL_REVIEW`: docs evidence complete; multi-file inventory (>1) and not greenfield.
@@ -477,6 +479,8 @@ In `DIRECT` mode, do not force the request through `CHECKLIST`, `REVIEW`, or `PL
 - `DOCS_PARALLEL -> PARALLEL_REVIEW`: all parallel lookup groups complete; multi-file inventory (>1) and not greenfield.
 - `PARALLEL_REVIEW -> REVIEW`: all N BabaSensei reviewers + BabaTester subagents complete; merge protocol produces unified findings (Sensei authority on H1-H12, union on S1-S20).
 - `REVIEW -> PLAN`: user confirmed the REVIEW decision section.
+- `REVIEW -> PLAN (partial)`: confirmed items exist, user approves partial handoff.
+- `PLAN (partial) -> PATCH (partial)`: plan approval for scoped items.
 - `REVIEW -> TEST_STRATEGY`: active persona is BabaTester and user confirmed.
 - `REVIEW -> DRIFT`: spec exists on disk (or user explicitly requested drift analysis) and the phase can run read-only.
 - `TEST_STRATEGY -> HANDOFF`: TEST_STRATEGY output complete, receiving persona identified.
@@ -506,6 +510,7 @@ In `DIRECT` mode, do not force the request through `CHECKLIST`, `REVIEW`, or `PL
 - Phase skips decided by model judgment transition automatically, no user confirmation.
 - **No patch before approved plan.**
 - **No patch before complete rewrite contract.**
+- **No partial handoff without explicit scope**: confirmed items list, pending items list, and user approval.
 - No mixed-phase response; do not skip forward to a later phase.
 - Do not continue after failure without an explicit retry request.
 - No findings from DISCUSS without explicit user promotion.

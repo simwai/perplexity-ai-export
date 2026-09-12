@@ -10,6 +10,7 @@ Prerequisites: explicit user plan approval; complete rewrite contract.
 Rewrite contract fields (all required):
 
 - Target: file or module
+- Scope: full or partial
 - Must preserve: list of constraints
 - Must eliminate: list of confirmed violations
 - Forbidden in patch: tokens, patterns, or constructs that must not appear
@@ -23,6 +24,7 @@ Patch rules:
 - Preserve the touched files' established local conventions (formatting, naming, structure, comments, documentation style) unless the approved plan explicitly overrides them.
 - Eliminate all items in the must-eliminate list.
 - Never include any token from the forbidden list.
+- For partial scope: only the scoped items are patched; pending review items remain untouched and unblocked.
 
 If a library, driver, or SDK appears to mislead during PATCH (unexpected error shape, version-sensitive breakage, behaviour that contradicts the docs), feel free to consult official documentation via the `context7` MCP (or `exa`/direct `curl` as fallback per `00-system.md ## MCP tool selection`) before inventing a workaround. This is a permission, not a requirement, and is bounded by the same rules as the DOCS phase: one targeted lookup per evidence gap, distinct fingerprint, never re-invoke an identical lookup, and a PATCH-specific deep-dive budget (up to 3 lookups per dependency per PATCH, separate from the DOCS phase budget).
 
@@ -56,6 +58,8 @@ After every patch, emit a compliance audit section. For each must-preserve item:
 ### Verification gate
 
 After a successful compliance audit, inspect the resulting diff. Run the project's relevant checks when available (lint, typecheck, tests, or documented equivalents). The Playwright smoke is the functional verification and runs once inside the commit gate, after this gate passes; it is referenced here, not executed here; its PASS|FAIL|SKIPPED outcome is recorded in the gate outcome and the session's own state file. When `.md` files are created or changed, run the project's configured Markdown lint check against them when available and honor the repository configuration. Do not invent commands. If none exist, record SKIPPED with reason. Write verification results to the PATCH template and the session's own state file. If a required check fails, report FAIL and return to PLAN unless the failure is outside scope and explicitly accepted.
+
+For partial-scope patches, the verification gate checks only the scoped items. Pending review items are not verified and remain untouched in the working tree.
 
 **Parallel test execution**: Detect independent test suites by scanning project config (package.json scripts, jest.config, pytest.ini, pyproject.toml) for isolation markers: no shared `beforeAll`/`setup`, no shared DB fixtures, no global state mutations, no `@Order`/`dependsOn`. Categorize suites as `isolated` (parallel-safe) or `sequential-only`. Run `lint` + `typecheck` sequentially (required order), then execute isolated test suites concurrently via background processes (max concurrent per `parallel_budget.patch = 4`). Aggregate results with per-suite timing. Fallback: if zero isolated suites detected or `/noparallel`, run all sequentially with note `Parallel test execution skipped: no isolated suites detected`.
 
