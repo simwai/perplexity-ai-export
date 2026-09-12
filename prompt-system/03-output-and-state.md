@@ -198,6 +198,7 @@ Hard tier:
 - [ ] H10
 - [ ] H11
 - [ ] H12
+  - Greenfield skip: mark `[x] H1-H12 -- skipped (greenfield)` when CHECKLIST/REVIEW are skipped per the greenfield branch.
 
 Soft tier:
 - [ ] S1
@@ -217,6 +218,7 @@ Soft tier:
 - [ ] S15
 - [ ] S16
 - [ ] S17
+  - Greenfield skip: mark `[x] S1-S17 -- skipped (greenfield)` when CHECKLIST/REVIEW are skipped per the greenfield branch.
 
 Logical tier (L1-L10):
 - [ ] L1
@@ -229,6 +231,7 @@ Logical tier (L1-L10):
 - [ ] L8
 - [ ] L9
 - [ ] L10
+  - Greenfield skip: mark `[x] L1-L10 -- skipped (greenfield)` when CHECKLIST/REVIEW are skipped per the greenfield branch.
 
 Verification:
 - Build: pending -- [command]
@@ -243,7 +246,11 @@ Batch log:
 Verdict: Pending
 ```
 
-Tick semantics: an inventory row is ticked `[x]` when it is recorded in the inventory with its status; the status field is review progress and flips (`pending` -> `reviewed`, `reviewing` -> `complete`) inside REVIEW, never inside CHECKLIST. A `[x]` on a status claiming completed review that has not run is a false tick and a protocol breach; a `[x]` on a row whose status is `pending` is the expected checklist state, not a false tick. The hard/soft-tier lines are coverage-scope records (in scope / out of scope), decided at checklist time.
+Tick semantics: Two checkbox types exist in CHECKLIST:
+- **Inventory rows**: `[x]` = item recorded in inventory with status. Status field flips (`pending` -> `reviewed`, `reviewing` -> `complete`) inside REVIEW, never inside CHECKLIST. A `[x]` on inventory row with status `pending` is the expected checklist state.
+- **Hard/soft-tier lines**: `[x]` = coverage decision (in scope / out of scope), decided at checklist time. These do not flip during REVIEW.
+
+A `[x]` on an inventory row whose status claims `reviewed`/`complete` but review has not run is a false tick and a protocol breach. The hard/soft-tier lines are coverage-scope records only.
 
 ## `SPEC` template
 
@@ -395,7 +402,7 @@ Merge protocol: See 07-protocols.md `## REVIEW Merge Protocol`
 Output: Unified findings written to main session state on merge complete
 ```
 
-This phase runs automatically when CHECKLIST inventory > 1 file. Partitions file inventory by architectural layer (controllers/, services/, repositories/, middleware/, components/, hooks/, stores/, utils/, tests/); spawns N BabaSensei reviewers (N = min(ceil(files/50), 4)) + BabaTester. The merge step produces unified findings for the consolidated REVIEW phase.
+This phase runs automatically when CHECKLIST inventory > 1 file and not greenfield. Partitions file inventory by architectural layer (controllers/, services/, repositories/, middleware/, components/, hooks/, stores/, utils/, tests/); spawns N BabaSensei reviewers (N = min(ceil(files/50), 4)) + BabaTester. The merge step produces unified findings for the consolidated REVIEW phase.
 ```
 
 ## `REVIEW` template
@@ -662,7 +669,7 @@ Retry: Reply with "retry" to resume at the last valid phase.
 
 ## Session state file
 
-The session state file is `SESSION_STATE-<session_id>.md` and is the standing persistence between turns and between sessions. Required sections:
+The session state file is `SESSION_STATE-<session_id>.md`, lives at the repository root, and is gitignored. It is the standing persistence between turns and between sessions. Required sections:
 
 ```markdown
 # Session State
@@ -677,13 +684,20 @@ current_phase: [phase]
 last_valid_phase: [phase]
 mode: [AUTO|DIRECT|STRUCTURED]
 style_policy: [preserve-local|upgrade-house-style]
-style_policy_source: [STYLE_POLICY.md artifact|INTAKE Stack/Style field|SKIPPED: file-edit|auto-trigger pending]
+style_policy_source: [STYLE_POLICY.md artifact|INTAKE Stack/Style field|SKIPPED: file-edit -- no write access; policy recorded in conversation carrier|auto-trigger pending]
 style_policy_resolved: [yes|no]
+startup_verified: [true|false]
+startup_fingerprint:
+  line_count: [number]
+  first_100_chars: "[string]"
+  last_100_chars: "[string]"
+  sha256_first_1kb: "[hash or N/A]"
+  verified_at: [ISO-8601 UTC]
 
 ## Startup Verification
 
 AGENTS.md: [cited rule]
-00-system.md: [cited rule] — fingerprint: <line_count> lines, first_100_chars="<first 100 chars>", sha256_first_1kb="<hash or N/A>"
+00-system.md: [cited rule] — fingerprint: <line_count> lines, first_100_chars="<first 100 chars>", last_100_chars="<last 100 chars>", sha256_first_1kb="<hash or N/A>"
 01-personas.md: [cited rule]
 03-output-and-state.md: [cited rule]
 04-rubrics.md: [cited rule]
@@ -736,6 +750,10 @@ plan_actual_history: [list of (timestamp, items, verdict) tuples]
 <!-- Per-item records consumed by the Plan-Versus-Actual Gate. -->
 
 - format: pass|fail|exit:N|regex:<pat>|contains:<s>|silent
+
+## Read Ledger
+
+- [fingerprint] -- [result digest]
 
 ## Plan-Actual History
 

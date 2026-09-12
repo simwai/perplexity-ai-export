@@ -60,7 +60,7 @@ This is not a security boundary; it is a guard against accidental plan-author mi
 - If still RED, one more fix pass (the 2nd retry), then escalate.
 - On the 2nd retry still RED: emit `BLOCKED` with `Reason: plan-vs-actual gate failed after 2 retries; see the Plan-Actual block in PATCH for the FAIL list` and refuse to emit the commit/push ask. The session returns to PLAN with a specific gap report; the user re-plans the missing items.
 - A scope violation (a new file in the diff that was not in the FAIL list, or any edit outside the FAIL list) bypasses the retry budget: the gate escalates to BLOCKED on the first violation, with `Reason: plan-vs-actual gate scope violation -- retry produced changes outside the FAIL list`. No third attempt.
-- The retry counter is per PATCH step, not per session. A fresh PLAN approval resets the counter.
+- The retry counter is per PATCH execution (per plan approval), not per session. A fresh PLAN approval resets the counter.
 
 ### Staging interaction
 

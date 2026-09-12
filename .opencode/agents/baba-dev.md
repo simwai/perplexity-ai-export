@@ -13,10 +13,11 @@ Read `prompt-system/00-system.md` (orchestrator + routing + loop protection + RE
 credentials), `prompt-system/01-personas.md` (finding the BabaDev section),
 `prompt-system/05-impl-style.md` (selecting the active stack section),
 `prompt-system/06-misc.md` (PATCH protocol + commit/push gate), `prompt-system/07-protocols.md`
-(pre-commit + cross-team + session file locks when in scope), and
-`prompt-system/03-output-and-state.md` (phase templates + session state schema). Before
-emitting `[PHASE:X]` verify the Read Ledger contains these files; if missing, `read`
-it now.
+(pre-commit + cross-team + session file locks when in scope),
+`prompt-system/03-output-and-state.md` (phase templates + session state schema),
+`prompt-system/04-rubrics.md` (H1-H12, S1-S20), and `prompt-system/08-plan-actual-gate.md`
+(Plan-Versus-Actual Gate). Before emitting `[PHASE:X]` verify the Read Ledger contains
+these files; if missing, `read` it now.
 
 Implement only from an approved plan and complete rewrite contract. Do not
 bypass review or invent scope. Make the smallest architecturally sound change,

@@ -1,6 +1,6 @@
 # 04-rubrics
 
-Hard-tier (H1-H12) and soft-tier (S1-S17) review rubrics. Hard-tier items block the PLAN phase until accepted or excluded with justification in the REVIEW decision section. Soft-tier items are quality concerns; flag and discuss, do not hard-block.
+Hard-tier (H1-H12) and soft-tier (S1-S20) review rubrics. Hard-tier items block the PLAN phase until accepted or excluded with justification in the REVIEW decision section. Soft-tier items are quality concerns; flag and discuss, do not hard-block.
 
 ## Hard tier (H1-H12) <HIGH_PRIO>
 
@@ -24,11 +24,11 @@ Hard-tier (H1-H12) and soft-tier (S1-S17) review rubrics. Hard-tier items block 
 
 **H10 -- Python type safety (Python only): missing type annotations on function signatures.** Applies to parameters and return type. `Any` requires inline `# pyrefly: ignore` with reason.
 
-**H11 -- Runnable artifact (verdict-gate criterion).** The project must build/compile, start (smoke: boot, or library import/entry-point load), pass the existing functional test suite, and pass a Playwright e2e smoke (navigate to the deployed/preview URL, click through 1-2 critical user flows). Applies once per session/aggregate at verdict time, not per chunk. Exclusion allowed only with justification recorded in the REVIEW decision section (e.g., no test suite exists, execution environment unavailable, or suite failing on a pre-existing baseline). Do not invent commands. If none exist, record SKIPPED with reason.
+**H11 -- Runnable artifact (verdict-gate criterion).** The project must build/compile, start (smoke: boot, or library import/entry-point load), pass the existing functional test suite, and pass a Playwright e2e smoke (navigate to the deployed/preview URL, click through 1-2 critical user flows). Applies once per session/aggregate at verdict time, not per chunk. SKIPPED allowed only with justification recorded in the REVIEW decision section (e.g., no test suite exists, execution environment unavailable, or suite failing on a pre-existing baseline). Do not invent commands. If none exist, record SKIPPED with reason.
 
 **H12 -- Idiom consistency: a change introduces an error-handling or style idiom that conflicts with the dominating pattern of the file or codebase** (e.g., `try/catch` in an exit-code-guard script, Result-wrapping in an exception-style codebase, a new failure idiom for an operation the file already handles). Confirmed when the file's established idiom is evident from uniform usage or an in-code comment. When the imported idiom cannot detect the failure it claims to handle, H9 applies alongside.
 
-## Soft tier (S1-S17)
+## Soft tier (S1-S20)
 
 **S1 -- Naming: unclear, misleading, or inconsistent identifiers.**
 
@@ -64,7 +64,7 @@ Hard-tier (H1-H12) and soft-tier (S1-S17) review rubrics. Hard-tier items block 
 
 **S17 -- Tell, don't ask (Law of Demeter): a method reaches through another object to access its parts (`a.b.c.d`); the behavior belongs on the inner object.** A chain of more than one dot is a Demeter violation unless the chain is a fluent-builder return value (Martin, *Clean Code* ch. 6 / ch. 12 "Objects and Data Structures" -- The Law of Demeter).
 
-**S18 -- Full Comprehension Read violation: using sliced/partial file reads instead of reading files in full (largest window, offset-chunked when large) before editing, judging, or reviewing.** This includes all related files: callers, importers, dependencies, and transitive dependents. Partial reads reduce accuracy and are prohibited per `00-system.md` Rules always in force. **Exception**: the initial load of all 8 system files at STARTUP MUST read each file in a single read with NO chunking.
+**S18 -- Full Comprehension Read violation: using sliced/partial file reads instead of reading files in full (largest window, offset-chunked when large) before editing, judging, or reviewing.** This includes all related files: callers, importers, dependencies, and transitive dependents. Partial reads reduce accuracy and are prohibited per `00-system.md` `## Identity` `### Rules always in force` (Full Comprehension Read rule). **Exception**: the initial load of all 8 system files at STARTUP MUST read each file in a single read with NO chunking.
 
 **S19 -- Log Output Calls in agent-generated code: debug prints (`console.log`, `print`, `Write-Host`, `printf`, etc.) left in generated or edited code.** These reduce accuracy and pollute the transcript. Evidence must come from `file:line` inspected, command output, validation-loop pass, or explicit user acceptance per `00-system.md` Loop protection / Log output prohibition.
 

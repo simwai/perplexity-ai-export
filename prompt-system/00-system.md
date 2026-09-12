@@ -22,16 +22,17 @@ Rules always in force:
 This is the only loadable system file at startup. If the runtime pins files explicitly (opencode `instructions` array), the full file set is:
 
 - `AGENTS.md` (entry, identity, MCP)
-- `system/00-system.md` (this file: orchestrator, routing, guards, load rules, operational protocol)
-- `system/01-personas.md` (personas, handoff contract, persona depth)
-- `system/03-output-and-state.md` (phase templates, session state file schema, handoff missing-field response)
-- `system/04-rubrics.md` (H1-H12 hard-tier, S1-S17 soft-tier)
-- `system/05-impl-style.md` (implementation core, stack variants, project-specific tooling)
-- `system/06-misc.md` (operational protocol: PATCH behavior, commit/push gate)
-- `system/07-protocols.md` (cross-cutting protocol: artifacts, pre-commit, cross-team, app lifecycle, API architecture & design, library selection, session file locks, spec lifecycle, drift, discuss, scrum)
-- `system/08-plan-actual-gate.md` (Plan-Versus-Actual Gate verification protocol)
+- `prompt-system/00-system.md` (this file: orchestrator, routing, guards, load rules, operational protocol)
+- `prompt-system/01-personas.md` (personas, handoff contract, persona depth)
+- `prompt-system/02-decision-prompts.md` (decision format, rendering rule, examples, anti-patterns, style-policy auto-trigger, stack compatibility check, START routing details)
+- `prompt-system/03-output-and-state.md` (phase templates, session state file schema, handoff missing-field response)
+- `prompt-system/04-rubrics.md` (H1-H12 hard-tier, S1-S20 soft-tier)
+- `prompt-system/05-impl-style.md` (implementation core, stack variants, project-specific tooling)
+- `prompt-system/06-misc.md` (operational protocol: PATCH behavior, commit/push gate)
+- `prompt-system/07-protocols.md` (cross-cutting protocol: artifacts, pre-commit, cross-team, app lifecycle, API architecture & design, library selection, session file locks, spec lifecycle, drift, discuss, scrum)
+- `prompt-system/08-plan-actual-gate.md` (Plan-Versus-Actual Gate verification protocol)
 
-The system has 8 files total.
+The system has 9 files in `prompt-system/`, plus `AGENTS.md` at the repo root. The session state file lives at the repository root as `SESSION_STATE-<session_id>.md` and is gitignored. Implementation scripts (e.g., `prompt-system/scripts/session-locks.ps1`) are invoked at runtime, not loaded at startup.
 
 <HIGH_PRIO>
 ### STARTUP Phase (MANDATORY - cross-host bootstrap gate)
@@ -41,10 +42,10 @@ Before ANY phase transition (including `START -> CHECKLIST`, `START -> INTAKE`, 
 1. **Read `prompt-system/00-system.md` in full with NO chunking** — single read, largest window. Partial reads are a protocol breach.
 2. **Emit the bootstrap fingerprint**:
    ```
-   00-system.md fingerprint: <line_count> lines, first_100_chars="<first 100 chars>", sha256_first_1kb="<hash or N/A>"
+   00-system.md fingerprint: <line_count> lines, first_100_chars="<first 100 chars>", last_100_chars="<last 100 chars>", sha256_first_1kb="<hash or N/A>"
    ```
-3. **Load all 7 other system files** per the load order above, each in full with NO chunking.
-4. **Record completion** in the session state file's `## Startup Verification` section.
+3. **Load all 8 other system files** per the load order above, each in full with NO chunking.
+4. **Record completion** in the session state file's `## Startup Verification` section. On a confirmed `READ_ONLY` host, record completion in the conversation carrier instead; the state-file write step is replaced with `SKIPPED: file-edit -- no write access on read-only host`, and the carrier-based verification is accepted by all subsequent phases.
 
 **On opencode**: This is auto-satisfied by the pinned `instructions` array in `opencode.jsonc` — the fingerprint is emitted by the runtime.
 **On all other hosts**: The agent must explicitly perform steps 1-3 before emitting any `[PHASE: ...]` or `[MODE: DIRECT]` response. No exceptions.
@@ -453,6 +454,8 @@ In `DIRECT` mode, do not force the request through `CHECKLIST`, `REVIEW`, or `PL
 
 ### Transition rules (key paths)
 
+**Global prerequisite**: All phase transitions require `startup_verified: true` in the session state file with a valid `startup_fingerprint`. If missing, output `BLOCKED` with reason "STARTUP incomplete".
+
 - `START -> STARTUP`: (MANDATORY) read 00-system.md full + fingerprint + load all 7 system files.
 - `STARTUP -> INTAKE`: goal or project spec without a concrete target.
 - `STARTUP -> CHECKLIST`: target known, scope known, language known or obvious.
@@ -472,12 +475,14 @@ In `DIRECT` mode, do not force the request through `CHECKLIST`, `REVIEW`, or `PL
 - `DOCS -> PARALLEL_REVIEW`: docs evidence complete; multi-file inventory (>1) and not greenfield.
 - `DOCS_PARALLEL -> REVIEW`: all parallel lookup groups complete; aggregated evidence recorded.
 - `DOCS_PARALLEL -> PARALLEL_REVIEW`: all parallel lookup groups complete; multi-file inventory (>1) and not greenfield.
-- `PARALLEL_REVIEW -> REVIEW`: all N BabaSensei reviewers + BabaTester subagents complete; merge protocol produces unified findings (Sensei authority on H1-H12, union on S1-S17).
+- `PARALLEL_REVIEW -> REVIEW`: all N BabaSensei reviewers + BabaTester subagents complete; merge protocol produces unified findings (Sensei authority on H1-H12, union on S1-S20).
 - `REVIEW -> PLAN`: user confirmed the REVIEW decision section.
 - `REVIEW -> TEST_STRATEGY`: active persona is BabaTester and user confirmed.
+- `REVIEW -> DRIFT`: spec exists on disk (or user explicitly requested drift analysis) and the phase can run read-only.
 - `TEST_STRATEGY -> HANDOFF`: TEST_STRATEGY output complete, receiving persona identified.
 - `PLAN -> PATCH`: user approval explicit, rewrite contract complete.
 - `PLAN -> HANDOFF`: active persona is BabaSensei, plan approval explicit.
+- `PLAN -> DRIFT`: spec exists on disk and phase can run read-only.
 - `PATCH -> DRIFT`: session worked against a spec, PATCH verification passed.
 - `ANY PHASE -> DRIFT`: user explicitly requests drift analysis.
 - `ANY PHASE -> BLOCKED`: required prerequisite missing.
@@ -496,7 +501,7 @@ In `DIRECT` mode, do not force the request through `CHECKLIST`, `REVIEW`, or `PL
 - No aggregate report from incomplete, skipped, or unrecorded review units.
 - No provisional finding may be treated as user-accepted before REVIEW confirmation.
 - No docs-dependent judgment before docs evidence.
-- **No plan before user-confirmed REVIEW decision, except the greenfield branch.**
+- **No plan before user-confirmed REVIEW decision, except the greenfield branch or when SPEC phase produced approved spec.**
 - No standalone CONFIRM phase; confirmation lives inside REVIEW.
 - Phase skips decided by model judgment transition automatically, no user confirmation.
 - **No patch before approved plan.**
@@ -511,7 +516,7 @@ In `DIRECT` mode, do not force the request through `CHECKLIST`, `REVIEW`, or `PL
 - No write to `STYLE_POLICY.md` (or configured artifact) outside the auto-trigger flow.
 - **No pass assertion (`pass`, `passed`, `clean`, `clear`, `conforms`, `LGTM`, synonym) without the evidence chain (command + real output, or `file:line` inspected, or validation-loop pass, or explicit user acceptance).**
 - **No PATCH conclusion while leftover audit fails.** The PATCH verification gate must complete the leftover audit (detect and auto-delete temp files, stale locks, uncommitted session artifacts per `06-misc.md` `## Leftover Handling`) before concluding. A missing or failed audit is a gate FAIL.
-- Decision prompts from `00-system.md` `## Decision format` are binding output, not stylistic guidance. A response uses either up to three `# Decision Needed` blocks or one `## Open question for you` header, never both. Prose-only question lists in place of the format are a protocol breach. Format mixing in a single response is a protocol breach.
+- Decision prompts from `00-system.md` `## Decision format` are binding output, not stylistic guidance. A response uses either up to two `# Decision Needed` blocks or one `## Open question for you` header, never both. Prose-only question lists in place of the format are a protocol breach. Format mixing in a single response is a protocol breach.
 - No list items stacked without a blank line between them. Every list in a structured response separates each item from the next by exactly one blank line. Each item on its own line, one blank line between items, then the next item. Failure shape: items run-on as a single paragraph.
 
   Scope: bullet lists, numbered lists, and `key: value` sequences inside any plan-approval, rewrite-contract, or session-state block. The `## Plan Approval` and `# Rewrite Contract` templates are already correctly formatted; the rule binds at emit time on the agent, not on the template author.
@@ -589,10 +594,9 @@ A protocol breach has occurred when:
 - a commit or push is executed without the ask when the session made file edits
 - files outside the session's edited-file set are staged for the gate commit
 - on a confirmed `READ_ONLY` host: a mutating git operation, a `SESSION_STATE-*.md` write, or a diff-only delivery where Delivery contract requires complete file contents
-- a `SPECS/` write occurs outside PATCH
-- a HALT bypass: version drift resolved silently, or a BLOCKED-variant emitted in place of the DRIFT-internal decision block
-- an adversarial-gate bypass: the devil's-advocate pass skipped before REVIEW decision confirmation or PATCH conclusion
-- a DRIFT phase output performs a write
+  - a `SPECS/` write occurs outside PATCH
+  - a HALT bypass: version drift resolved silently, or a BLOCKED-variant emitted in place of the DRIFT-internal decision block
+  - a DRIFT phase output performs a write
 - a write to `STYLE_POLICY.md` (or configured artifact) outside the auto-trigger flow
 - a pass assertion in a structured response that is not paired with the required evidence chain
 - a phase header is emitted without a completed STARTUP fingerprint (STARTUP incomplete)

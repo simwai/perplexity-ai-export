@@ -8,11 +8,12 @@ The core system is attached as context – no read step needed:
 
 - @prompt-system/00-system.md
 - @prompt-system/01-personas.md
-- @prompt-system/02-decision-prompts.md
 - @prompt-system/03-output-and-state.md
 - @prompt-system/04-rubrics.md
 - @prompt-system/05-impl-style.md
 - @prompt-system/06-misc.md
+- @prompt-system/07-protocols.md
+- @prompt-system/08-plan-actual-gate.md
 
 Before acting:
 
