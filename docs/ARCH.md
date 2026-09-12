@@ -85,7 +85,7 @@ Our RAG implementation is not a simple "retrieve and stuff" pipeline. It follows
 
 Before any retrieval, the system acts as a **Research Planner**. It decomposes the user's query into:
 
-- **Strategy**: Selecting between `precise` (targeted facts, pool of 35) or `exhaustive` (broad historical overview, pool of 60).
+- **Strategy**: Selecting between `precise` (targeted facts, pool of 50) or `exhaustive` (broad historical overview, pool of 80).
 - **Semantic Variations**: Generating multiple search phrases to cover different linguistic facets of the query.
 - **Hard Keywords**: Identifying unique entities or technical IDs that require exact-match precision.
 - **HyDE Passage**: Generating a short hypothetical answer passage (1-2 sentences) that would plausibly appear in stored history for this question. This passage is embedded and searched alongside the query variations, improving recall when the user's question wording diverges from how the content was originally written.
@@ -106,6 +106,7 @@ After RRF fusion, the top candidates are passed to a **cross-encoder reranker** 
 - **Model**: `Xenova/ms-marco-MiniLM-L-6-v2`. It runs locally via ONNX (`@huggingface/transformers`), no API key required.
 - **Quantization**: Loaded in `int8` for a 3× latency reduction with <0.5% rank-correlation loss versus fp32.
 - **Batching**: Processed in chunks of 64 pairs for optimal throughput.
+- **Threshold & Fallback**: Results with logit >= -5.0 are kept; if none pass, the top 20 by RRF score are used as a fallback, guaranteeing the pipeline always has candidates. Logs `Reranked N -> M (threshold -5.0, fallback to top-20)`.
 - **Fallback**: Gracefully skips reranking if the package is not installed, preserving the RRF order.
 - **Implementation note**: The raw relevance logit is read directly from `AutoModelForSequenceClassification` output. The high-level `pipeline()` API is intentionally bypassed as it normalizes single-class regression heads to a constant `score: 1.0`.
 
@@ -113,8 +114,13 @@ After RRF fusion, the top candidates are passed to a **cross-encoder reranker** 
 
 To mitigate "lost in the middle" phenomena and context window saturation, we utilize a **MapReduce** approach:
 
-1. **Map**: Each snippet is analyzed in small, high-density batches to extract atomic facts, code snippets, and dates.
-2. **Reduce**: These verified facts are then synthesized into a final, authoritative response with full source provenance.
+1. **Map**: Each snippet is analyzed in small, high-density batches (size 10) to extract atomic facts, code snippets, and dates. Extraction uses:
+   - **Zod schema validation** with `node_id` coercion (accepts string `"3"` → `3`).
+   - **Per-entry JSON error handling**: malformed LLM output is skipped, batch continues, falls back to raw snippet.
+   - **Diversity instruction**: at most 1 fact per unique source title per batch.
+2. **Filter**: Post-extraction LLM gate marks facts as relevant if loosely related to Python/programming/learning. Keeps all if 0 pass; keeps top 4 if only 1 passes from >3.
+3. **Deduplicate**: Source-level dedup keeps best fact per unique source title.
+3. **Reduce**: Verified facts synthesized into final response with cited sources. `History Sources Explored` shows `[Find N] title + preview`. Citations use source title brackets `[which big python projects...]`.
 
 ---
 

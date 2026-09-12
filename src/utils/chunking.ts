@@ -1,4 +1,15 @@
-export function chunkMarkdown(markdown: string, maxChars = 1500, overlapChars = 150): string[] {
+// why: 1500 chars ≈ ~375 tokens (4 chars/token), fits common embedding model windows
+// why: 150 chars overlap preserves context between chunks without excessive duplication
+// why: 500 char slack allows sections slightly over maxChars to not trigger hard-slice on every boundary
+const DEFAULT_MAX_CHARS = 1500
+const DEFAULT_OVERLAP_CHARS = 150
+const OVERSIZED_CHUNK_SLACK = 500
+
+export function chunkMarkdown(
+  markdown: string,
+  maxChars = DEFAULT_MAX_CHARS,
+  overlapChars = DEFAULT_OVERLAP_CHARS
+): string[] {
   const HEADER_OR_RULE_REGEX = /(?=^#{1,3}\s)|(?=^---)/gm
 
   const sections = markdown.split(HEADER_OR_RULE_REGEX)
@@ -29,7 +40,7 @@ export function chunkMarkdown(markdown: string, maxChars = 1500, overlapChars = 
     chunks.push(trimmedRemainingChunk)
   }
 
-  const MAX_CHUNK_THRESHOLD = maxChars + 500
+  const MAX_CHUNK_THRESHOLD = maxChars + OVERSIZED_CHUNK_SLACK
   return chunks.flatMap((chunk) => {
     if (chunk.length <= MAX_CHUNK_THRESHOLD) {
       return [chunk]

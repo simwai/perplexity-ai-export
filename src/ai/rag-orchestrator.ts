@@ -1,4 +1,3 @@
-import { errorBus } from '../utils/error-bus.js'
 import { VectorStore, type VectorSearchResult } from '../search/vector-store.js'
 import { OllamaClient, type ChatMessage, type LlmResponse } from './ollama-client.js'
 import { RgSearch } from '../search/rg-search.js'
@@ -7,72 +6,8 @@ import { join } from 'node:path'
 import { type Config } from '../utils/config.js'
 import { z } from 'zod'
 import { errorMessageOf } from '../utils/extract-error-message.js'
-
-interface CrossEncoderInstance {
-  tokenizer: {
-    (
-      text: string[],
-      options?: { text_pair?: string[]; padding?: boolean; truncation?: boolean }
-    ): Promise<{ input_ids: number[][]; attention_mask: number[][] }>
-  }
-  model: {
-    (inputs: {
-      input_ids: number[][]
-      attention_mask: number[][]
-    }): Promise<{ logits: { data: Float32Array } }>
-  }
-}
-
-class CrossEncoder {
-  private static instance: CrossEncoderInstance | null = null
-  private static loading = false
-
-  static async getInstance(): Promise<CrossEncoderInstance | null> {
-    if (CrossEncoder.instance) {
-      return CrossEncoder.instance
-    }
-
-    if (CrossEncoder.loading) {
-      while (CrossEncoder.loading) {
-        await new Promise((resolve) => setTimeout(resolve, 50))
-      }
-      return CrossEncoder.instance
-    }
-
-    CrossEncoder.loading = true
-    try {
-      const transformers = await import('@huggingface/transformers').catch(() => null)
-      if (!transformers) {
-        return null
-      }
-
-      const { AutoTokenizer, AutoModelForSequenceClassification } = transformers
-
-      const tokenizer = await AutoTokenizer.from_pretrained('Xenova/ms-marco-MiniLM-L-6-v2')
-      const model = await AutoModelForSequenceClassification.from_pretrained(
-        'Xenova/ms-marco-MiniLM-L-6-v2',
-        { dtype: 'int8' }
-      )
-
-      CrossEncoder.instance = { tokenizer, model }
-      return CrossEncoder.instance
-    } catch (error) {
-      logger.debug(`Failed to load cross-encoder: ${errorMessageOf(error)}`)
-      return null
-    } finally {
-      CrossEncoder.loading = false
-    }
-  }
-
-  static resetForTesting(): void {
-    CrossEncoder.instance = null
-    CrossEncoder.loading = false
-  }
-}
-
-async function getCrossEncoder(): Promise<CrossEncoderInstance | null> {
-  return CrossEncoder.getInstance()
-}
+import { getCrossEncoder } from './cross-encoder.js'
+import { createResult, ok, err, type Result } from 'super-result'
 
 const VECTOR_SEARCH_LIMIT = 40
 const ANALYSIS_BATCH_SIZE = 10
@@ -145,16 +80,20 @@ export class RagOrchestrator {
   private readonly vectorStore: VectorStore
   private readonly ripgrep: RgSearch
 
+  private readonly R = createResult<OrchestratorError>((error: unknown) =>
+    error instanceof OrchestratorError ? error : new OrchestratorError(String(error))
+  )
+
   constructor(private readonly config: Config) {
     this.ollamaClient = new OllamaClient(config)
     this.vectorStore = new VectorStore(config)
     this.ripgrep = new RgSearch(config)
   }
 
-  async answerQuestion(question: string): Promise<void> {
+  async answerQuestion(question: string): Promise<Result<void, OrchestratorError>> {
     logger.info(`Mightiest RAG is analyzing: "${question}"...`)
 
-    try {
+    return this.R.from(async () => {
       const plan = await this.developResearchPlan(question)
       const results = await this.executeAdaptiveHybridSearch(plan)
       const rerankedResults = await this.crossEncoderRerank(question, results)
@@ -178,58 +117,46 @@ export class RagOrchestrator {
       if (needsCorrection) {
         logger.warn(`Self-Correction: ${feedback.suggestion}`)
       }
-    } catch (error) {
-      const errorMessage = errorMessageOf(error)
-      // why: we accept OrchestratorError-shaped throws from the call graph; non-OrchestratorError gets undefined context
-      const errorContext = (error as { context?: Record<string, unknown> })?.context
-      const orchestratorError = new RagOrchestrator.OrchestratorError(
-        `Mightiest RAG failed: ${errorMessage}`,
-        errorContext
-      )
-      errorBus.emitError(orchestratorError.message, orchestratorError)
-    }
+    })
   }
 
-  async chat(question: string, history: ChatMessage[]): Promise<LlmResponse> {
+  async chat(
+    question: string,
+    history: ChatMessage[]
+  ): Promise<Result<LlmResponse, OrchestratorError>> {
     logger.info(`Processing chat turn: "${question}"...`)
 
-    try {
-      const refinedQuestion = await this.rephraseQuestionWithHistory(question, history)
-      logger.debug(`Refined question for search: "${refinedQuestion}"`)
+    const refinedQuestion = await this.rephraseQuestionWithHistory(question, history)
+    logger.debug(`Refined question for search: "${refinedQuestion}"`)
 
-      const plan = await this.developResearchPlan(refinedQuestion)
-      const results = await this.executeAdaptiveHybridSearch(plan)
-      const rerankedResults = await this.crossEncoderRerank(refinedQuestion, results)
+    const plan = await this.developResearchPlan(refinedQuestion)
+    const results = await this.executeAdaptiveHybridSearch(plan)
+    const rerankedResults = await this.crossEncoderRerank(refinedQuestion, results)
 
-      const isExhaustive = plan.strategy === 'exhaustive'
-      const extractedFacts = await this.extractFactsWithGranularMapReduce(
-        refinedQuestion,
-        rerankedResults,
-        isExhaustive
-      )
+    const isExhaustive = plan.strategy === 'exhaustive'
+    const extractedFacts = await this.extractFactsWithGranularMapReduce(
+      refinedQuestion,
+      rerankedResults,
+      isExhaustive
+    )
 
-      const systemPrompt = this.buildChatSystemPrompt(extractedFacts)
-      const chatMessages: ChatMessage[] = [
-        { role: 'system', content: systemPrompt },
-        ...history,
-        { role: 'user', content: question },
-      ]
+    const systemPrompt = this.buildChatSystemPrompt(extractedFacts)
+    const chatMessages: ChatMessage[] = [
+      { role: 'system', content: systemPrompt },
+      ...history,
+      { role: 'user', content: question },
+    ]
 
-      const response = await this.ollamaClient.chat(chatMessages)
-
-      this.displaySourceProvenance(extractedFacts)
-
-      return response
-    } catch (error) {
-      const errorMessage = errorMessageOf(error)
-      // why: we accept OrchestratorError-shaped throws from the call graph; non-OrchestratorError gets undefined context
-      const errorContext = (error as { context?: Record<string, unknown> })?.context
-      const orchestratorError = new RagOrchestrator.OrchestratorError(
-        `Mightiest Chat failed: ${errorMessage}`,
-        errorContext
-      )
-      throw orchestratorError
+    const chatResult = await this.ollamaClient.chat(chatMessages)
+    if (!chatResult.ok) {
+      return err(new OrchestratorError(`Chat failed: ${errorMessageOf(chatResult.error)}`))
     }
+
+    const response = chatResult.value
+
+    this.displaySourceProvenance(extractedFacts)
+
+    return ok(response)
   }
 
   private async rephraseQuestionWithHistory(
@@ -251,7 +178,7 @@ New Question: ${question}
 Standalone Question:
 `
     const response = await this.ollamaClient.generate(rephrasePrompt)
-    return response.trim() || question
+    return response.ok ? response.value.trim() || question : question
   }
 
   private buildChatSystemPrompt(extractedFacts: ExtractedFact[]): string {
@@ -296,20 +223,10 @@ Analyze: "${originalQuestion}"
 ${hydeInstruction}
 Return JSON: ${jsonTemplate}
 `
-    try {
-      const response = await this.ollamaClient.generate(plannerPrompt)
-      const planJson = parseJsonWithSchema(response, researchPlanJsonSchema, {})
+    const generateResult = await this.ollamaClient.generate(plannerPrompt)
 
-      return {
-        originalQuestion,
-        strategy: planJson.strategy || 'precise',
-        queries:
-          planJson.queries && planJson.queries.length > 0 ? planJson.queries : [originalQuestion],
-        hardKeywords: planJson.hardKeywords || [],
-        hydePassage: planJson.hydePassage || '',
-      }
-    } catch (error) {
-      logger.debug(`Research plan generation failed: ${errorMessageOf(error)}`)
+    if (!generateResult.ok) {
+      logger.debug(`Research plan generation failed: ${errorMessageOf(generateResult.error)}`)
       return {
         strategy: 'precise',
         originalQuestion,
@@ -317,6 +234,17 @@ Return JSON: ${jsonTemplate}
         hardKeywords: [],
         hydePassage: '',
       }
+    }
+
+    const planJson = parseJsonWithSchema(generateResult.value, researchPlanJsonSchema, {})
+
+    return {
+      originalQuestion,
+      strategy: planJson.strategy || 'precise',
+      queries:
+        planJson.queries && planJson.queries.length > 0 ? planJson.queries : [originalQuestion],
+      hardKeywords: planJson.hardKeywords || [],
+      hydePassage: planJson.hydePassage || '',
     }
   }
 
@@ -329,7 +257,8 @@ Return JSON: ${jsonTemplate}
         logger.debug(
           `Executing semantic search [${index + 1}/${plan.queries.length}]: "${searchQuery}"`
         )
-        return this.vectorStore.search(searchQuery, VECTOR_SEARCH_LIMIT)
+        const searchResult = await this.vectorStore.search(searchQuery, VECTOR_SEARCH_LIMIT)
+        return searchResult.ok ? searchResult.value : []
       })
     )
     searchPools.push(...queryResults)
@@ -337,10 +266,13 @@ Return JSON: ${jsonTemplate}
     if (hydeMode === 'fusion' && plan.hydePassage) {
       logger.debug(`Executing HyDE search (fusion): "${plan.hydePassage.slice(0, 60)}..."`)
       const hydeResults = await this.vectorStore.search(plan.hydePassage, VECTOR_SEARCH_LIMIT)
-      searchPools.push(hydeResults)
+      if (hydeResults.ok) searchPools.push(hydeResults.value)
     } else if (hydeMode === 'supplement') {
       const allSoFar = searchPools.flat()
-      const maxScore = allSoFar.reduce((max, res) => Math.max(max, res.score), 0)
+      let maxScore = 0
+      for (const res of allSoFar) {
+        if (res.score > maxScore) maxScore = res.score
+      }
       const resultCount = allSoFar.length
 
       const isWeak =
@@ -355,7 +287,7 @@ Return JSON: ${jsonTemplate}
         if (hydePassage) {
           logger.debug(`Executing HyDE search (supplement): "${hydePassage.slice(0, 60)}..."`)
           const hydeResults = await this.vectorStore.search(hydePassage, VECTOR_SEARCH_LIMIT)
-          searchPools.push(hydeResults)
+          if (hydeResults.ok) searchPools.push(hydeResults.value)
         }
       }
     }
@@ -422,15 +354,15 @@ Return JSON: ${jsonTemplate}
     const isResultsEmpty = results.length === 0
     if (isResultsEmpty) return results
 
-    const crossEncoder = await getCrossEncoder()
-    if (!crossEncoder) {
+    const crossEncoderResult = await getCrossEncoder()
+    if (!crossEncoderResult.ok || !crossEncoderResult.value) {
       logger.debug(
         'Cross-encoder not available (run: npm install @huggingface/transformers). Skipping rerank.'
       )
       return results
     }
 
-    const { tokenizer, model } = crossEncoder
+    const { tokenizer, model } = crossEncoderResult.value
     logger.info(`Cross-encoder reranking ${results.length} candidates...`)
 
     const rerankScores: number[] = (
@@ -454,7 +386,6 @@ Return JSON: ${jsonTemplate}
       )
 
       const modelOutput = await model(tokenizedInputs)
-      // why: @huggingface/transformers types logits.data as ArrayLike<number>; runtime is Float32Array
       const batchLogits: number[] = Array.from(modelOutput.logits.data as Float32Array)
 
       for (let offset = 0; offset < batchLogits.length; offset++) {
@@ -526,18 +457,33 @@ Return JSON array: [{"fact": "...", "node_id": N}]
 `
       try {
         const response = await this.ollamaClient.generate(researchPrompt)
-        const match = response.match(/\[[\s\S]*\]/)
+        if (!response.ok) {
+          logger.warn(
+            `Fact extraction batch ${batchNumber}/${totalBatches} failed for question "${question}": ${errorMessageOf(response.error)}`
+          )
+          for (const res of currentBatch) {
+            extractedFindings.push({
+              fact: res.meta['snippet'] ?? '',
+              source_title: res.meta['title'] ?? '',
+              thread: res.meta['title'] ?? '',
+            })
+          }
+          continue
+        }
+        const match = response.value.match(/\[[\s\S]*\]/)
         if (!match?.[0]) {
-          throw new Error('No JSON array found in response')
+          throw new OrchestratorError('No JSON array found in response')
         }
         let parsedJson: unknown
-        try {
-          parsedJson = JSON.parse(match[0])
-        } catch (parseError) {
-          throw new Error(`Invalid JSON in response: ${errorMessageOf(parseError)}`)
+        const parseResult = this.R.from(() => JSON.parse(match[0]!))
+        if (!parseResult.ok) {
+          throw new OrchestratorError(
+            `Invalid JSON in response: ${errorMessageOf(parseResult.error)}`
+          )
         }
+        parsedJson = parseResult.value
         if (!Array.isArray(parsedJson)) {
-          throw new Error('Response is not a JSON array')
+          throw new OrchestratorError('Response is not a JSON array')
         }
 
         for (const factEntry of parsedJson) {
@@ -566,12 +512,14 @@ Return JSON array: [{"fact": "...", "node_id": N}]
           }
         }
       } catch (error) {
-        logger.debug(`Fact extraction batch failed: ${errorMessageOf(error)}`)
+        logger.warn(
+          `Fact extraction batch ${batchNumber}/${totalBatches} failed for question "${question}": ${errorMessageOf(error)}`
+        )
         for (const res of currentBatch) {
           extractedFindings.push({
-            fact: res.meta['snippet'] as string,
-            source_title: res.meta['title'] as string,
-            thread: res.meta['title'] as string,
+            fact: res.meta['snippet'] ?? '',
+            source_title: res.meta['title'] ?? '',
+            thread: res.meta['title'] ?? '',
           })
         }
       }
@@ -591,12 +539,18 @@ Question: "${question}"
 Facts:
 ${facts.map((f, i) => `${i}: ${f.fact} (source: ${f.source_title})`).join('\n')}
 
-For each fact, is it related to the question? Mark relevant=true if it mentions Python, programming, or learning that could be relevant context.
+For each fact, is it related to the question? Mark relevant=true if the fact contains information that could be relevant context for answering the question.
 Return JSON array: [{"index": 0, "relevant": true}, {"index": 1, "relevant": false}, ...]
 `
     try {
       const response = await this.ollamaClient.generate(filterPrompt)
-      const match = response.match(/\[[\s\S]*\]/)
+      if (!response.ok) {
+        logger.warn(
+          `Relevance filter failed for question "${question}": ${errorMessageOf(response.error)}`
+        )
+        return facts
+      }
+      const match = response.value.match(/\[[\s\S]*\]/)
       if (!match?.[0]) return facts
       const parsed: Array<{ index: number; relevant: boolean }> = JSON.parse(match[0])
       const relevantIndices = new Set(parsed.filter((p) => p.relevant).map((p) => p.index))
@@ -607,7 +561,6 @@ Return JSON array: [{"index": 0, "relevant": true}, {"index": 1, "relevant": fal
         filtered = facts
       }
 
-      // Deduplicate: keep best fact per unique source title
       const seenSources = new Set<string>()
       const deduped: ExtractedFact[] = []
       for (const fact of filtered) {
@@ -624,7 +577,7 @@ Return JSON array: [{"index": 0, "relevant": true}, {"index": 1, "relevant": fal
 
       return deduped
     } catch (error) {
-      logger.debug(`Relevance filter failed: ${errorMessageOf(error)}`)
+      logger.warn(`Relevance filter failed for question "${question}": ${errorMessageOf(error)}`)
       return facts
     }
   }
@@ -635,9 +588,12 @@ Write 1-2 sentences that would plausibly appear in a saved answer to the questio
 Write as if it's content already stored in a document, not as a direct reply.
 `
     try {
-      return await this.ollamaClient.generate(hydePrompt)
+      const response = await this.ollamaClient.generate(hydePrompt)
+      return response.ok ? response.value : ''
     } catch (error) {
-      logger.debug(`HyDE passage generation failed: ${errorMessageOf(error)}`)
+      logger.warn(
+        `HyDE passage generation failed for question "${question}": ${errorMessageOf(error)}`
+      )
       return ''
     }
   }
@@ -665,8 +621,10 @@ INSTRUCTIONS:
 
 ANSWER:
 `
-    return this.ollamaClient.generate(synthesisPrompt)
+    const response = await this.ollamaClient.generate(synthesisPrompt)
+    return response.ok ? response.value : 'Failed to generate answer.'
   }
+
   private displaySourceProvenance(extractedFacts: ExtractedFact[]): void {
     if (extractedFacts.length === 0) return
 
@@ -696,8 +654,10 @@ Did I miss anything important?
 Return JSON: {"status": "ok" | "missed-info", "suggestion": "..."}
 `
     try {
-      const verificationResponse = await this.ollamaClient.generate(verificationPrompt)
-      return parseJsonWithSchema(verificationResponse, verificationResultSchema, { status: 'ok' })
+      const response = await this.ollamaClient.generate(verificationPrompt)
+      return parseJsonWithSchema(response.ok ? response.value : '', verificationResultSchema, {
+        status: 'ok',
+      })
     } catch (error) {
       logger.warn(`Answer verification failed: ${errorMessageOf(error)}`)
       return { status: 'ok' }

@@ -2,9 +2,14 @@ import { errorBus } from '../utils/error-bus.js'
 import { type Browser, type BrowserContext } from '@playwright/test'
 import { ConversationExtractor } from './conversation-extractor.js'
 import { CheckpointManager, type ConversationMeta } from './checkpoint-manager.js'
-import { FileWriter } from '../export/file-writer.js'
 import { logger } from '../utils/logger.js'
 import { type Config } from '../utils/config.js'
+import { isTypedError } from '../utils/errors.js'
+import { join } from 'node:path'
+import { writeFileSync, existsSync, mkdirSync, statSync } from 'node:fs'
+import { sanitizeFilename, sanitizeSpaceName } from '../export/sanitizer.js'
+import { createResult, ok, err, type Result } from 'super-result'
+import { errorMessageOf } from '../utils/extract-error-message.js'
 
 const MAX_RETRIES = 2
 const POLLING_INTERVAL_MS = 100
@@ -22,20 +27,21 @@ interface QueueItem {
 
 export class WorkerPool {
   private readonly workers: ExtractionWorker[] = []
-  private readonly fileWriter: FileWriter
   private sharedBrowserContext: BrowserContext | null = null
   private isRefreshing = false
+
+  private readonly R = createResult<Error>((error: unknown) =>
+    error instanceof Error ? error : new Error(String(error))
+  )
 
   constructor(
     private readonly config: Config,
     private readonly checkpointManager: CheckpointManager,
     private readonly browser: Browser
-  ) {
-    this.fileWriter = new FileWriter(config)
-  }
+  ) {}
 
-  async initialize(): Promise<void> {
-    try {
+  async initialize(): Promise<Result<void, Error>> {
+    return this.R.from(async () => {
       this.sharedBrowserContext = await this.browser.newContext({
         storageState: this.config.authStoragePath,
       })
@@ -46,13 +52,12 @@ export class WorkerPool {
           isBusy: false,
         })
       }
-    } catch (error) {
-      errorBus.emitError('Failed to initialize worker pool', error)
-      throw error
-    }
+    })
   }
 
-  async processConversations(conversationsToProcess: ConversationMeta[]): Promise<void> {
+  async processConversations(
+    conversationsToProcess: ConversationMeta[]
+  ): Promise<Result<void, Error>> {
     const queue: QueueItem[] = conversationsToProcess.map((meta) => ({ meta, attempts: 0 }))
     const activeTasks: Promise<void>[] = []
 
@@ -79,10 +84,11 @@ export class WorkerPool {
     if (failedCount > 0) {
       logger.warn(`${failedCount} conversation(s) failed and will be retried on next run.`)
     }
+    return ok(undefined)
   }
 
   async close(): Promise<void> {
-    // why: best-effort teardown; if the context is already gone, Playwright throws and we ignore.
+    // best-effort teardown; if the context is already gone, Playwright throws and we ignore.
     await this.sharedBrowserContext?.close().catch(() => {})
   }
 
@@ -109,15 +115,64 @@ export class WorkerPool {
     const progressLabel = `[${processed}/${total}]`
 
     if (existingHash && existingHash === result.contentHash) {
-      this.checkpointManager.markAsProcessed(meta.id)
+      const markResult = await this.checkpointManager.markAsProcessed(meta.id)
+      if (!markResult.ok) errorBus.emitError('Failed to mark as processed', markResult.error)
       logger.info(`${progressLabel} Up to date: ${result.title} (skipped write)`)
     } else {
-      this.fileWriter.write(result)
-      this.checkpointManager.markAsProcessed(meta.id, result.contentHash)
+      const writeResult = await this.writeConversationAsMarkdown(result)
+      if (!writeResult.ok) {
+        errorBus.emitError('Failed to write conversation', writeResult.error)
+        return
+      }
+      const markResult = await this.checkpointManager.markAsProcessed(meta.id, result.contentHash)
+      if (!markResult.ok) errorBus.emitError('Failed to mark as processed', markResult.error)
       logger.info(`${progressLabel} Processed: ${result.title}`)
     }
 
     worker.extractor.recoverTimeout()
+  }
+
+  private async writeConversationAsMarkdown(
+    conversation: Awaited<ReturnType<ConversationExtractor['extract']>>
+  ): Promise<Result<void, Error>> {
+    const outputDir = this.config.exportDir
+    const safeSpaceName = sanitizeSpaceName(conversation.spaceName)
+    const spaceSpecificDirectory = join(outputDir, safeSpaceName)
+
+    if (!existsSync(spaceSpecificDirectory)) {
+      const mkdirResult = this.R.from(() => mkdirSync(spaceSpecificDirectory, { recursive: true }))
+      if (!mkdirResult.ok)
+        return err(new Error(`Failed to create directory: ${errorMessageOf(mkdirResult.error)}`))
+    }
+
+    const safeFileTitle = sanitizeFilename(conversation.title)
+    const fileName = `${safeFileTitle} (${conversation.id}).md`
+    const destinationFilePath = join(spaceSpecificDirectory, fileName)
+
+    const headerTitle = `# ${conversation.title}\n\n`
+    const metadataBlock =
+      `**Space:** ${conversation.spaceName}  \n` +
+      `**ID:** ${conversation.id}  \n` +
+      `**Date:** ${conversation.timestamp.toISOString()}  \n\n`
+    const content = headerTitle + metadataBlock + conversation.content
+
+    const tmpPath = `${destinationFilePath}.tmp`
+    const writeResult = this.R.from(() => writeFileSync(tmpPath, content, 'utf-8'))
+    if (!writeResult.ok) return writeResult
+
+    const fs = await import('node:fs')
+    const renameResult = this.R.from(() => fs.renameSync(tmpPath, destinationFilePath))
+    if (!renameResult.ok) return renameResult
+
+    const verifyResult = this.R.from(() => {
+      if (!existsSync(destinationFilePath) || statSync(destinationFilePath).size === 0) {
+        return err(new Error(`Exported file is missing or empty: ${destinationFilePath}`))
+      }
+      return ok(undefined)
+    })
+    if (!verifyResult.ok) return verifyResult
+
+    return ok(undefined)
   }
 
   private async handleFailure(
@@ -126,11 +181,10 @@ export class WorkerPool {
     queue: QueueItem[],
     error: unknown
   ): Promise<void> {
-    const isTimeout = error instanceof Error && error.message.includes('API response timeout')
-    const isContextLost =
-      error instanceof Error && error.message.includes('context is no longer available')
+    const isTimeout = isTypedError(error, ConversationExtractor.NoDataError)
+    const isContextLost = isTypedError(error, ConversationExtractor.ExtractionError)
 
-    if (isTimeout) worker.extractor.reduceTimeout()
+    if (isTimeout) worker.extractor.recoverTimeout()
 
     if (isContextLost) {
       logger.warn('Browser context lost. Refreshing worker context...')
@@ -153,8 +207,8 @@ export class WorkerPool {
   private async refreshContext(): Promise<void> {
     if (this.isRefreshing) return
     this.isRefreshing = true
-    try {
-      // why: best-effort close before re-creating; a stale context is what we are refreshing away.
+    const result = await this.R.from(async () => {
+      // best-effort close before re-creating; a stale context is what we are refreshing away.
       await this.sharedBrowserContext?.close().catch(() => {})
       this.sharedBrowserContext = await this.browser.newContext({
         storageState: this.config.authStoragePath,
@@ -162,10 +216,10 @@ export class WorkerPool {
       for (const worker of this.workers) {
         worker.extractor = new ConversationExtractor(this.config, this.sharedBrowserContext)
       }
-    } catch (error) {
-      errorBus.emitError('Failed to refresh worker context', error)
-    } finally {
-      this.isRefreshing = false
+    })
+    if (!result.ok) {
+      errorBus.emitError('Failed to refresh worker context', result.error)
     }
+    this.isRefreshing = false
   }
 }

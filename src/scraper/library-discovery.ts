@@ -2,6 +2,8 @@ import type { Page } from '@playwright/test'
 import { logger } from '../utils/logger.js'
 import { DEFAULT_API_VERSION } from './api-version.js'
 import { errorMessageOf } from '../utils/extract-error-message.js'
+import { makeNamedError } from '../utils/errors.js'
+import { from, ok, err, type Result } from 'super-result'
 
 // #region Constants
 
@@ -11,6 +13,10 @@ const BATCH_SIZE = 50
 const MAX_RETRIES = 3
 const RETRY_DELAY_MS = 1500
 const PAGE_READY_BUFFER_MS = 500
+
+// why: base delay + jitter prevents hitting rate limits; values from PR #12 tuning
+const MIN_DELAY_MS = 800
+const JITTER_MS = 700
 
 /**
  * Only capture API version from endpoints that fire AFTER the library page
@@ -57,7 +63,7 @@ interface Collection {
   slug: string
 }
 
-export interface ConversationMeta {
+export interface DiscoveredConversationMeta {
   id: string
   url: string
   uuid: string
@@ -93,7 +99,7 @@ function extractVersionFromUrl(url: string): string | null {
   return match?.[1] ?? null
 }
 
-function rawThreadToConversationMeta(thread: RawThread): ConversationMeta {
+function rawThreadToConversationMeta(thread: RawThread): DiscoveredConversationMeta {
   return {
     ...thread,
     id: thread.uuid,
@@ -105,8 +111,8 @@ function rawThreadToConversationMeta(thread: RawThread): ConversationMeta {
 
 // #region Version Detection
 
-async function detectApiVersion(page: Page): Promise<string> {
-  try {
+async function detectApiVersion(page: Page): Promise<Result<string, Error>> {
+  const result = await from<string>(async () => {
     const response = await page.waitForResponse(
       (res) => VERSIONED_URL_PATTERNS.some((p) => res.url().includes(p)) && res.status() === 200,
       { timeout: 15_000 }
@@ -115,10 +121,13 @@ async function detectApiVersion(page: Page): Promise<string> {
     const pathname = new URL(response.url()).pathname
     logger.debug(`Detected API version: ${version} (from ${pathname})`)
     return version
-  } catch {
+  })
+
+  if (!result.ok) {
     logger.debug(`Version detection timeout — using fallback ${DEFAULT_API_VERSION}`)
-    return DEFAULT_API_VERSION
+    return ok(DEFAULT_API_VERSION)
   }
+  return result
 }
 
 // #endregion Version Detection
@@ -131,13 +140,15 @@ async function detectApiVersion(page: Page): Promise<string> {
  * cookies/CSRF are fully hydrated before we call list_ask_threads.
  */
 async function waitForLibraryReady(page: Page, timeout = 12_000): Promise<void> {
-  try {
+  const result = await from(async () => {
     await page.waitForResponse(
       (res) => res.url().includes('/rest/userinfo') && res.status() === 200,
       { timeout }
     )
     logger.debug('Library page ready (userinfo confirmed)')
-  } catch {
+  })
+
+  if (!result.ok) {
     logger.debug('waitForLibraryReady: timeout — proceeding anyway')
   }
 
@@ -189,6 +200,7 @@ async function fetchThreadBatch(
   try {
     parsed = JSON.parse(raw.body)
   } catch {
+    // why: invalid JSON from API is an unrecoverable error for this endpoint
     throw new LibraryDiscovery.ApiError(
       `list_ask_threads: invalid JSON — body: ${raw.body.slice(0, 200)}`
     )
@@ -211,45 +223,57 @@ async function fetchThreadBatch(
   }
 }
 
-async function fetchPinnedThreads(page: Page, version: string): Promise<RawThread[]> {
+async function fetchPinnedThreads(
+  page: Page,
+  version: string
+): Promise<Result<RawThread[], Error>> {
   const url = `${BASE_URL}/rest/thread/list_pinned_ask_threads?version=${version}&source=default`
 
-  const raw = await page.evaluate(
-    async ({ url }: { url: string }) => {
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({}),
-        credentials: 'include',
-      })
-      const text = await res.text()
-      return { status: res.status, body: text }
-    },
-    { url }
-  )
+  const rawResult = await from<{ status: number; body: string }>(async () => {
+    return page.evaluate(
+      async ({ url }: { url: string }) => {
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({}),
+          credentials: 'include',
+        })
+        const text = await res.text()
+        return { status: res.status, body: text }
+      },
+      { url }
+    )
+  })
+
+  if (!rawResult.ok) {
+    return err(rawResult.error)
+  }
+
+  const raw = rawResult.value
 
   logger.debug(`list_pinned_ask_threads: status=${raw.status}`)
 
   if (raw.status !== 200) {
     logger.debug(`list_pinned_ask_threads returned HTTP ${raw.status} — skipping pinned`)
-    return []
+    return ok([])
   }
 
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(raw.body)
-  } catch {
+  const parseResult = await from<unknown>(() => JSON.parse(raw.body))
+
+  if (!parseResult.ok) {
     logger.debug('list_pinned_ask_threads: invalid JSON — skipping pinned')
-    return []
+    return ok([])
   }
+
+  const parsed = parseResult.value
 
   if (!Array.isArray(parsed)) {
     logger.debug(`list_pinned_ask_threads: expected array, got ${typeof parsed} — skipping pinned`)
-    return []
+    return ok([])
   }
 
   // why: Array.isArray(parsed) above guarantees an array; per-element shape validated by downstream zod
-  return parsed as RawThread[]
+  return ok(parsed as RawThread[])
 }
 
 async function fetchFirstBatch(page: Page, version: string): Promise<ThreadBatchResponse> {
@@ -277,25 +301,15 @@ async function fetchFirstBatch(page: Page, version: string): Promise<ThreadBatch
 // #region Main Discovery
 
 export class LibraryDiscovery {
-  static readonly DiscoveryError = class extends Error {
-    constructor(message: string) {
-      super(message)
-      this.name = 'DiscoveryError'
-    }
-  }
+  static readonly DiscoveryError = makeNamedError('DiscoveryError')
+  static readonly ApiError = makeNamedError('ApiError')
 
-  static readonly ApiError = class extends Error {
-    constructor(message: string) {
-      super(message)
-      this.name = 'ApiError'
-    }
-  }
-
-  async discoverAllConversationsFromLibrary(page: Page): Promise<ConversationMeta[]> {
+  async discoverAllConversationsFromLibrary(page: Page): Promise<DiscoveredConversationMeta[]> {
     logger.info('Discovering threads via REST API...')
 
     // Start version detection BEFORE navigation so we catch the first matching response
-    const versionPromise = detectApiVersion(page)
+    const versionResult = await detectApiVersion(page)
+    const version = versionResult.ok ? versionResult.value : DEFAULT_API_VERSION
 
     // Navigate to library
     await page.goto(LIBRARY_URL, { waitUntil: 'domcontentloaded' })
@@ -303,12 +317,11 @@ export class LibraryDiscovery {
     // Wait for page to be fully ready (userinfo fired + hydration buffer)
     await waitForLibraryReady(page)
 
-    // Resolve detected version (fallback to default API version on timeout)
-    const version = await versionPromise
     logger.info(`Detected API version: ${version}`)
 
     // Fetch pinned threads first (separate endpoint, no pagination)
-    const pinnedThreads = await fetchPinnedThreads(page, version)
+    const pinnedResult = await fetchPinnedThreads(page, version)
+    const pinnedThreads = pinnedResult.ok ? pinnedResult.value : []
     logger.debug(`Pinned threads: ${pinnedThreads.length}`)
 
     // First batch with retry logic
@@ -340,10 +353,18 @@ export class LibraryDiscovery {
 
     while (hasMore) {
       // Randomized delay to avoid Cloudflare triggers (from PR #12)
-      const delay = 800 + Math.random() * 700
+      const delay = MIN_DELAY_MS + Math.random() * JITTER_MS
       await page.waitForTimeout(delay)
 
-      const batch = await fetchThreadBatch(page, version, offset)
+      const batchResult = await from<ThreadBatchResponse>(async () =>
+        fetchThreadBatch(page, version, offset)
+      )
+
+      if (!batchResult.ok) {
+        throw batchResult.error
+      }
+
+      const batch = batchResult.value
       allThreads.push(...batch.threads)
       offset += batch.threads.length
       hasMore = batch.hasMore

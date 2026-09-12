@@ -31,18 +31,16 @@ async function runBenchmark(): Promise<void> {
   const ragOrchestrator = new RagOrchestrator(config)
   const benchmarkResults: { query: string; durationMs: number; isFailure: boolean }[] = []
 
-  for (let queryIndex = 0; queryIndex < BENCHMARK_QUERIES.length; queryIndex++) {
-    const currentQuery = BENCHMARK_QUERIES[queryIndex]!
+  for (const [queryIndex, currentQuery] of BENCHMARK_QUERIES.entries()) {
     logger.info(`[${queryIndex + 1}/${BENCHMARK_QUERIES.length}] "${currentQuery}"`)
 
     const startTime = performance.now()
     let isFailure = false
 
-    try {
-      await ragOrchestrator.answerQuestion(currentQuery)
-    } catch (error) {
+    const answerResult = await ragOrchestrator.answerQuestion(currentQuery)
+    if (!answerResult.ok) {
       isFailure = true
-      errorBus.emitError('Benchmark query failed', error, { query: currentQuery })
+      errorBus.emitError('Benchmark query failed', answerResult.error, { query: currentQuery })
     }
 
     const durationMs = Math.round(performance.now() - startTime)
@@ -58,20 +56,20 @@ async function runBenchmark(): Promise<void> {
   const successfulResults = benchmarkResults.filter((result) => !result.isFailure)
   const failedResults = benchmarkResults.filter((result) => result.isFailure)
 
-  const totalSuccessfulDuration = successfulResults.reduce(
-    (accumulator, result) => accumulator + result.durationMs,
-    0
-  )
+  let totalSuccessfulDuration = 0
+  for (const result of successfulResults) {
+    totalSuccessfulDuration += result.durationMs
+  }
   const averageLatencyMs =
     successfulResults.length > 0
       ? Math.round(totalSuccessfulDuration / successfulResults.length)
       : 0
 
   logger.info('--- Benchmark Results ---')
-  benchmarkResults.forEach((result, index) => {
+  for (const [index, result] of benchmarkResults.entries()) {
     const statusSymbol = result.isFailure ? '✗' : '✓'
     logger.info(`  ${statusSymbol} [${index + 1}] ${result.durationMs}ms — ${result.query}`)
-  })
+  }
 
   logger.info(`Successful: ${successfulResults.length}/${benchmarkResults.length}`)
   logger.info(`Average latency: ${averageLatencyMs}ms`)

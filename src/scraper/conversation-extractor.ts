@@ -3,11 +3,16 @@ import { errorBus } from '../utils/error-bus.js'
 import { z } from 'zod'
 import { type Page, type BrowserContext, type Response } from '@playwright/test'
 import { logger } from '../utils/logger.js'
-import { waitStrategy } from '../utils/wait-strategy.js'
+import { createWaitStrategy } from '../utils/wait-strategy.js'
 import { type Config } from '../utils/config.js'
 import { ApiDiagnosticsWriter } from '../utils/api-diagnostics.js'
 import { errorMessageOf } from '../utils/extract-error-message.js'
+import { makeNamedError } from '../utils/errors.js'
 import { DEFAULT_API_VERSION } from './api-version.js'
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+}
 
 export interface ConversationMessage {
   role: 'user' | 'assistant'
@@ -80,54 +85,17 @@ export class ConversationExtractor {
     }),
   ])
 
-  static readonly ExtractionError = class extends Error {
-    constructor(message: string) {
-      super(message)
-      this.name = 'ExtractionError'
-    }
-  }
+  private static readonly TimestampCarrierSchema = z.object({
+    updated_datetime: z.string().optional(),
+  })
 
-  static readonly NavigationError = class extends Error {
-    constructor(message: string) {
-      super(message)
-      this.name = 'NavigationError'
-    }
-  }
-
-  static readonly NotFoundError = class extends Error {
-    constructor(message: string) {
-      super(message)
-      this.name = 'NotFoundError'
-    }
-  }
-
-  static readonly AuthError = class extends Error {
-    constructor(message: string) {
-      super(message)
-      this.name = 'AuthError'
-    }
-  }
-
-  static readonly ServerError = class extends Error {
-    constructor(message: string) {
-      super(message)
-      this.name = 'ServerError'
-    }
-  }
-
-  static readonly NoDataError = class extends Error {
-    constructor(message: string) {
-      super(message)
-      this.name = 'NoDataError'
-    }
-  }
-
-  static readonly ParsingError = class extends Error {
-    constructor(message: string) {
-      super(message)
-      this.name = 'ParsingError'
-    }
-  }
+  static readonly ExtractionError = makeNamedError('ExtractionError')
+  static readonly NavigationError = makeNamedError('NavigationError')
+  static readonly NotFoundError = makeNamedError('NotFoundError')
+  static readonly AuthError = makeNamedError('AuthError')
+  static readonly ServerError = makeNamedError('ServerError')
+  static readonly NoDataError = makeNamedError('NoDataError')
+  static readonly ParsingError = makeNamedError('ParsingError')
 
   private static readonly TIMEOUT_MAX_MS = 30_000
   private static readonly TIMEOUT_MIN_MS = 8_000
@@ -170,11 +138,11 @@ export class ConversationExtractor {
       throw new ConversationExtractor.ExtractionError(`Failed to create new page: ${errorMessage}`)
     }
 
-    const apiResponsePromise = this.captureConversationApiResponse(conversationPage)
+    const apiResponsePromise = this.captureConversationApiResponse(conversationPage, expectedId)
 
     try {
       await this.navigateToConversationUrl(conversationPage, conversationUrl)
-      await waitStrategy(this.config).afterScroll(conversationPage)
+      await createWaitStrategy(this.config).afterScroll(conversationPage)
 
       const capturedApiData = await apiResponsePromise
       if (!capturedApiData) {
@@ -214,19 +182,23 @@ export class ConversationExtractor {
     }
   }
 
-  private captureConversationApiResponse(page: Page): Promise<unknown> {
+  private captureConversationApiResponse(
+    page: Page,
+    expectedId?: string
+  ): Promise<{ entries: unknown[]; partial: boolean } | null> {
     const accumulatedEntries: unknown[] = []
     let isRequestResolved = false
     const expectedVersionToken = `version=${encodeURIComponent(DEFAULT_API_VERSION)}`
+    const expectedThreadToken = expectedId ? `/rest/thread/${expectedId}` : ''
 
     return new Promise((resolve) => {
       const timeoutId = setTimeout(() => {
         if (!isRequestResolved) {
           if (accumulatedEntries.length > 0) {
             logger.info(
-              `API response timeout – resolving with ${accumulatedEntries.length} accumulated entries`
+              `API response timeout – resolving with ${accumulatedEntries.length} accumulated entries (partial)`
             )
-            resolve({ entries: accumulatedEntries })
+            resolve({ entries: accumulatedEntries, partial: true })
           } else {
             logger.warn('API response timeout – resolving with null')
             resolve(null)
@@ -246,6 +218,7 @@ export class ConversationExtractor {
           responseUrl.includes('list_pinned')
 
         if (!isThreadApiRequest || isListRequest) return
+        if (expectedThreadToken && !responseUrl.includes(expectedThreadToken)) return
         if (page.isClosed()) return
 
         if (!responseUrl.includes(expectedVersionToken) && responseUrl.includes('version=')) {
@@ -277,7 +250,7 @@ export class ConversationExtractor {
             if (!hasNextPage) {
               clearTimeout(timeoutId)
               isRequestResolved = true
-              resolve({ entries: accumulatedEntries })
+              resolve({ entries: accumulatedEntries, partial: false })
             } else {
               logger.info(
                 `Captured paginated response, ${accumulatedEntries.length} entries so far...`
@@ -285,9 +258,7 @@ export class ConversationExtractor {
             }
           }
         } catch (error) {
-          logger.debug(
-            `JSON parse failed for response ${response.url()}: ${(error as Error).message}`
-          )
+          logger.debug(`JSON parse failed for response ${response.url()}: ${errorMessageOf(error)}`)
         }
       })
     })
@@ -335,17 +306,12 @@ export class ConversationExtractor {
     })
 
     const stableJsonString = JSON.stringify(contentOnlyEntries, (_key, value) => {
-      const isObjectButNotArray = value && typeof value === 'object' && !Array.isArray(value)
-      if (isObjectButNotArray) {
-        return Object.keys(value)
-          .sort()
-          .reduce((sortedObj: Record<string, unknown>, currentKey) => {
-            // why: JSON.stringify replacer cannot narrow; the type guard above ensures we have an object
-            sortedObj[currentKey] = (value as Record<string, unknown>)[currentKey]
-            return sortedObj
-          }, {})
+      if (!isPlainObject(value)) return value
+      const sortedObj: Record<string, unknown> = {}
+      for (const currentKey of Object.keys(value).sort()) {
+        sortedObj[currentKey] = value[currentKey]
       }
-      return value
+      return sortedObj
     })
     return createHash('sha256').update(stableJsonString).digest('hex')
   }
@@ -425,10 +391,6 @@ export class ConversationExtractor {
     const match = url.match(/\/search\/([^/?]+)/)
     return match?.[1] ?? 'unknown'
   }
-
-  private static readonly TimestampCarrierSchema = z.object({
-    updated_datetime: z.string().optional(),
-  })
 
   private extractTimestamp(firstEntry: RawEntry, data: unknown): Date {
     const parsed = ConversationExtractor.TimestampCarrierSchema.safeParse(data)

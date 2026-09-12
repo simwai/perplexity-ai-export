@@ -15,6 +15,7 @@ class DynamicWaitStrategy implements WaitStrategy {
     // why: best-effort wait for network idle; a timeout here just means the click landed on a fast page
     await page
       .waitForLoadState('networkidle', { timeout: DynamicWaitStrategy.NETWORK_IDLE_TIMEOUT_MS })
+      // why: networkidle timeout is non-fatal; proceed with next step
       .catch(() => {})
   }
 
@@ -56,7 +57,7 @@ class StaticWaitStrategy implements WaitStrategy {
   }
 }
 
-export const waitStrategy = (config: Config): WaitStrategy => {
+export const createWaitStrategy = (config: Config): WaitStrategy => {
   const isDynamicMode = config.waitMode === 'dynamic'
   return isDynamicMode ? new DynamicWaitStrategy() : new StaticWaitStrategy(config.rateLimitMs)
 }

@@ -5,6 +5,8 @@ import { RagOrchestrator } from '../../src/ai/rag-orchestrator.js'
 import { config } from '../../src/utils/config.js'
 import { VectorStore } from '../../src/search/vector-store.js'
 import { RgSearch } from '../../src/search/rg-search.js'
+import { logger } from '../../src/utils/logger.js'
+import { ok } from 'super-result'
 
 const mockSearchOutcome = [
   {
@@ -55,18 +57,25 @@ afterAll(() => mswServer.close())
 
 describe('RagOrchestrator (MSW Mocked)', () => {
   it('should orchestrate the RAG flow successfully', async () => {
-    vi.spyOn(VectorStore.prototype, 'search').mockResolvedValue(mockSearchOutcome)
+    // Mock VectorStore.search to return Result with mock data
+    vi.spyOn(VectorStore.prototype, 'search').mockResolvedValue(ok(mockSearchOutcome))
     vi.spyOn(VectorStore.prototype, 'validate').mockResolvedValue(undefined)
     vi.spyOn(RgSearch.prototype, 'captureSearchMatches').mockResolvedValue([])
 
+    // Spy on logger.info since that's where the final answer is written (with ℹ prefix)
+    const infoSpy = vi.spyOn(logger, 'info').mockImplementation(() => {})
+
     const ragOrchestratorInstance = new RagOrchestrator(config)
-    const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
 
-    await ragOrchestratorInstance.answerQuestion('What is in my history?')
+    try {
+      await ragOrchestratorInstance.answerQuestion('What is in my history?')
 
-    expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('Based on your history'))
-    expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('Mocked Title'))
-
-    consoleLogSpy.mockRestore()
+      // Check that logger.info was called with the expected content
+      const infoCalls = infoSpy.mock.calls.flat().join(' ')
+      expect(infoCalls).toContain('Based on your history')
+      expect(infoCalls).toContain('Mocked Title')
+    } finally {
+      infoSpy.mockRestore()
+    }
   })
 })

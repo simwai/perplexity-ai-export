@@ -5,9 +5,20 @@ import { type Config } from '../utils/config.js'
 import { logger } from '../utils/logger.js'
 import { rgPath } from '@vscode/ripgrep'
 import { errorMessageOf } from '../utils/extract-error-message.js'
+import { makeNamedError } from '../utils/errors.js'
+import { z } from 'zod'
 
 // why: ripgrep emits this exact substring on stderr when the binary is missing or unreadable
 const RIPGREP_ENOENT_MESSAGE = 'No such file or directory'
+
+const RgMatchJsonSchema = z.object({
+  type: z.literal('match'),
+  data: z.object({
+    path: z.object({ text: z.string() }),
+    line_number: z.number(),
+    lines: z.object({ text: z.string() }),
+  }),
+})
 
 export interface RgSearchOptions {
   pattern: string
@@ -23,19 +34,8 @@ export interface RgMatch {
 }
 
 export class RgSearch {
-  static readonly RgSearchError = class extends Error {
-    constructor(message: string) {
-      super(message)
-      this.name = 'RgSearchError'
-    }
-  }
-
-  static readonly RgNotFoundError = class extends Error {
-    constructor(message: string) {
-      super(message)
-      this.name = 'RgNotFoundError'
-    }
-  }
+  static readonly RgSearchError = makeNamedError('RgSearchError')
+  static readonly RgNotFoundError = makeNamedError('RgNotFoundError')
 
   constructor(private readonly config: Config) {}
 
@@ -81,12 +81,12 @@ export class RgSearch {
             return
           }
           try {
-            const parsed = JSON.parse(line)
-            if (parsed.type === 'match') {
+            const parsed = RgMatchJsonSchema.safeParse(JSON.parse(line))
+            if (parsed.success && parsed.data.type === 'match') {
               matches.push({
-                path: parsed.data.path.text,
-                line: parsed.data.line_number,
-                text: parsed.data.lines.text,
+                path: parsed.data.data.path.text,
+                line: parsed.data.data.line_number,
+                text: parsed.data.data.lines.text,
               })
             }
           } catch (error) {

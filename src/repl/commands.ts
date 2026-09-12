@@ -10,45 +10,19 @@ import { SearchOrchestrator } from '../search/search-orchestrator.js'
 import { RagOrchestrator } from '../ai/rag-orchestrator.js'
 import { type ChatMessage } from '../ai/ollama-client.js'
 import { logger } from '../utils/logger.js'
+import { errorMessageOf } from '../utils/extract-error-message.js'
+import { makeNamedError } from '../utils/errors.js'
+import { ok, err, type Result } from 'super-result'
 import { showHelp } from './help.js'
 import { LibraryDiscovery } from '../scraper/library-discovery.js'
 import { type Config } from '../utils/config.js'
 
 export class CommandHandler {
-  static readonly ScraperError = class extends Error {
-    constructor(message: string) {
-      super(message)
-      this.name = 'ScraperError'
-    }
-  }
-
-  static readonly SearchError = class extends Error {
-    constructor(message: string) {
-      super(message)
-      this.name = 'SearchError'
-    }
-  }
-
-  static readonly VectorizeError = class extends Error {
-    constructor(message: string) {
-      super(message)
-      this.name = 'VectorizeError'
-    }
-  }
-
-  static readonly ValidationError = class extends Error {
-    constructor(message: string) {
-      super(message)
-      this.name = 'ValidationError'
-    }
-  }
-
-  static readonly ResetError = class extends Error {
-    constructor(message: string) {
-      super(message)
-      this.name = 'ResetError'
-    }
-  }
+  static readonly ScraperError = makeNamedError('ScraperError')
+  static readonly SearchError = makeNamedError('SearchError')
+  static readonly VectorizeError = makeNamedError('VectorizeError')
+  static readonly ValidationError = makeNamedError('ValidationError')
+  static readonly ResetError = makeNamedError('ResetError')
 
   private readonly checkpointManager: CheckpointManager
   private readonly searchOrchestrator: SearchOrchestrator
@@ -60,11 +34,26 @@ export class CommandHandler {
     this.ragOrchestrator = new RagOrchestrator(config)
   }
 
+  private async ensureVectorSearchAvailable(mode: 'auto' | 'vector' | 'rag'): Promise<boolean> {
+    const result = await this.searchOrchestrator.validateVectorSearch()
+    if (result.ok) return true
+
+    const errorMessage = errorMessageOf(result.error)
+    errorBus.emitError(errorMessage)
+    if (mode === 'auto') {
+      logger.warn(
+        'Ollama is not available (required for semantic features). Falling back to Exact Text search (ripgrep).'
+      )
+      return false
+    }
+    logger.info('Start Ollama with the embedding model, then run "vectorize".')
+    return false
+  }
+
   async handleStartLibraryExport(): Promise<void> {
-    try {
-      await this.executeFullScrapingFlow()
-    } catch (error) {
-      errorBus.emitError('Scraper failed', error)
+    const result = await this.executeFullScrapingFlow()
+    if (!result.ok) {
+      errorBus.emitError('Scraper failed', result.error)
       logger.info(
         '\nNote: Check "debug/api-diagnostics.jsonl" for details if the failure is related to API response changes.'
       )
@@ -93,32 +82,17 @@ export class CommandHandler {
       regex: false,
     }
 
-    try {
-      const isSemanticMode = mode === 'auto' || mode === 'vector' || mode === 'rag'
-      if (isSemanticMode) {
-        try {
-          await this.searchOrchestrator.validateVectorSearch()
-        } catch (error) {
-          if (mode === 'auto') {
-            logger.warn(
-              'Ollama is not available (required for semantic features). Falling back to Exact Text search (ripgrep).'
-            )
-            mode = 'rg'
-          } else {
-            const errorMessage = error instanceof Error ? error.message : String(error)
-            errorBus.emitError(errorMessage)
-            logger.info('Start Ollama with the embedding model, then run "vectorize".')
-            return
-          }
-        }
-      }
+    const isSemanticMode = mode === 'auto' || mode === 'vector' || mode === 'rag'
+    if (isSemanticMode) {
+      const available = await this.ensureVectorSearchAvailable(mode)
+      if (!available) return
+    }
 
-      logger.info(`Searching for: "${query}" (mode: ${mode})\n`)
-      await this.searchOrchestrator.search(query, mode, ripgrepOptions)
-    } catch (error) {
-      if (error instanceof Error) {
-        errorBus.emitError(error.message, error)
-      }
+    logger.info(`Searching for: "${query}" (mode: ${mode})\n`)
+    const searchResult = await this.searchOrchestrator.search(query, mode, ripgrepOptions)
+    if (!searchResult.ok) {
+      const errorMessage = errorMessageOf(searchResult.error)
+      errorBus.emitError(errorMessage)
     }
   }
 
@@ -133,14 +107,14 @@ export class CommandHandler {
       return
     }
 
-    try {
-      await this.searchOrchestrator.validateVectorSearch()
-    } catch (error) {
-      await this.handleVectorSearchValidationRetry(error)
-      return
-    }
+    const available = await this.ensureVectorSearchAvailable('vector')
+    if (!available) return
 
-    await this.searchOrchestrator.vectorizeNow()
+    const result = await this.searchOrchestrator.vectorizeNow()
+    if (!result.ok) {
+      const errorMessage = errorMessageOf(result.error)
+      errorBus.emitError(errorMessage)
+    }
   }
 
   async handleDataReset(): Promise<void> {
@@ -155,58 +129,62 @@ export class CommandHandler {
       return
     }
 
-    try {
-      this.wipeStorageDirectory()
-      this.checkpointManager.resetCheckpoint()
-      logger.success('✅ Storage folder deleted. All progress has been reset.')
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error)
-      throw new CommandHandler.ResetError(`Failed to reset: ${errorMessage}`)
+    const resetResult = await this.checkpointManager.resetCheckpoint()
+    if (!resetResult.ok) {
+      errorBus.emitError('Failed to reset', resetResult.error)
+      return
     }
+
+    this.wipeStorageDirectory()
+    logger.success('✅ Storage folder deleted. All progress has been reset.')
   }
 
   handleShowHelp(): void {
     showHelp()
   }
 
-  private async executeFullScrapingFlow(): Promise<void> {
+  private async executeFullScrapingFlow(): Promise<Result<void, Error>> {
     const browserManager = new BrowserManager(this.config)
 
-    try {
-      const activePage = await browserManager.launch()
-
-      const isDiscoveryRequired = !this.checkpointManager.isDiscoveryPhaseComplete()
-      if (isDiscoveryRequired) {
-        await this.runDiscoveryPhase(activePage)
-      }
-
-      const pendingConversations = this.checkpointManager.getPendingConversations()
-      const hasPendingConversations = pendingConversations.length > 0
-
-      if (!hasPendingConversations) {
-        logger.success('All conversations already processed!')
-        return
-      }
-
-      await this.runExtractionPhase(browserManager, pendingConversations)
-
-      logger.success('\n✨ Export complete!')
-      logger.info(
-        '\nNote: If some conversations were missed or the format looks wrong, please check "debug/api-diagnostics.jsonl" and consider opening a GitHub issue with that file attached.'
-      )
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error)
-      throw new CommandHandler.ScraperError(`Scraping failed: ${errorMessage}`)
-    } finally {
-      await browserManager.close()
+    const launchResult = await browserManager.launch()
+    if (!launchResult.ok) {
+      return err(new Error(`Failed to launch browser: ${errorMessageOf(launchResult.error)}`))
     }
+    const activePage = launchResult.value
+
+    const isDiscoveryRequired = !this.checkpointManager.isDiscoveryPhaseComplete()
+    if (isDiscoveryRequired) {
+      await this.runDiscoveryPhase(activePage)
+    }
+
+    const pendingConversations = this.checkpointManager.getPendingConversations()
+    const hasPendingConversations = pendingConversations.length > 0
+
+    if (!hasPendingConversations) {
+      logger.success('All conversations already processed!')
+      await browserManager.close()
+      return ok(undefined)
+    }
+
+    await this.runExtractionPhase(browserManager, pendingConversations)
+
+    logger.success('\n✨ Export complete!')
+    logger.info(
+      '\nNote: If some conversations were missed or the format looks wrong, please check "debug/api-diagnostics.jsonl" and consider opening a GitHub issue with that file attached.'
+    )
+    await browserManager.close()
+    return ok(undefined)
   }
 
   private async runDiscoveryPhase(page: Page): Promise<void> {
     logger.info('\n=== Phase 1: Library Discovery ===\n')
     const discoveryTool = new LibraryDiscovery()
     const discoveredConversations = await discoveryTool.discoverAllConversationsFromLibrary(page)
-    this.checkpointManager.setDiscoveredConversations(discoveredConversations)
+    const setResult =
+      await this.checkpointManager.setDiscoveredConversations(discoveredConversations)
+    if (!setResult.ok) {
+      errorBus.emitError('Failed to save discovered conversations', setResult.error)
+    }
   }
 
   private async runExtractionPhase(
@@ -215,14 +193,24 @@ export class CommandHandler {
   ): Promise<void> {
     logger.info(`\n=== Phase 2: Parallel Extraction (${pendingConversations.length} pending) ===\n`)
 
-    const activeBrowser = browserManager.browserInstance
+    const activeBrowser = browserManager.getBrowserInstance()
     if (!activeBrowser) {
-      throw new CommandHandler.ScraperError('Browser was not initialized')
+      errorBus.emitError('Browser was not initialized')
+      return
     }
 
     const workerPool = new WorkerPool(this.config, this.checkpointManager, activeBrowser)
-    await workerPool.initialize()
-    await workerPool.processConversations(pendingConversations)
+    const initResult = await workerPool.initialize()
+    if (!initResult.ok) {
+      errorBus.emitError('Failed to initialize worker pool', initResult.error)
+      return
+    }
+
+    const processResult = await workerPool.processConversations(pendingConversations)
+    if (!processResult.ok) {
+      errorBus.emitError('Failed to process conversations', processResult.error)
+    }
+
     await workerPool.close()
   }
 
@@ -247,9 +235,9 @@ export class CommandHandler {
     }
 
     if (selectedAction === 'restart') {
-      this.checkpointManager.resetCheckpoint()
+      await this.checkpointManager.resetCheckpoint()
     } else if (selectedAction === 'update') {
-      this.checkpointManager.prepareForUpdateRun()
+      await this.checkpointManager.prepareForUpdateRun()
     }
   }
 
@@ -273,42 +261,9 @@ export class CommandHandler {
     })
   }
 
-  private async handleVectorSearchValidationRetry(validationError: unknown): Promise<void> {
-    const validationErrorMessage =
-      validationError instanceof Error ? validationError.message : String(validationError)
-    errorBus.emitError(validationErrorMessage)
-
-    const shouldRetryAfterStartingOllama = await confirm({
-      message:
-        'Ollama validation failed. Start Ollama (with the embedding model) and retry vectorization?',
-      default: false,
-    })
-
-    if (!shouldRetryAfterStartingOllama) {
-      return
-    }
-
-    try {
-      await this.searchOrchestrator.validateVectorSearch()
-    } catch (retryError) {
-      const retryErrorMessage =
-        retryError instanceof Error ? retryError.message : String(retryError)
-      errorBus.emitError(retryErrorMessage)
-      return
-    }
-
-    await this.searchOrchestrator.vectorizeNow()
-  }
-
   async handleChatWizard(): Promise<void> {
-    try {
-      await this.searchOrchestrator.validateVectorSearch()
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error)
-      errorBus.emitError(errorMessage)
-      logger.info('Start Ollama with the embedding model, then run "vectorize".')
-      return
-    }
+    const available = await this.ensureVectorSearchAvailable('rag')
+    if (!available) return
 
     logger.info('\n💬 History Chat Mode')
     logger.info('Type your questions about your exported conversations.')
@@ -329,7 +284,14 @@ export class CommandHandler {
           continue
         }
 
-        const response = await this.ragOrchestrator.chat(query, history)
+        const chatResult = await this.ragOrchestrator.chat(query, history)
+        if (!chatResult.ok) {
+          const errorMessage = errorMessageOf(chatResult.error)
+          errorBus.emitError(errorMessage)
+          continue
+        }
+
+        const response = chatResult.value
 
         logger.log('\nAssistant:\n')
         logger.log(response.content)
@@ -340,24 +302,34 @@ export class CommandHandler {
         history.push({ role: 'user', content: query })
         history.push({ role: 'assistant', content: response.content })
 
-        // Keep history manageable
-        if (history.length > 20) {
+        if (history.length > this.MAX_HISTORY_MESSAGES) {
           history.splice(0, 2)
         }
       } catch (error) {
         if (error instanceof Error && error.name === 'ExitPromptError') {
           isChatting = false
-        } else if (error instanceof Error) {
-          errorBus.emitError(error.message, error)
+        } else {
+          const errorMessage = errorMessageOf(error)
+          errorBus.emitError(errorMessage)
         }
       }
     }
   }
+
+  private readonly MAX_HISTORY_MESSAGES = 20
+
   private wipeStorageDirectory(): void {
     const authStoragePath = this.config.authStoragePath
 
     const resolvedAuthPath = resolve(authStoragePath)
     const storageRootDir = dirname(resolvedAuthPath)
+
+    if (!storageRootDir.endsWith('.storage')) {
+      errorBus.emitError(
+        `Refusing to delete unexpected path: ${storageRootDir}. Expected a path ending with '.storage'`
+      )
+      return
+    }
 
     try {
       if (storageRootDir) {
@@ -367,7 +339,7 @@ export class CommandHandler {
     } catch (error) {
       const isNotFoundError = (error as NodeJS.ErrnoException).code === 'ENOENT'
       if (!isNotFoundError) {
-        throw error
+        errorBus.emitError('Failed to wipe storage directory', error)
       }
     }
   }

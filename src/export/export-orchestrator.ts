@@ -7,14 +7,21 @@ import { sanitizeFilename, sanitizeSpaceName } from './sanitizer.js'
 import { type ExportStrategy } from '../exporters/export.strategy.js'
 import { logger } from '../utils/logger.js'
 import { errorMessageOf } from '../utils/extract-error-message.js'
+import { createResult, ok, err, type Result } from 'super-result'
+
+export class ExportError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'ExportError'
+  }
+}
 
 export class ExportOrchestrator {
-  static readonly ExportError = class extends Error {
-    constructor(message: string) {
-      super(message)
-      this.name = 'ExportError'
-    }
-  }
+  static readonly ExportError = ExportError
+
+  private readonly R = createResult<ExportError>((error: unknown) =>
+    error instanceof ExportError ? error : new ExportError(String(error))
+  )
 
   private strategies: ExportStrategy[] = []
 
@@ -40,84 +47,105 @@ export class ExportOrchestrator {
         (file.endsWith('.strategy.ts') || file.endsWith('.strategy.js')) &&
         !file.endsWith('.d.ts')
       ) {
-        try {
+        const importResult = await this.R.from(async () => {
           const filePath = join(strategiesDir, file)
           const moduleUrl = pathToFileURL(filePath).href
           const strategyModule = await import(moduleUrl)
+          // why: dynamic import of strategy module; default export must match ExportStrategy interface
           const strategy = strategyModule.default as ExportStrategy
+          return strategy
+        })
 
-          if (strategy && strategy.name && typeof strategy.format === 'function') {
-            if (this.config.exportStrategies.includes(strategy.name)) {
-              this.strategies.push(strategy)
-              logger.debug(`Registered export strategy: ${strategy.name}`)
-            }
-          }
-        } catch (error) {
-          logger.error(`Failed to load export strategy ${file}: ${errorMessageOf(error)}`)
+        if (!importResult.ok) {
+          logger.error(
+            `Failed to load export strategy ${file}: ${errorMessageOf(importResult.error)}`
+          )
+          continue
         }
-      }
-    }
 
-    if (this.strategies.length === 0) {
-      logger.warn('No active export strategies found. Defaulting to markdown.')
-      try {
-        const markdownStrategy = (await import('../exporters/markdown.strategy.js')).default
-        this.strategies.push(markdownStrategy)
-      } catch (e) {
-        logger.error(`Failed to load default markdown strategy: ${errorMessageOf(e)}`)
+        const strategy = importResult.value
+
+        if (strategy && strategy.name && typeof strategy.format === 'function') {
+          if (this.config.exportStrategies.includes(strategy.name)) {
+            this.strategies.push(strategy)
+            logger.debug(`Registered export strategy: ${strategy.name}`)
+          }
+        }
       }
     }
   }
 
-  async exportConversation(conversation: ExtractedConversation): Promise<string[]> {
+  async exportConversation(
+    conversation: ExtractedConversation
+  ): Promise<Result<string[], ExportError>> {
     const writtenFiles: string[] = []
 
     for (const strategy of this.strategies) {
-      try {
-        const outputDir = strategy.outputDir(this.config)
-        const safeSpaceName = sanitizeSpaceName(conversation.spaceName)
-        const spaceSpecificDirectory = join(outputDir, safeSpaceName)
+      const outputDir = strategy.outputDir(this.config)
+      const safeSpaceName = sanitizeSpaceName(conversation.spaceName)
+      const spaceSpecificDirectory = join(outputDir, safeSpaceName)
 
-        if (!existsSync(spaceSpecificDirectory)) {
+      if (!existsSync(spaceSpecificDirectory)) {
+        const mkdirResult = this.R.from(() =>
           mkdirSync(spaceSpecificDirectory, { recursive: true })
+        )
+        if (!mkdirResult.ok) {
+          logger.error(
+            `Failed to create directory for ${strategy.name} for ${conversation.id}: ${errorMessageOf(mkdirResult.error)}`
+          )
+          continue
         }
+      }
 
-        const safeFileTitle = sanitizeFilename(conversation.title)
-        const fileName = `${safeFileTitle} (${conversation.id})${strategy.fileExtension}`
-        const destinationFilePath = join(spaceSpecificDirectory, fileName)
+      const safeFileTitle = sanitizeFilename(conversation.title)
+      const fileName = `${safeFileTitle} (${conversation.id})${strategy.fileExtension}`
+      const destinationFilePath = join(spaceSpecificDirectory, fileName)
 
-        this.cleanupStaleFiles(conversation.id, destinationFilePath, strategy.fileExtension)
+      this.cleanupStaleFiles(conversation.id, destinationFilePath, strategy.fileExtension)
 
-        const content = strategy.format(conversation)
-        writeFileSync(destinationFilePath, content, 'utf-8')
+      const content = strategy.format(conversation)
+      const writeResult = this.R.from(() => writeFileSync(destinationFilePath, content, 'utf-8'))
+      if (!writeResult.ok) {
+        logger.error(
+          `Failed to export with ${strategy.name} for ${conversation.id}: ${errorMessageOf(writeResult.error)}`
+        )
+        continue
+      }
 
+      const verifyResult = this.R.from(() => {
         if (!existsSync(destinationFilePath) || statSync(destinationFilePath).size === 0) {
-          throw new ExportOrchestrator.ExportError(
-            `Exported file is missing or empty: ${destinationFilePath}`
+          return err(
+            new ExportOrchestrator.ExportError(
+              `Exported file is missing or empty: ${destinationFilePath}`
+            )
           )
         }
-
-        writtenFiles.push(destinationFilePath)
-      } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : String(error)
+        return ok(undefined)
+      })
+      if (!verifyResult.ok) {
         logger.error(
-          `Failed to export with ${strategy.name} for ${conversation.id}: ${errorMessage}`
+          `Failed to export with ${strategy.name} for ${conversation.id}: ${errorMessageOf(verifyResult.error)}`
         )
+        continue
       }
+
+      writtenFiles.push(destinationFilePath)
     }
 
     if (writtenFiles.length === 0 && this.strategies.length > 0) {
-      throw new ExportOrchestrator.ExportError(
-        `Failed to write conversation ${conversation.id} with any strategy.`
+      return err(
+        new ExportOrchestrator.ExportError(
+          `Failed to write conversation ${conversation.id} with any strategy.`
+        )
       )
     }
 
-    return writtenFiles
+    return ok(writtenFiles)
   }
 
   private ensureRootExportDirectoryExists(): void {
     if (!existsSync(this.config.exportDir)) {
-      mkdirSync(this.config.exportDir, { recursive: true })
+      this.R.from(() => mkdirSync(this.config.exportDir, { recursive: true }))
     }
   }
 
@@ -126,31 +154,27 @@ export class ExportOrchestrator {
     currentFilePath: string,
     fileExtension: string
   ): void {
-    try {
-      const suffix = `(${conversationId})${fileExtension}`
-      const searchDirs = new Set<string>([this.config.exportDir])
+    const suffix = `(${conversationId})${fileExtension}`
+    const searchDirs = new Set<string>([this.config.exportDir])
 
-      for (const strategy of this.strategies) {
-        searchDirs.add(strategy.outputDir(this.config))
-      }
+    for (const strategy of this.strategies) {
+      searchDirs.add(strategy.outputDir(this.config))
+    }
 
-      for (const baseDir of searchDirs) {
-        if (!existsSync(baseDir)) continue
-        for (const staleFile of this.findFilesBySuffix(baseDir, suffix)) {
-          if (staleFile !== currentFilePath) {
-            try {
-              unlinkSync(staleFile)
-              logger.debug(`Cleaned up stale export: ${staleFile}`)
-            } catch (error) {
-              logger.debug(
-                `Failed to clean up stale export ${staleFile}: ${(error as Error).message}`
-              )
-            }
+    for (const baseDir of searchDirs) {
+      if (!existsSync(baseDir)) continue
+      for (const staleFile of this.findFilesBySuffix(baseDir, suffix)) {
+        if (staleFile !== currentFilePath) {
+          const unlinkResult = this.R.from(() => unlinkSync(staleFile))
+          if (unlinkResult.ok) {
+            logger.debug(`Cleaned up stale export: ${staleFile}`)
+          } else {
+            logger.debug(
+              `Failed to clean up stale export ${staleFile}: ${errorMessageOf(unlinkResult.error)}`
+            )
           }
         }
       }
-    } catch (error) {
-      logger.debug(`Failed to scan for stale files: ${(error as Error).message}`)
     }
   }
 
@@ -158,25 +182,22 @@ export class ExportOrchestrator {
     const results: string[] = []
 
     const scanDirectory = (dir: string): void => {
-      let entries: string[]
-      try {
-        entries = readdirSync(dir)
-      } catch {
+      const readDirResult = this.R.from(() => readdirSync(dir))
+      if (!readDirResult.ok) {
         // why: directory may be missing or unreadable mid-walk; treat as empty
         return
       }
 
+      const entries = readDirResult.value
       for (const entry of entries) {
         const fullPath = join(dir, entry)
-        let stat
-        try {
-          stat = statSync(fullPath)
-        } catch {
+        const statResult = this.R.from(() => statSync(fullPath))
+        if (!statResult.ok) {
           // why: entry may be a broken symlink or transient FS race; skip
           continue
         }
 
-        if (stat.isDirectory()) {
+        if (statResult.value.isDirectory()) {
           scanDirectory(fullPath)
         } else if (entry.endsWith(suffix)) {
           results.push(fullPath)

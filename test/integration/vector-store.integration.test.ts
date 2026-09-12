@@ -95,8 +95,10 @@ describe.runIf(await isOllamaAvailable())('VectorStore Integration', () => {
 
     await store.rebuildFromExports()
 
-    const results = await store.search('TypeScript static typing', 5)
+    const searchResult = await store.search('TypeScript static typing', 5)
 
+    expect(searchResult.ok).toBe(true)
+    const results = searchResult.value
     expect(results.length).toBeGreaterThan(0)
     expect(results[0]).toHaveProperty('meta')
     expect(results[0]).toHaveProperty('score')

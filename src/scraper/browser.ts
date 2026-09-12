@@ -4,124 +4,127 @@ import { type Config } from '../utils/config.js'
 import { logger } from '../utils/logger.js'
 import { confirm } from '@inquirer/prompts'
 import { errorMessageOf } from '../utils/extract-error-message.js'
+import { makeNamedError } from '../utils/errors.js'
+import { ok, err, createResult, type Result } from 'super-result'
 import { logHttpRequest, logHttpResponse } from '../utils/http-logger.js'
 
+const SETTINGS_URL = 'https://www.perplexity.ai/settings'
+const NAVIGATION_TIMEOUT_MS = 15_000
+
 export class BrowserManager {
-  static readonly BrowserLaunchError = class extends Error {
-    constructor(message: string) {
-      super(message)
-      this.name = 'BrowserLaunchError'
-    }
-  }
+  static readonly BrowserLaunchError = makeNamedError('BrowserLaunchError')
+  static readonly AuthError = makeNamedError('AuthError')
+  static readonly ContextError = makeNamedError('ContextError')
+  static readonly NavigationError = makeNamedError('NavigationError')
 
-  static readonly AuthError = class extends Error {
-    constructor(message: string) {
-      super(message)
-      this.name = 'AuthError'
-    }
-  }
+  private readonly R = createResult<Error>((error: unknown) =>
+    error instanceof Error ? error : new Error(String(error))
+  )
 
-  static readonly ContextError = class extends Error {
-    constructor(message: string) {
-      super(message)
-      this.name = 'ContextError'
-    }
-  }
-
-  static readonly NavigationError = class extends Error {
-    constructor(message: string) {
-      super(message)
-      this.name = 'NavigationError'
-    }
-  }
-
-  public browserInstance: Browser | null = null
+  private browserInstance: Browser | null = null
   private activeContext: BrowserContext | null = null
   private activePage: Page | null = null
 
   constructor(private readonly config: Config) {}
 
-  async launch(): Promise<Page> {
-    try {
-      const authPath = this.config.authStoragePath
-      const authExists = existsSync(authPath)
-      const shouldTrySavedState = authExists
+  async launch(): Promise<Result<Page, Error>> {
+    const authPath = this.config.authStoragePath
+    const authExists = existsSync(authPath)
+    const shouldTrySavedState = authExists
 
-      if (shouldTrySavedState) {
-        await this.launchBrowser(this.config.headless)
-        await this.initializeBrowserContext(true)
-        await this.navigateToSettingsPage()
+    if (shouldTrySavedState) {
+      const launchResult = await this.launchBrowser(this.config.headless)
+      if (!launchResult.ok) return err(launchResult.error)
+      const contextResult = await this.newContextWithSavedState()
+      if (!contextResult.ok) return err(contextResult.error)
+      const navResult = await this.navigateToSettingsPage()
+      if (!navResult.ok) return err(navResult.error)
 
-        const isLoggedIn = await this.verifyLoginStatus(this.getActivePage())
-        if (isLoggedIn) {
-          logger.success('Already logged in!')
-          return this.getActivePage()
-        }
-
-        logger.warn(
-          'Saved authentication expired or invalid. Restarting in headful mode for login...'
-        )
-        await this.close()
+      const pageResult = this.getActivePage()
+      if (!pageResult.ok) return err(pageResult.error)
+      const isLoggedIn = await this.verifyLoginStatus(pageResult.value)
+      if (isLoggedIn) {
+        logger.success('Already logged in!')
+        return pageResult
       }
 
-      // Need manual login: launch headful
-      await this.launchBrowser(false)
-      await this.initializeBrowserContext(false)
-      await this.navigateToSettingsPage()
-      await this.ensureUserIsAuthenticated()
-
-      const shouldRestartInHeadless = this.config.headless !== false
-      if (shouldRestartInHeadless) {
-        logger.info('Authentication successful. Restarting in headless mode...')
-        await this.close()
-        await this.launchBrowser(this.config.headless)
-        await this.initializeBrowserContext(true)
-        await this.navigateToSettingsPage()
-      }
-
-      return this.getActivePage()
-    } catch (error) {
-      if (error instanceof Error) throw error
-      throw new BrowserManager.BrowserLaunchError(`Unexpected error: ${String(error)}`)
+      logger.warn(
+        'Saved authentication expired or invalid. Restarting in headful mode for login...'
+      )
+      await this.close()
     }
+
+    // Need manual login: launch headful
+    const launchResult2 = await this.launchBrowser(false)
+    if (!launchResult2.ok) return err(launchResult2.error)
+    const contextResult2 = await this.newFreshContext()
+    if (!contextResult2.ok) return err(contextResult2.error)
+    const navResult2 = await this.navigateToSettingsPage()
+    if (!navResult2.ok) return err(navResult2.error)
+    const authResult = await this.ensureUserIsAuthenticated()
+    if (!authResult.ok) throw authResult.error
+
+    const shouldRestartInHeadless = this.config.headless !== false
+    if (shouldRestartInHeadless) {
+      logger.info('Authentication successful. Restarting in headless mode...')
+      await this.close()
+      const launchResult3 = await this.launchBrowser(this.config.headless)
+      if (!launchResult3.ok) return err(launchResult3.error)
+      const contextResult3 = await this.newContextWithSavedState()
+      if (!contextResult3.ok) return err(contextResult3.error)
+      const navResult3 = await this.navigateToSettingsPage()
+      if (!navResult3.ok) return err(navResult3.error)
+    }
+
+    const finalPageResult = this.getActivePage()
+    if (!finalPageResult.ok) return err(finalPageResult.error)
+    return finalPageResult
   }
 
-  // why: each .catch(() => {}) below is a best-effort cleanup; if a close races with
-  // a prior failure (e.g. context already gone), Playwright throws and we ignore it.
   async close(): Promise<void> {
     if (this.activePage) {
-      await this.activePage.close().catch(() => {})
+      await this.activePage
+        .close()
+        .catch((err) => logger.debug('close: activePage.close failed', err))
     }
     if (this.activeContext) {
-      await this.activeContext.close().catch(() => {})
+      await this.activeContext
+        .close()
+        .catch((err) => logger.debug('close: activeContext.close failed', err))
     }
     if (this.browserInstance) {
-      await this.browserInstance.close().catch(() => {})
+      await this.browserInstance
+        .close()
+        .catch((err) => logger.debug('close: browserInstance.close failed', err))
     }
     this.activePage = null
     this.activeContext = null
     this.browserInstance = null
   }
 
-  private async launchBrowser(headless: boolean | 'new'): Promise<void> {
-    try {
+  private async launchBrowser(headless: boolean | 'new'): Promise<Result<void, Error>> {
+    return this.R.from(async () => {
       const actualHeadlessValue = headless === 'new' ? true : headless
       this.browserInstance = await chromium.launch({
         headless: actualHeadlessValue,
         args: ['--disable-blink-features=AutomationControlled'],
       })
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error)
-      throw new BrowserManager.BrowserLaunchError(`Failed to launch browser: ${errorMessage}`)
-    }
+    })
   }
 
-  private async initializeBrowserContext(loadState: boolean = false): Promise<void> {
+  private async newFreshContext(): Promise<Result<void, Error>> {
     if (!this.browserInstance) {
-      throw new BrowserManager.ContextError('Browser not initialized')
+      return err(new BrowserManager.ContextError('Browser not initialized'))
     }
+    this.activeContext = await this.browserInstance.newContext()
+    return ok(undefined)
+  }
 
-    if (loadState && existsSync(this.config.authStoragePath)) {
+  private async newContextWithSavedState(): Promise<Result<void, Error>> {
+    if (!this.browserInstance) {
+      return err(new BrowserManager.ContextError('Browser not initialized'))
+    }
+    if (existsSync(this.config.authStoragePath)) {
       logger.info('Loading saved authentication state...')
       try {
         const storageStateJson = readFileSync(this.config.authStoragePath, 'utf-8')
@@ -143,7 +146,7 @@ export class BrowserManager {
         const isRelevantUrl =
           (requestUrl.includes('perplexity.ai/rest') || requestUrl.includes('perplexity.ai/api')) &&
           !requestUrl.includes('static')
-        if (isRelevantUrl) logHttpRequest(req)
+        if (isRelevantUrl) logHttpRequest(req, this.config.debug)
       })
       this.activeContext.on('response', (res) => {
         const responseUrl = res.url()
@@ -151,40 +154,36 @@ export class BrowserManager {
           (responseUrl.includes('perplexity.ai/rest') ||
             responseUrl.includes('perplexity.ai/api')) &&
           !responseUrl.includes('static')
-        if (isRelevantUrl) logHttpResponse(res)
+        if (isRelevantUrl) logHttpResponse(res, this.config.debug)
       })
     }
+    return ok(undefined)
   }
 
-  private async navigateToSettingsPage(): Promise<void> {
+  private async navigateToSettingsPage(): Promise<Result<void, Error>> {
     if (!this.activeContext) {
-      throw new BrowserManager.NavigationError('No browser context available')
+      return err(new BrowserManager.NavigationError('No browser context available'))
     }
 
     this.activePage = await this.activeContext.newPage()
-    const SETTINGS_URL = 'https://www.perplexity.ai/settings'
-    const NAVIGATION_TIMEOUT_MS = 15_000
 
-    try {
-      await this.activePage.goto(SETTINGS_URL, {
+    return this.R.from(async () => {
+      await this.activePage!.goto(SETTINGS_URL, {
         timeout: NAVIGATION_TIMEOUT_MS,
       })
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error)
-      throw new BrowserManager.NavigationError(`Failed to navigate to settings: ${errorMessage}`)
-    }
+    })
   }
 
-  private async ensureUserIsAuthenticated(): Promise<void> {
+  private async ensureUserIsAuthenticated(): Promise<Result<void, Error>> {
     if (!this.activePage) {
-      throw new BrowserManager.AuthError('Page not initialized')
+      return err(new BrowserManager.AuthError('Page not initialized'))
     }
 
     while (true) {
       const isLoggedIn = await this.verifyLoginStatus(this.activePage)
       if (isLoggedIn) {
         logger.success('Already logged in!')
-        break
+        return ok(undefined)
       }
 
       logger.info('Please log in manually in the browser window...')
@@ -193,16 +192,16 @@ export class BrowserManager {
         default: true,
       })
 
-      const SETTINGS_URL = 'https://www.perplexity.ai/settings'
       await this.activePage.goto(SETTINGS_URL, {
         waitUntil: 'networkidle',
+        timeout: NAVIGATION_TIMEOUT_MS,
       })
 
       const isLoginConfirmed = await this.verifyLoginStatus(this.activePage)
       if (isLoginConfirmed) {
         await this.persistAuthenticationState()
         logger.success('Authentication state saved!')
-        break
+        return ok(undefined)
       }
 
       const currentUrl = this.activePage.url()
@@ -214,14 +213,14 @@ export class BrowserManager {
       })
 
       if (!retry) {
-        throw new BrowserManager.AuthError(`Login verification failed. Current URL: ${currentUrl}`)
+        return err(
+          new BrowserManager.AuthError(`Login verification failed. Current URL: ${currentUrl}`)
+        )
       }
     }
   }
 
   private async verifyLoginStatus(page: Page): Promise<boolean> {
-    // why: best-effort — a timeout here just means the page is not at a known state;
-    // the session fetch below is the source of truth for login status.
     await page.waitForTimeout(1000).catch(() => {})
     await page.waitForLoadState('domcontentloaded').catch(() => {})
 
@@ -233,28 +232,33 @@ export class BrowserManager {
         })
         const text = await res.text()
         return { body: text }
-      } catch (error) {
+      } catch {
         return { body: '' }
       }
     })
 
-    logger.debug(`verifyLoginStatus: body=${result.body}`)
-
     const trimmed = result.body.trim()
+    logger.debug(
+      `verifyLoginStatus: hasBody=${Boolean(trimmed)}, hasUser=false, hasExpires=false, hasEmail=false`
+    )
+
     if (!trimmed) return false
 
     try {
-      const parsed = JSON.parse(trimmed) as Record<string, unknown>
-      return Boolean(parsed.user || parsed.expires || parsed.email)
+      const parsed = JSON.parse(trimmed)
+      return Boolean(
+        (parsed as Record<string, unknown>).user ||
+        (parsed as Record<string, unknown>).expires ||
+        (parsed as Record<string, unknown>).email
+      )
     } catch {
-      // why: malformed JSON in the auth/session response means the user is not logged in.
       return false
     }
   }
 
-  private async persistAuthenticationState(): Promise<void> {
+  private async persistAuthenticationState(): Promise<Result<void, Error>> {
     if (!this.activeContext) {
-      throw new BrowserManager.AuthError('No browser context available to save')
+      return err(new BrowserManager.AuthError('No browser context available to save'))
     }
     const currentStorageState = await this.activeContext.storageState()
     logger.debug(
@@ -265,17 +269,30 @@ export class BrowserManager {
       logger.warn(
         'persistAuthenticationState: no cookies found — skipping write to avoid overwriting valid state'
       )
-      return
+      return ok(undefined)
     }
 
     const serializedState = JSON.stringify(currentStorageState, null, 2)
-    writeFileSync(this.config.authStoragePath, serializedState)
+    const tmpPath = `${this.config.authStoragePath}.tmp`
+
+    const writeResult = this.R.from(() => writeFileSync(tmpPath, serializedState))
+    if (!writeResult.ok) return writeResult
+
+    const fs = await import('node:fs')
+    const renameResult = this.R.from(() => fs.renameSync(tmpPath, this.config.authStoragePath))
+    if (!renameResult.ok) return renameResult
+
+    return ok(undefined)
   }
 
-  private getActivePage(): Page {
+  private getActivePage(): Result<Page, Error> {
     if (!this.activePage) {
-      throw new BrowserManager.ContextError('Page not initialized')
+      return err(new BrowserManager.ContextError('Page not initialized'))
     }
-    return this.activePage
+    return ok(this.activePage)
+  }
+
+  getBrowserInstance(): Browser | null {
+    return this.browserInstance
   }
 }

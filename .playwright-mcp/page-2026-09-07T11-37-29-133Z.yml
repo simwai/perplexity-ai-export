@@ -1,0 +1,51 @@
+- generic [ref=e1]:
+  - complementary [ref=e2]:
+    - generic [ref=e3]:
+      - heading "Knowledge Map Toggle theme" [level=1] [ref=e4]:
+        - generic [ref=e5]: Knowledge Map
+        - button "Toggle theme" [ref=e6] [cursor=pointer]: 🌙
+      - searchbox "Filter files or tags…" [ref=e8]
+      - paragraph [ref=e9]: 3 files, 5 keywords, 10 links
+    - generic [ref=e10]:
+      - generic [ref=e11]:
+        - generic [ref=e12]: View
+        - button "⛶ Fit" [ref=e13] [cursor=pointer]:
+          - generic [ref=e14]: ⛶
+          - text: Fit
+        - button "⊙ Center" [ref=e15] [cursor=pointer]:
+          - generic [ref=e16]: ⊙
+          - text: Center
+        - button "+ Zoom In" [ref=e17] [cursor=pointer]:
+          - generic [ref=e18]: +
+          - text: Zoom In
+        - button "− Zoom Out" [ref=e19] [cursor=pointer]:
+          - generic [ref=e20]: −
+          - text: Zoom Out
+        - generic [ref=e21]: Layout
+        - button "↻ Relayout" [ref=e22] [cursor=pointer]:
+          - generic [ref=e23]: ↻
+          - text: Relayout
+        - button "▦ Grid" [ref=e24] [cursor=pointer]:
+          - generic [ref=e25]: ▦
+          - text: Grid
+        - button "◯ Circle" [ref=e26] [cursor=pointer]:
+          - generic [ref=e27]: ◯
+          - text: Circle
+        - button "◎ Concentric" [active] [ref=e28] [cursor=pointer]:
+          - generic [ref=e29]: ◎
+          - text: Concentric
+        - generic [ref=e30]: Data
+        - button "⟳ Reload" [ref=e31] [cursor=pointer]:
+          - generic [ref=e32]: ⟳
+          - text: Reload
+        - button "⚡ Regenerate" [ref=e33] [cursor=pointer]:
+          - generic [ref=e34]: ⚡
+          - text: Regenerate
+      - generic [ref=e35]: Click a node to see details
+  - main [ref=e36]:
+    - generic [ref=e37]:
+      - button "+" [ref=e38] [cursor=pointer]
+      - button "−" [ref=e39] [cursor=pointer]
+      - button "⛶" [ref=e40] [cursor=pointer]
+      - button "⊙" [ref=e41] [cursor=pointer]
+  - generic: "Layout: concentric"

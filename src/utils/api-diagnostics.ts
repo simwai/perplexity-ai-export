@@ -1,6 +1,8 @@
 import fs from 'node:fs/promises'
 import { join } from 'node:path'
 import { logger } from './logger.js'
+import { errorMessageOf } from './extract-error-message.js'
+import { from } from 'super-result'
 import type { Config } from './config.js'
 
 export interface ApiDiagnosticEntry {
@@ -19,7 +21,7 @@ export class ApiDiagnosticsWriter {
   async writeFailure(entry: Omit<ApiDiagnosticEntry, 'timestamp'>): Promise<void> {
     if (!this.config.debug) return
 
-    try {
+    const result = await from(async () => {
       const diagnosticEntry: ApiDiagnosticEntry = {
         timestamp: new Date().toISOString(),
         ...entry,
@@ -30,9 +32,10 @@ export class ApiDiagnosticsWriter {
 
       const entryAsJsonLine = JSON.stringify(diagnosticEntry) + '\n'
       await fs.appendFile(diagnosticLogPath, entryAsJsonLine, 'utf8')
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error)
-      logger.warn(`Failed to write API diagnostic: ${errorMessage}`)
+    })
+
+    if (!result.ok) {
+      logger.warn(`Failed to write API diagnostic: ${errorMessageOf(result.error)}`)
     }
   }
 }

@@ -3,6 +3,7 @@ import { RagOrchestrator } from '../../src/ai/rag-orchestrator.js'
 import { VectorStore } from '../../src/search/vector-store.js'
 import { OllamaClient } from '../../src/ai/ollama-client.js'
 import { RgSearch } from '../../src/search/rg-search.js'
+import { ok, err } from 'super-result'
 
 vi.mock('../../src/search/vector-store.js')
 vi.mock('../../src/ai/ollama-client.js')
@@ -21,7 +22,7 @@ describe('RagOrchestrator HyDE Modes', () => {
       hydeThresholdScore: 0.7,
       hydeThresholdCount: 5,
       ollamaModel: 'test-model',
-      exportDir: 'exports'
+      exportDir: 'exports',
     }
     mockVectorStore = new VectorStore(config)
     mockOllamaClient = new OllamaClient(config)
@@ -31,14 +32,18 @@ describe('RagOrchestrator HyDE Modes', () => {
     orchestrator.ollamaClient = mockOllamaClient
     orchestrator.ripgrep = new RgSearch(config)
 
-    // Default mocks
-    mockOllamaClient.generate.mockResolvedValue(JSON.stringify({
-      strategy: 'precise',
-      queries: ['query1'],
-      hardKeywords: [],
-      hydePassage: 'hypothetical passage'
-    }))
-    mockVectorStore.search.mockResolvedValue([])
+    // Default mocks - return Result objects
+    mockOllamaClient.generate.mockResolvedValue(
+      ok(
+        JSON.stringify({
+          strategy: 'precise',
+          queries: ['query1'],
+          hardKeywords: [],
+          hydePassage: 'hypothetical passage',
+        })
+      )
+    )
+    mockVectorStore.search.mockResolvedValue(ok([]))
   })
 
   it('should NOT trigger HyDE when mode is "off"', async () => {
@@ -61,10 +66,10 @@ describe('RagOrchestrator HyDE Modes', () => {
 
   it('should trigger HyDE in supplement mode when results are weak', async () => {
     config.hydeMode = 'supplement'
-    mockVectorStore.search.mockResolvedValueOnce([
-      { meta: { id: '1', score: 0.5 }, score: 0.5 }
-    ])
-    mockVectorStore.search.mockResolvedValueOnce([]) // HyDE results
+    // First call returns weak results, second call returns HyDE results
+    mockVectorStore.search
+      .mockResolvedValueOnce(ok([{ meta: { id: '1', score: 0.5 }, score: 0.5 }]))
+      .mockResolvedValueOnce(ok([]))
 
     const plan = await orchestrator.developResearchPlan('test question')
     await orchestrator.executeAdaptiveHybridSearch(plan)
@@ -74,14 +79,16 @@ describe('RagOrchestrator HyDE Modes', () => {
 
   it('should NOT trigger HyDE in supplement mode when results are strong', async () => {
     config.hydeMode = 'supplement'
-    mockVectorStore.search.mockResolvedValueOnce([
-      { meta: { id: '1' }, score: 0.9 },
-      { meta: { id: '2' }, score: 0.8 },
-      { meta: { id: '3' }, score: 0.8 },
-      { meta: { id: '4' }, score: 0.8 },
-      { meta: { id: '5' }, score: 0.8 },
-      { meta: { id: '6' }, score: 0.8 }
-    ])
+    mockVectorStore.search.mockResolvedValueOnce(
+      ok([
+        { meta: { id: '1' }, score: 0.9 },
+        { meta: { id: '2' }, score: 0.8 },
+        { meta: { id: '3' }, score: 0.8 },
+        { meta: { id: '4' }, score: 0.8 },
+        { meta: { id: '5' }, score: 0.8 },
+        { meta: { id: '6' }, score: 0.8 },
+      ])
+    )
 
     const plan = await orchestrator.developResearchPlan('test question')
     await orchestrator.executeAdaptiveHybridSearch(plan)

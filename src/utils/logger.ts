@@ -8,6 +8,31 @@ const LOG_FILE_TIMESTAMP = new Date().toISOString().replace(/[:.]/g, '-')
 const MAIN_LOG_FILENAME = `main-log-${LOG_FILE_TIMESTAMP}.txt`
 const MAIN_LOG_PATH = join(LOGS_DIRECTORY, MAIN_LOG_FILENAME)
 
+const SENSITIVE_KEY_PATTERN =
+  /token|secret|authorization|cookie|password|api[_-]?key|access[_-]?token|bearer/i
+
+export function redactSensitiveData(obj: unknown): unknown {
+  if (obj === null || obj === undefined) return obj
+  if (typeof obj === 'string') return obj
+  if (Array.isArray(obj)) return obj.map(redactSensitiveData)
+  if (typeof obj === 'object') {
+    const result: Record<string, unknown> = {}
+    for (const [key, value] of Object.entries(obj as Record<string, unknown>)) {
+      if (SENSITIVE_KEY_PATTERN.test(key)) {
+        result[key] = '[REDACTED]'
+      } else {
+        result[key] = redactSensitiveData(value)
+      }
+    }
+    return result
+  }
+  return obj
+}
+
+export function redactArgs(args: unknown[]): unknown[] {
+  return args.map(redactSensitiveData)
+}
+
 const baseLogger = createColorino(
   {
     error: '#ff5555',
@@ -32,34 +57,44 @@ const baseLogger = createColorino(
   }
 )
 
+function logWithRedaction(
+  level: 'info' | 'success' | 'warn' | 'error' | 'debug' | 'log' | 'trace',
+  prefix: string,
+  args: unknown[]
+): void {
+  const redacted = redactArgs(args)
+  const colorinoLevel = level === 'success' ? 'log' : level
+  ;(baseLogger[colorinoLevel] as (...args: unknown[]) => void)(prefix, ...redacted)
+}
+
 export const logger = {
   info(...args: unknown[]): void {
-    baseLogger.info('ℹ', ...args)
+    logWithRedaction('info', 'ℹ', args)
   },
 
   success(...args: unknown[]): void {
-    baseLogger.log('✓', ...args)
+    logWithRedaction('log', '✓', args)
   },
 
   warn(...args: unknown[]): void {
-    baseLogger.warn('⚠', ...args)
+    logWithRedaction('warn', '⚠', args)
   },
 
   error(...args: unknown[]): void {
-    baseLogger.error('✗', ...args)
+    logWithRedaction('error', '✗', args)
   },
 
   debug(...args: unknown[]): void {
     const isVerboseDebug = process.env['DEBUG'] === 'true'
     if (!isVerboseDebug) return
-    baseLogger.debug('›', ...args)
+    logWithRedaction('debug', '›', args)
   },
 
   log(...args: unknown[]): void {
-    baseLogger.log(...args)
+    logWithRedaction('log', '', args)
   },
 
   trace(...args: unknown[]): void {
-    baseLogger.trace(...args)
+    logWithRedaction('trace', '', args)
   },
 }

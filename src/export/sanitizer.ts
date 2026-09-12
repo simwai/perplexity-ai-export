@@ -16,7 +16,3 @@ export function sanitizeFilename(filename: string): string {
 export function sanitizeSpaceName(spaceName: string): string {
   return sanitizeFilename(spaceName)
 }
-
-export function sanitizeMarkdownContent(rawMarkdown: string): string {
-  return rawMarkdown || ''
-}

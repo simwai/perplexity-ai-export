@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events'
-import { logger } from './logger.js'
+import { logger, redactSensitiveData } from './logger.js'
 import { errorMessageOf } from './extract-error-message.js'
 
 export interface AppError {
@@ -13,9 +13,8 @@ class ErrorBus extends EventEmitter {
   constructor() {
     super()
     this.on('error', (appError: AppError) => {
-      const contextSuffix = appError.context
-        ? ` | Context: ${JSON.stringify(appError.context)}`
-        : ''
+      const redactedContext = appError.context ? redactSensitiveData(appError.context) : undefined
+      const contextSuffix = redactedContext ? ` | Context: ${JSON.stringify(redactedContext)}` : ''
       logger.error(`${appError.message}${contextSuffix}`)
 
       const isDebugEnabled = process.env['DEBUG'] === 'true' || process.env['DEBUG_MODE'] === 'true'

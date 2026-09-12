@@ -72,7 +72,8 @@ describe('RagOrchestrator Chat (MSW Mocked)', () => {
       { role: 'user', content: 'What is this?' },
     ])
 
-    expect(response.content).toBe('History-based chat response')
-    expect(response.usage.totalTokens).toBe(150)
+    expect(response.ok).toBe(true)
+    expect(response.value.content).toBe('History-based chat response')
+    expect(response.value.usage.totalTokens).toBe(150)
   })
 })

@@ -15,7 +15,7 @@ const configSchema = z.object({
   exportDir: z.string().min(1),
   checkpointPath: z.string().min(1),
   vectorIndexPath: z.string().min(1),
-  ollamaUrl: z.string().url(),
+  ollamaUrl: z.url(),
   ollamaModel: z.string().min(1),
   ollamaEmbedModel: z.string().min(1),
   enableVectorSearch: z
@@ -24,7 +24,10 @@ const configSchema = z.object({
     .transform((val) => val === 'true'),
   headless: z.union([z.boolean(), z.literal('new')]),
   debug: z.boolean(),
-  hydeMode: z.enum(['off', 'fusion', 'supplement']),
+  hydeMode: z.preprocess(
+    (val) => (typeof val === 'string' && val.trim() === '' ? undefined : val),
+    z.enum(['off', 'fusion', 'supplement']).default('supplement')
+  ),
   hydeThresholdScore: z.number(),
   hydeThresholdCount: z.number().int().nonnegative(),
   exportStrategies: z
@@ -68,7 +71,7 @@ function parseEnvConfig(): Config {
     enableVectorSearch: process.env['ENABLE_VECTOR_SEARCH'],
     headless: headless,
     debug: process.env['DEBUG'] === 'true',
-    hydeMode: (process.env['HYDE_MODE'] || 'supplement') as any,
+    hydeMode: process.env['HYDE_MODE'],
     hydeThresholdScore: parseFloat(process.env['HYDE_THRESHOLD_SCORE'] || '0.7'),
     hydeThresholdCount: parseInt(process.env['HYDE_THRESHOLD_COUNT'] || '5', 10),
     exportStrategies: process.env['EXPORT_STRATEGIES'],
@@ -78,11 +81,11 @@ function parseEnvConfig(): Config {
 
   if (!result.success) {
     logger.error('Invalid configuration detected:')
-    result.error.issues.forEach((issue) => {
+    for (const issue of result.error.issues) {
       const fieldPath = issue.path.join('.')
       const envVarName = camelToSnakeCase(fieldPath).toUpperCase()
       logger.error(`  ${envVarName}: ${issue.message}`)
-    })
+    }
     logger.error('\nPlease check your .env file and fix the above errors.')
     process.exit(1)
   }

@@ -145,7 +145,7 @@ const server = createServer((req: IncomingMessage, res: ServerResponse) => {
 
 // #region Main
 export function startMapServer(port: number = PORT) {
-  server.listen(port, () => {
+  server.listen(port, '127.0.0.1', () => {
     const address = server.address()
     const actual = typeof address === 'object' && address !== null ? address.port : port
     logger.success('Serving Knowledge Map!')

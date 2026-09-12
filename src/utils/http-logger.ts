@@ -1,26 +1,14 @@
 import { appendFileSync, existsSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import type { Request, Response } from '@playwright/test'
-import { config } from './config.js'
+import { redactSensitiveData } from './logger.js'
 
 const LOGS_DIRECTORY = 'logs'
 const LOG_FILE_TIMESTAMP = new Date().toISOString().replace(/[:.]/g, '-')
 const HTTP_LOG_FILENAME = `http-req-res-log-${LOG_FILE_TIMESTAMP}.txt`
 const HTTP_LOG_PATH = join(LOGS_DIRECTORY, HTTP_LOG_FILENAME)
 
-const SENSITIVE_HEADERS = ['authorization', 'cookie', 'set-cookie', 'x-api-key']
 const PROMPT_KEYWORDS = ['"query"', '"prompt"', '"messages"']
-
-function redactSensitiveHeaders(headers: Record<string, string>): Record<string, string> {
-  const redactedHeaders = { ...headers }
-
-  for (const headerKey of SENSITIVE_HEADERS) {
-    if (redactedHeaders[headerKey]) {
-      redactedHeaders[headerKey] = '[REDACTED]'
-    }
-  }
-  return redactedHeaders
-}
 
 function isPromptRequest(url: string, postData: string | null): boolean {
   const isPerplexityAiApi = url.includes('/backend-api/chat') || url.includes('/api/v1/chat')
@@ -53,14 +41,30 @@ function ensureLogsDirectoryExists(): void {
   }
 }
 
-export async function logHttpRequest(request: Request): Promise<void> {
-  if (!config.debug) return
+function redactUrlQuery(url: string): string {
+  try {
+    const urlObj = new URL(url)
+    const sensitiveQueryPattern =
+      /token|secret|authorization|cookie|password|api[_-]?key|access[_-]?token|bearer/i
+    for (const [key] of urlObj.searchParams.entries()) {
+      if (sensitiveQueryPattern.test(key)) {
+        urlObj.searchParams.set(key, '[REDACTED]')
+      }
+    }
+    return urlObj.toString()
+  } catch {
+    return url
+  }
+}
+
+export async function logHttpRequest(request: Request, debug: boolean): Promise<void> {
+  if (!debug) return
 
   ensureLogsDirectoryExists()
 
-  const requestUrl = request.url()
+  const requestUrl = redactUrlQuery(request.url())
   const requestMethod = request.method()
-  const sanitizedHeaders = redactSensitiveHeaders(request.headers())
+  const sanitizedHeaders = redactSensitiveData(request.headers()) as Record<string, string>
   const rawPostData = request.postData()
 
   const requestBody = isPromptRequest(requestUrl, rawPostData) ? '[PROMPT REDACTED]' : rawPostData
@@ -76,13 +80,13 @@ export async function logHttpRequest(request: Request): Promise<void> {
   appendFileSync(HTTP_LOG_PATH, logEntry + '\n')
 }
 
-export async function logHttpResponse(response: Response): Promise<void> {
-  if (!config.debug) return
+export async function logHttpResponse(response: Response, debug: boolean): Promise<void> {
+  if (!debug) return
 
   const originalRequest = response.request()
-  const responseUrl = originalRequest.url()
+  const responseUrl = redactUrlQuery(originalRequest.url())
   const responseStatus = response.status()
-  const sanitizedHeaders = redactSensitiveHeaders(response.headers())
+  const sanitizedHeaders = redactSensitiveData(response.headers()) as Record<string, string>
 
   let responseBody = '[BODY SKIPPED]'
 

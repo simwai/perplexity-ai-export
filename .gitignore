@@ -6,13 +6,34 @@ coverage/
 
 # debug
 debug/
-logs/*.txt
+logs/
 *.log
 
+# env files (but allow .env.example)
 .env
+.env.*
+!.env.example
 
-*.old
-exports*
+# OS/editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# build artifacts
+*.tmp
+*.bak
+*.orig
+
+# knowledge-map generated artifacts
+public/
+
+# session state (agent system)
+SESSION_STATE-*.md
+.session-locks/
 
 # AI
 .aider*

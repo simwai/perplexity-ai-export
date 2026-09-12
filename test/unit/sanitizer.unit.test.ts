@@ -1,9 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import {
-  sanitizeFilename,
-  sanitizeMarkdownContent,
-  sanitizeSpaceName,
-} from '../../src/export/sanitizer.js'
+import { sanitizeFilename, sanitizeSpaceName } from '../../src/export/sanitizer.js'
 
 describe('sanitizeFilename', () => {
   it('should replace illegal filesystem characters', () => {
@@ -35,23 +31,5 @@ describe('sanitizeSpaceName', () => {
   it('should behave identically to sanitizeFilename', () => {
     const rawSpaceName = 'My Space: 2024'
     expect(sanitizeSpaceName(rawSpaceName)).toBe(sanitizeFilename(rawSpaceName))
-  })
-})
-
-describe('sanitizeMarkdownContent', () => {
-  it('should return content unchanged for normal markdown', () => {
-    const rawMarkdownContent = '## My Header\n\nContent with `code` and **bold**'
-    const processedContent = sanitizeMarkdownContent(rawMarkdownContent)
-
-    expect(processedContent).toContain('## My Header')
-  })
-
-  it('should handle empty input gracefully', () => {
-    expect(sanitizeMarkdownContent('')).toBe('')
-  })
-
-  it('should handle null or undefined input by returning empty string', () => {
-    expect(sanitizeMarkdownContent(null as any)).toBe('')
-    expect(sanitizeMarkdownContent(undefined as any)).toBe('')
   })
 })
