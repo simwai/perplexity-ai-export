@@ -1,50 +1,50 @@
 - generic [active] [ref=f1e1]:
-  - complementary [ref=f1e2]:
-    - generic [ref=f1e3]:
-      - heading "Knowledge Map Toggle theme" [level=1] [ref=f1e4]:
-        - generic [ref=f1e5]: Knowledge Map
-        - button "Toggle theme" [ref=f1e6] [cursor=pointer]: ☀
-      - searchbox "Filter files or tags…" [ref=f1e8]
-      - paragraph [ref=f1e9]: 986 files, 40 keywords, 986 links
-    - generic [ref=f1e10]:
-      - generic [ref=f1e11]:
-        - generic [ref=f1e12]: View
-        - button "⛶ Fit" [ref=f1e13] [cursor=pointer]:
-          - generic [ref=f1e14]: ⛶
-          - text: Fit
-        - button "⊙ Center" [ref=f1e15] [cursor=pointer]:
-          - generic [ref=f1e16]: ⊙
-          - text: Center
-        - button "+ Zoom In" [ref=f1e17] [cursor=pointer]:
-          - generic [ref=f1e18]: +
-          - text: Zoom In
-        - button "− Zoom Out" [ref=f1e19] [cursor=pointer]:
-          - generic [ref=f1e20]: −
-          - text: Zoom Out
-        - generic [ref=f1e21]: Layout
-        - button "↻ Relayout" [ref=f1e22] [cursor=pointer]:
-          - generic [ref=f1e23]: ↻
-          - text: Relayout
-        - button "▦ Grid" [ref=f1e24] [cursor=pointer]:
-          - generic [ref=f1e25]: ▦
-          - text: Grid
-        - button "◯ Circle" [ref=f1e26] [cursor=pointer]:
-          - generic [ref=f1e27]: ◯
-          - text: Circle
-        - button "◎ Concentric" [ref=f1e28] [cursor=pointer]:
-          - generic [ref=f1e29]: ◎
-          - text: Concentric
-        - generic [ref=f1e30]: Data
-        - button "⟳ Reload" [ref=f1e31] [cursor=pointer]:
-          - generic [ref=f1e32]: ⟳
-          - text: Reload
-        - button "⚡ Regenerate" [ref=f1e33] [cursor=pointer]:
-          - generic [ref=f1e34]: ⚡
-          - text: Regenerate
-      - generic [ref=f1e35]: Click a node to see details
-  - main [ref=f1e36]:
-    - generic [ref=f1e37]:
-      - button "+" [ref=f1e38] [cursor=pointer]
-      - button "−" [ref=f1e39] [cursor=pointer]
-      - button "⛶" [ref=f1e40] [cursor=pointer]
-      - button "⊙" [ref=f1e41] [cursor=pointer]
+    - complementary [ref=f1e2]:
+        - generic [ref=f1e3]:
+            - heading "Knowledge Map Toggle theme" [level=1] [ref=f1e4]:
+                - generic [ref=f1e5]: Knowledge Map
+                - button "Toggle theme" [ref=f1e6] [cursor=pointer]: ☀
+            - searchbox "Filter files or tags…" [ref=f1e8]
+            - paragraph [ref=f1e9]: 986 files, 40 keywords, 986 links
+        - generic [ref=f1e10]:
+            - generic [ref=f1e11]:
+                - generic [ref=f1e12]: View
+                - button "⛶ Fit" [ref=f1e13] [cursor=pointer]:
+                    - generic [ref=f1e14]: ⛶
+                    - text: Fit
+                - button "⊙ Center" [ref=f1e15] [cursor=pointer]:
+                    - generic [ref=f1e16]: ⊙
+                    - text: Center
+                - button "+ Zoom In" [ref=f1e17] [cursor=pointer]:
+                    - generic [ref=f1e18]: +
+                    - text: Zoom In
+                - button "− Zoom Out" [ref=f1e19] [cursor=pointer]:
+                    - generic [ref=f1e20]: −
+                    - text: Zoom Out
+                - generic [ref=f1e21]: Layout
+                - button "↻ Relayout" [ref=f1e22] [cursor=pointer]:
+                    - generic [ref=f1e23]: ↻
+                    - text: Relayout
+                - button "▦ Grid" [ref=f1e24] [cursor=pointer]:
+                    - generic [ref=f1e25]: ▦
+                    - text: Grid
+                - button "◯ Circle" [ref=f1e26] [cursor=pointer]:
+                    - generic [ref=f1e27]: ◯
+                    - text: Circle
+                - button "◎ Concentric" [ref=f1e28] [cursor=pointer]:
+                    - generic [ref=f1e29]: ◎
+                    - text: Concentric
+                - generic [ref=f1e30]: Data
+                - button "⟳ Reload" [ref=f1e31] [cursor=pointer]:
+                    - generic [ref=f1e32]: ⟳
+                    - text: Reload
+                - button "⚡ Regenerate" [ref=f1e33] [cursor=pointer]:
+                    - generic [ref=f1e34]: ⚡
+                    - text: Regenerate
+            - generic [ref=f1e35]: Click a node to see details
+    - main [ref=f1e36]:
+        - generic [ref=f1e37]:
+            - button "+" [ref=f1e38] [cursor=pointer]
+            - button "−" [ref=f1e39] [cursor=pointer]
+            - button "⛶" [ref=f1e40] [cursor=pointer]
+            - button "⊙" [ref=f1e41] [cursor=pointer]
