@@ -304,7 +304,6 @@ export class BrowserManager {
     const domVerified = await page
       .evaluate(async () => {
         try {
-          // Look for user identity indicators in the page DOM
           const userEmail = document.querySelector(
             '[data-testid="user-email"], [data-testid="user-name"], [data-testid="username"], .user-email, [class*="user-email"], [class*="userName"], [class*="user-name"]'
           )
@@ -321,12 +320,12 @@ export class BrowserManager {
 
     if (domVerified) return true
 
-    // Second check: network-based verification via /rest/userinfo
-    // Perplexity uses /rest/userinfo (NOT /api/auth/session) for auth checks
-    const hasUserinfo = await page
+    // Second check: /api/auth/session returns user info when logged in
+    // Response: { expires: string, user: { email, id, username, ... } }
+    const apiVerified = await page
       .evaluate(async () => {
         try {
-          const res = await fetch('/rest/userinfo', {
+          const res = await fetch('/api/auth/session', {
             method: 'GET',
             credentials: 'include',
           })
@@ -334,57 +333,34 @@ export class BrowserManager {
           if (!res.ok) return false
           const text = await res.text()
           if (!text.trim()) return false
-          // Perplexity returns user info JSON; presence of any parseable JSON
-          // with user data indicates authenticated state
           const parsed = JSON.parse(text)
-          return Boolean(parsed.user || parsed.username || parsed.email || parsed.uuid || parsed.id)
+          return Boolean(parsed.user || parsed.expires || parsed.email)
         } catch {
           return false
         }
       })
       .catch(() => false)
 
-    if (hasUserinfo) return true
+    if (apiVerified) return true
 
-    // Third check: poll for /rest/userinfo network response (fires after page init)
+    // Third check: poll for /api/auth/session network response in performance entries
     const networkVerified = await page
       .evaluate(async () => {
         return new Promise<boolean>((resolve) => {
           const check = () => {
-            // Check if any completed /rest/userinfo response exists in performance entries
             const entries = performance.getEntriesByType('resource') as PerformanceResourceTiming[]
-            const hasUserinfoResponse = entries.some(
-              (e) => e.name.includes('/rest/userinfo') && e.responseStatus === 200
+            const hasSessionResponse = entries.some(
+              (e) => e.name.includes('/api/auth/session') && e.responseStatus === 200
             )
-            resolve(hasUserinfoResponse)
+            resolve(hasSessionResponse)
           }
-          // Check immediately and after a short delay
           check()
           setTimeout(check, 500)
         })
       })
       .catch(() => false)
 
-    if (networkVerified) return true
-
-    // Last resort: check if we're on settings page with user indicators
-    const settingsPage = await page
-      .evaluate(async () => {
-        try {
-          const url = new URL(window.location.href)
-          if (!url.hash.includes('settings') && url.pathname !== '/settings') return false
-          // Check for any logged-in user element
-          const userName = document.querySelector(
-            '[class*="user"], [class*="account"], [class*="profile"]'
-          )
-          return Boolean(userName)
-        } catch {
-          return false
-        }
-      })
-      .catch(() => false)
-
-    return settingsPage
+    return networkVerified
   }
 
   private async persistAuthenticationState(): Promise<Result<void, Error>> {
