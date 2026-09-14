@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { type Config } from '../utils/config.js'
 import { logger } from '../utils/logger.js'
-import { OllamaClient } from '../ai/ollama-client.js'
+import { AiClient } from '../ai/ai-client.js'
 import { chunkMarkdown } from '../utils/chunking.js'
 import { errorMessageOf } from '../utils/extract-error-message.js'
 import { ok, err, createResult, type Result } from 'super-result'
@@ -40,18 +40,18 @@ export class SearchError extends Error {
 
 export class VectorStore {
   private readonly vectorIndex: LocalIndex
-  private readonly ollamaClient: OllamaClient
+  private readonly aiClient: AiClient
   private readonly resultFactory = createResult<VectorStoreError>((error: unknown) =>
     error instanceof VectorStoreError ? error : new VectorStoreError(String(error))
   )
 
   constructor(private readonly config: Config) {
     this.vectorIndex = new LocalIndex(config.vectorIndexPath)
-    this.ollamaClient = new OllamaClient(config)
+    this.aiClient = new AiClient(config)
   }
 
   async validate(): Promise<Result<void, VectorStoreError>> {
-    const result = await this.ollamaClient.validate()
+    const result = await this.aiClient.validate()
     if (!result.ok)
       return err(
         new VectorStoreError(`Vector store validation failed: ${errorMessageOf(result.error)}`)
@@ -244,7 +244,7 @@ export class VectorStore {
     batchTexts: string[],
     batchMetas: VectorDocMeta[]
   ): Promise<string | null> {
-    const embedResult = await this.ollamaClient.embed(batchTexts)
+    const embedResult = await this.aiClient.embed(batchTexts)
     if (!embedResult.ok) {
       const errorMessage = `Batch embedding failed: ${errorMessageOf(embedResult.error)}`
       errorBus.emitError(errorMessage)
@@ -272,7 +272,7 @@ export class VectorStore {
   }
 
   private async generateQueryEmbedding(query: string): Promise<Result<number[], EmbeddingError>> {
-    const result = await this.ollamaClient.embed([query])
+    const result = await this.aiClient.embed([query])
     if (!result.ok)
       return err(
         new EmbeddingError(

@@ -32,7 +32,11 @@ export function showHelp(): void {
 
   logAction('Exit', 'Close the application.')
 
-  logger.info('💡 Search & RAG Tips:\n')
+  logger.info('\n💡 Chat with History:\n')
+  logger.info('  • Engage in a continuous, multi-turn dialogue with your knowledge base.')
+  logger.info('    The assistant maintains context and cites sources from your history.')
+
+  logger.info('\n💡 Search & RAG Tips:\n')
   logger.info(
     '  • RAG: Ask history with Ollama. Combines vector retrieval with AI generation for comprehensive answers.'
   )

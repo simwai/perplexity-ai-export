@@ -1,12 +1,11 @@
 <p align="center">
-  <img src="docs/header.svg" width="100%" alt="Perplexity History Export Header" />
+  <img src="docs/header.svg" width="600" alt="Perplexity History Export" />
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Node.js-4c1d95?style=flat&logo=node.js&logoColor=white" alt="Node.js" />
-  <img src="https://img.shields.io/badge/TypeScript-5b21b6?style=flat&logo=typescript&logoColor=white" alt="TypeScript" />
-  <img src="https://img.shields.io/badge/Ollama-6d28d9?style=flat&logo=ollama&logoColor=white" alt="Ollama" />
-  <img src="https://img.shields.io/badge/Playwright-7c3aed?style=flat&logo=playwright&logoColor=white" alt="Playwright" />
+  <img src="https://img.shields.io/badge/TypeScript-3178C6?style=flat&logo=typescript&logoColor=white" alt="TypeScript" />
+  <img src="https://img.shields.io/badge/Playwright-2EAD33?style=flat&logo=playwright&logoColor=white" alt="Playwright" />
+  <img src="https://img.shields.io/badge/Ollama-000000?style=flat&logo=ollama&logoColor=white" alt="Ollama" />
   <img src="https://img.shields.io/badge/Vitest-8b5cf6?style=flat&logo=vitest&logoColor=white" alt="Vitest" />
 </p>
 
@@ -19,7 +18,7 @@
 - [System Requirements](#system-requirements)
 - [Environment Setup Guide](#environment-setup-guide)
   * [1. Install Node.js (The Engine)](#1-install-nodejs-the-engine)
-  * [2. Install Ollama (Optional - For AI Intelligence)](#2-install-ollama-optional---for-ai-intelligence)
+  * [2. Install AI Provider (Optional - For AI Intelligence)](#2-install-ai-provider-optional---for-ai-intelligence)
   * [3. Download and Prepare the Project](#3-download-and-prepare-the-project)
 - [Configuration](#configuration)
   * [Key Environment Variables](#key-environment-variables)
@@ -83,16 +82,21 @@ We recommend using a version manager to install Node.js. This allows you to easi
      nvm use 20
      ```
 
-### 2. Install Ollama (Optional - For AI Intelligence)
+### 2. Install AI Provider (Optional - For AI Intelligence)
 
-Ollama is **optional**. It is only required if you want to use the Semantic Search or RAG (Retrieval-Augmented Generation) features. Basic extraction and keyword search work without it.
+An AI provider is **optional**. It is only required if you want to use the Semantic Search or RAG (Retrieval-Augmented Generation) features. Basic extraction and keyword search work without it. You can use local Ollama or any OpenAI-compatible API (OpenAI, OpenRouter, DeepSeek, etc.).
 
-1. Download and install Ollama from [ollama.ai](https://ollama.ai).
-2. Open your terminal and pull the required models:
-   ```powershell
-   ollama pull nomic-embed-text
-   ollama pull deepseek-r1
-   ```
+- **Ollama (Local)**:
+  1. Download and install from [ollama.ai](https://ollama.ai).
+  2. Pull required models:
+     ```powershell
+     ollama pull nomic-embed-text
+     ollama pull deepseek-r1
+     ```
+
+- **External API (OpenAI-compatible)**:
+  1. Obtain an API key from your provider (e.g., [OpenRouter](https://openrouter.ai), [OpenAI](https://platform.openai.com)).
+  2. Configure `AI_PROVIDER`, `AI_API_KEY`, and `AI_BASE_URL` in your `.env` file.
 
 ### 3. Download and Prepare the Project
 
@@ -116,9 +120,12 @@ bash -c "cp .env.example .env"
 ### Key Environment Variables
 
 - **HEADLESS**: Set to `false` in your `.env` file. **Note:** Headless mode (`true`) is currently non-functional due to Cloudflare Turnstile protection on Perplexity.ai. Using headful mode allows you to complete any challenges manually if they appear.
-- **OLLAMA_URL**: Access point for your local AI engine (default: http://localhost:11434).
-- **OLLAMA_MODEL**: Cognitive model for RAG synthesis (e.g., deepseek-r1).
-- **OLLAMA_EMBED_MODEL**: Model for generating vector representations (e.g., nomic-embed-text).
+- **AI_PROVIDER**: "ollama" or "openai-compatible".
+- **AI_API_KEY**: Required for external providers.
+- **AI_BASE_URL**: Base URL for external providers (e.g., https://openrouter.ai/api/v1).
+- **AI_MODEL**: Cognitive model for RAG synthesis (e.g., deepseek-r1). The system defaults to `llama3.1` internally if this is not specified.
+- **AI_EMBED_MODEL**: Model for generating vector representations (e.g., nomic-embed-text).
+- **EXPORT_STRATEGIES**: A comma-separated list of enabled export formats (default: `markdown`).
 - **ENABLE_VECTOR_SEARCH**: Set to `true` to activate semantic and RAG layers.
 
 ## Usage Guide
@@ -139,6 +146,7 @@ pnpm run dev
   - **Semantic**: Fuzzy matching via high-dimensional vector space.
   - **RAG**: Direct inquiry, such as "What did I learn about emergent intelligence?"
   - **Exact**: Rapid string matching via ripgrep (bundled).
+- **Chat with history**: Engage in a continuous, multi-turn dialogue with your knowledge base. The assistant maintains context and cites sources from your history.
 - **Build vector index**: Processes Markdown exports into a local vector store.
 - **Reset all data**: Purges checkpoints, authentication data, and the vector index.
 
@@ -183,7 +191,7 @@ For a detailed look at our RAG implementation, hybrid search strategy, and theor
 
 ### Project Structure
 
-- **src/ai/**: Ollama interaction and advanced RAG orchestration layers.
+- **src/ai/**: AI interaction and advanced RAG orchestration layers.
 - **src/scraper/**: Playwright-based extraction logic and parallel worker pool management.
 - **src/search/**: Vector storage (Vectra) and ripgrep search implementation.
 - **src/repl/**: Interactive CLI components.
@@ -213,6 +221,6 @@ Measure RAG pipeline latency and validate the full retrieval stack against your 
 pnpm run benchmark
 ```
 
-Requires a built vector index and a running Ollama instance. The benchmark runs a set of predefined queries end-to-end through the full pipeline (HyDE → hybrid search → cross-encoder reranking → MapReduce → synthesis) and reports per-query latency and success rate. Edit `BENCHMARK_QUERIES` in `src/benchmark.ts` to tailor queries to your history.
+Requires a built vector index and a running AI provider instance. The benchmark runs a set of predefined queries end-to-end through the full pipeline (HyDE → hybrid search → cross-encoder reranking → MapReduce → synthesis) and reports per-query latency and success rate. Edit `BENCHMARK_QUERIES` in `src/benchmark.ts` to tailor queries to your history.
 
 👉 **[BENCHMARKS.md](./docs/BENCHMARKS.md)**: Full details on each benchmark, why the metrics were chosen, how to interpret results, and how to write effective custom queries.

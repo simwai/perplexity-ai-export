@@ -7,9 +7,11 @@ import { errorMessageOf } from '../utils/extract-error-message.js'
 import { createNamedError } from '../utils/errors.js'
 import { ok, err, createResult, from, type Result } from 'super-result'
 import { logHttpRequest, logHttpResponse } from '../utils/http-logger.js'
+import { createWaitStrategy } from '../utils/wait-strategy.js'
 
 const SETTINGS_URL = 'https://www.perplexity.ai/settings'
 const NAVIGATION_TIMEOUT_MS = 15_000
+const CLOUDFLARE_CHALLENGE_PATTERN = /cdn-cgi\/challenge|cf-challenge|cloudflare/i
 
 export class BrowserManager {
   static readonly BrowserLaunchError = createNamedError('BrowserLaunchError')
@@ -24,8 +26,11 @@ export class BrowserManager {
   private browserInstance: Browser | null = null
   private activeContext: BrowserContext | null = null
   private activePage: Page | null = null
+  private readonly waitStrategy: ReturnType<typeof createWaitStrategy>
 
-  constructor(private readonly config: Config) {}
+  constructor(private readonly config: Config) {
+    this.waitStrategy = createWaitStrategy(config)
+  }
 
   async launch(): Promise<Result<Page, Error>> {
     const authPath = this.config.authStoragePath
@@ -173,8 +178,28 @@ export class BrowserManager {
 
     return this.resultFactory.from(async () => {
       await this.activePage!.goto(SETTINGS_URL, {
+        waitUntil: 'networkidle',
         timeout: NAVIGATION_TIMEOUT_MS,
       })
+      // Wait for SPA hash routing to settle (Perplexity redirects to #settings/account)
+      await this.activePage!.waitForFunction(
+        (url) => new URL(url).hash.startsWith('#settings') || new URL(url).pathname !== '/settings',
+        this.activePage!.url(),
+        { timeout: NAVIGATION_TIMEOUT_MS }
+      ).catch(() => {
+        // Hash may not have settled; continue and let verifyLoginStatus handle it
+        logger.debug('Hash routing not yet settled; proceeding to verify')
+      })
+      // Confirm the settings page has loaded by waiting for a known DOM element
+      await this.waitStrategy
+        .forSelector(
+          this.activePage!,
+          '[data-testid="settings-page"], #settings, .settings-container, [data-testid="account-settings"]'
+        )
+        .catch(() => {
+          // Selector may not match; the page may use different DOM structure
+          logger.debug('Settings page DOM selector not found; continuing')
+        })
     })
   }
 
@@ -196,10 +221,29 @@ export class BrowserManager {
         default: true,
       })
 
-      await this.activePage.goto(SETTINGS_URL, {
-        waitUntil: 'networkidle',
-        timeout: NAVIGATION_TIMEOUT_MS,
-      })
+      await this.waitStrategy.afterClick(this.activePage)
+
+      // Check for Cloudflare challenge before verifying auth
+      const cloudflareDetected = await this.isCloudflareChallenge(this.activePage)
+      if (cloudflareDetected) {
+        return err(
+          new BrowserManager.AuthError(
+            'Cloudflare challenge detected. Please complete the CAPTCHA/verification, then try again.'
+          )
+        )
+      }
+
+      // Wait for hash routing to settle
+      await this.activePage
+        .waitForFunction(
+          (url) =>
+            new URL(url).hash.startsWith('#settings') || new URL(url).pathname !== '/settings',
+          this.activePage.url(),
+          { timeout: NAVIGATION_TIMEOUT_MS }
+        )
+        .catch(() => {
+          logger.debug('Hash routing not yet settled; proceeding to verify')
+        })
 
       const isLoginConfirmed = await this.verifyLoginStatus(this.activePage)
       if (isLoginConfirmed) {
@@ -224,22 +268,83 @@ export class BrowserManager {
     }
   }
 
-  private async verifyLoginStatus(page: Page): Promise<boolean> {
-    await page.waitForTimeout(1000).catch(() => {})
-    await page.waitForLoadState('domcontentloaded').catch(() => {})
+  private async isCloudflareChallenge(page: Page): Promise<boolean> {
+    const currentUrl = page.url()
+    if (CLOUDFLARE_CHALLENGE_PATTERN.test(currentUrl)) return true
 
+    const hasChallenge = await page
+      .evaluate(async () => {
+        try {
+          const body = document.body.innerText
+          return (
+            body.includes('Checking your browser') ||
+            body.includes('Verifying your identity') ||
+            body.includes('One moment') ||
+            body.includes('cf-turnstile') ||
+            body.includes('cloudflare')
+          )
+        } catch {
+          return false
+        }
+      })
+      .catch(() => false)
+
+    return hasChallenge
+  }
+
+  private async verifyLoginStatus(page: Page): Promise<boolean> {
+    // Wait for network to settle before checking auth
+    await page.waitForLoadState('networkidle').catch(() => {})
+    await page.waitForTimeout(1000).catch(() => {})
+
+    // First check: DOM-based verification (works when SPA is hydrated)
+    const domVerified = await page
+      .evaluate(async () => {
+        try {
+          // Look for user identity indicators in the page DOM
+          const userEmail = document.querySelector(
+            '[data-testid="user-email"], [data-testid="user-name"], .user-email, [class*="user-email"], [class*="userName"]'
+          )
+          const userAvatar = document.querySelector(
+            '[data-testid="user-avatar"], .user-avatar, [class*="avatar"]'
+          )
+          if (userEmail || userAvatar) return true
+        } catch {
+          // Ignore DOM errors
+        }
+        return false
+      })
+      .catch(() => false)
+
+    if (domVerified) return true
+
+    // Second check: API-based verification
     const result = await page.evaluate(async () => {
       try {
         const res = await fetch('/api/auth/session', {
           method: 'GET',
           credentials: 'include',
         })
+        // Check if this is a Cloudflare challenge response
+        const contentType = res.headers.get('content-type') || ''
+        if (contentType.includes('text/html') && res.status === 200) {
+          const text = await res.text()
+          if (text.includes('cdn-cgi') || text.includes('cloudflare')) {
+            return { body: '', cloudflare: true }
+          }
+        }
         const text = await res.text()
         return { body: text }
       } catch {
         return { body: '' }
       }
     })
+
+    // Cloudflare challenge detected via API call
+    if (result.cloudflare) {
+      logger.warn('verifyLoginStatus: Cloudflare challenge detected via API')
+      return false
+    }
 
     const trimmed = result.body.trim()
     logger.debug(

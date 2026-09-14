@@ -18,6 +18,12 @@ const configSchema = z.object({
   ollamaUrl: z.url(),
   ollamaModel: z.string().min(1),
   ollamaEmbedModel: z.string().min(1),
+  aiProvider: z.enum(['ollama', 'openai-compatible']).default('ollama'),
+  aiEmbedProvider: z.enum(['ollama', 'openai-compatible']).default('ollama'),
+  aiBaseUrl: z.string().url().optional(),
+  aiApiKey: z.string().min(1).optional(),
+  aiModel: z.string().min(1).optional(),
+  aiEmbedModel: z.string().min(1).optional(),
   enableVectorSearch: z
     .string()
     .optional()
@@ -68,6 +74,12 @@ function parseEnvConfig(): Config {
     ollamaUrl: process.env['OLLAMA_URL'] ?? DEFAULT_OLLAMA_URL,
     ollamaModel: process.env['OLLAMA_MODEL'] ?? 'llama3.1',
     ollamaEmbedModel: process.env['OLLAMA_EMBED_MODEL'] ?? 'nomic-embed-text',
+    aiProvider: process.env['AI_PROVIDER'] ?? 'ollama',
+    aiEmbedProvider: process.env['AI_EMBED_PROVIDER'] ?? process.env['AI_PROVIDER'] ?? 'ollama',
+    aiBaseUrl: process.env['AI_BASE_URL'],
+    aiApiKey: process.env['AI_API_KEY'],
+    aiModel: process.env['AI_MODEL'] ?? 'llama3.1',
+    aiEmbedModel: process.env['AI_EMBED_MODEL'] ?? 'nomic-embed-text',
     enableVectorSearch: process.env['ENABLE_VECTOR_SEARCH'],
     headless: headless,
     debug: process.env['DEBUG'] === 'true',

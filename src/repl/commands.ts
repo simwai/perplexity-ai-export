@@ -8,7 +8,7 @@ import { CheckpointManager, type ConversationMeta } from '../scraper/checkpoint-
 import { WorkerPool } from '../scraper/worker-pool.js'
 import { SearchOrchestrator } from '../search/search-orchestrator.js'
 import { RagOrchestrator } from '../ai/rag-orchestrator.js'
-import { type ChatMessage } from '../ai/ollama-client.js'
+import { type ChatMessage } from '../ai/ai-client.js'
 import { logger } from '../utils/logger.js'
 import { errorMessageOf } from '../utils/extract-error-message.js'
 import { createNamedError } from '../utils/errors.js'

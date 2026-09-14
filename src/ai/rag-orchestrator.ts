@@ -1,5 +1,5 @@
 import { VectorStore, type VectorSearchResult } from '../search/vector-store.js'
-import { OllamaClient, type ChatMessage, type LlmResponse } from './ollama-client.js'
+import { AiClient, type ChatMessage, type LlmResponse } from './ai-client.js'
 import { RipgrepSearch } from '../search/rg-search.js'
 import { logger } from '../utils/logger.js'
 import { join } from 'node:path'
@@ -75,7 +75,7 @@ export class OrchestratorError extends Error {
 export class RagOrchestrator {
   static readonly OrchestratorError = OrchestratorError
 
-  private readonly ollamaClient: OllamaClient
+  private readonly aiClient: AiClient
   private readonly vectorStore: VectorStore
   private readonly ripgrep: RipgrepSearch
 
@@ -84,7 +84,7 @@ export class RagOrchestrator {
   )
 
   constructor(private readonly config: Config) {
-    this.ollamaClient = new OllamaClient(config)
+    this.aiClient = new AiClient(config)
     this.vectorStore = new VectorStore(config)
     this.ripgrep = new RipgrepSearch(config)
   }
@@ -148,7 +148,7 @@ export class RagOrchestrator {
       { role: 'user', content: question },
     ]
 
-    const chatResult = await this.ollamaClient.chat(chatMessages)
+    const chatResult = await this.aiClient.chat(chatMessages)
     if (!chatResult.ok) {
       return err(new OrchestratorError(`Chat failed: ${errorMessageOf(chatResult.error)}`))
     }
@@ -178,7 +178,7 @@ New Question: ${question}
 
 Standalone Question:
 `
-    const response = await this.ollamaClient.generate(rephrasePrompt)
+    const response = await this.aiClient.generate(rephrasePrompt)
     return response.ok ? response.value.trim() || question : question
   }
 
@@ -224,7 +224,7 @@ Analyze: "${originalQuestion}"
 ${hydeInstruction}
 Return JSON: ${jsonTemplate}
 `
-    const generateResult = await this.ollamaClient.generate(plannerPrompt)
+    const generateResult = await this.aiClient.generate(plannerPrompt)
 
     if (!generateResult.ok) {
       logger.debug(`Research plan generation failed: ${errorMessageOf(generateResult.error)}`)
@@ -458,7 +458,7 @@ Return JSON array: [{"fact": "...", "node_id": N}]
 - Do NOT include a "thread" field - it will be filled from the source title
 - Limit: at most 1 fact per unique source title in this batch
 `
-      const response = await this.ollamaClient.generate(researchPrompt)
+      const response = await this.aiClient.generate(researchPrompt)
       if (!response.ok) {
         logger.warn(
           `Fact extraction batch ${batchNumber}/${totalBatches} failed for question "${question}": ${errorMessageOf(response.error)}`
@@ -584,7 +584,7 @@ ${facts.map((f, i) => `${i}: ${f.fact} (source: ${f.source_title})`).join('\n')}
 For each fact, is it related to the question? Mark relevant=true if the fact contains information that could be relevant context for answering the question.
 Return JSON array: [{"index": 0, "relevant": true}, {"index": 1, "relevant": false}, ...]
 `
-    const filterResponse = await this.ollamaClient.generate(filterPrompt)
+    const filterResponse = await this.aiClient.generate(filterPrompt)
     if (!filterResponse.ok) {
       logger.warn(
         `Relevance filter failed for question "${question}": ${errorMessageOf(filterResponse.error)}`
@@ -626,7 +626,7 @@ Return JSON array: [{"index": 0, "relevant": true}, {"index": 1, "relevant": fal
 Write 1-2 sentences that would plausibly appear in a saved answer to the question: "${question}"
 Write as if it's content already stored in a document, not as a direct reply.
 `
-    const response = await this.ollamaClient.generate(hydePrompt)
+    const response = await this.aiClient.generate(hydePrompt)
     return response.ok ? response.value : ''
   }
 
@@ -653,7 +653,7 @@ INSTRUCTIONS:
 
 ANSWER:
 `
-    const response = await this.ollamaClient.generate(synthesisPrompt)
+    const response = await this.aiClient.generate(synthesisPrompt)
     return response.ok ? response.value : 'Failed to generate answer.'
   }
 
@@ -685,7 +685,7 @@ Answer: "${answer.slice(0, 500)}..."
 Did I miss anything important?
 Return JSON: {"status": "ok" | "missed-info", "suggestion": "..."}
 `
-    const verifyResponse = await this.ollamaClient.generate(verificationPrompt)
+    const verifyResponse = await this.aiClient.generate(verificationPrompt)
     return parseJsonWithSchema(
       verifyResponse.ok ? verifyResponse.value : '',
       verificationResultSchema,
