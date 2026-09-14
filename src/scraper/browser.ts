@@ -299,8 +299,9 @@ export class BrowserManager {
     const currentUrl = page.url()
     if (CLOUDFLARE_CHALLENGE_PATTERN.test(currentUrl)) return true
 
-    const hasChallenge = await page
-      .evaluate(async () => {
+    let hasChallenge = false
+    try {
+      hasChallenge = await page.evaluate(async () => {
         try {
           const body = document.body.innerText
           return (
@@ -314,7 +315,9 @@ export class BrowserManager {
           return false
         }
       })
-      .catch(() => false)
+    } catch {
+      // ignore evaluation errors
+    }
 
     return hasChallenge
   }
@@ -325,12 +328,12 @@ export class BrowserManager {
     try {
       await page.waitForLoadState('networkidle')
     } catch {
-      // networkidle timeout is non-fatal; proceed with DOM/API checks
+      logger.debug('verifyLoginStatus: networkidle timeout, proceeding anyway')
     }
     try {
       await page.waitForTimeout(1000)
     } catch {
-      // timeout is non-fatal; proceed with DOM/API checks
+      logger.debug('verifyLoginStatus: waitForTimeout error, proceeding anyway')
     }
 
     // First check: DOM-based verification (works when SPA is hydrated)
@@ -345,28 +348,49 @@ export class BrowserManager {
         return Boolean(userEmail || userAvatar)
       })
     )
-    if (domResult.ok && domResult.value) return true
+    logger.debug(`verifyLoginStatus: domResult = ok:${domResult.ok}, value:${domResult.ok ? domResult.value : 'N/A'}, error:${domResult.ok ? 'none' : domResult.error?.message}`)
+    if (domResult.ok && domResult.value) {
+      logger.debug('verifyLoginStatus: DOM check PASSED')
+      return true
+    }
+    logger.debug('verifyLoginStatus: DOM check FAILED/empty')
 
     // Second check: /api/auth/session returns user info when logged in
     // Response: { expires: string, user: { email, id, username, ... } }
     const apiResult = await from<boolean>(async () => {
       const text = await page.evaluate(async () => {
-        const res = await fetch('/api/auth/session', {
-          method: 'GET',
-          credentials: 'include',
-        })
-        if (!res.ok) return ''
-        return await res.text()
+        try {
+          const res = await fetch('/api/auth/session', {
+            method: 'GET',
+            credentials: 'include',
+          })
+          if (!res.ok) {
+            logger.debug(`verifyLoginStatus: /api/auth/session HTTP ${res.status}`)
+            return ''
+          }
+          return await res.text()
+        } catch (e) {
+          logger.debug(`verifyLoginStatus: fetch error: ${e instanceof Error ? e.message : String(e)}`)
+          return ''
+        }
       })
+      logger.debug(`verifyLoginStatus: /api/auth/session response text length: ${text.length}, preview: ${text.slice(0, 200)}`)
       if (!text.trim()) return false
       try {
         const parsed = authSessionSchema.safeParse(JSON.parse(text))
+        logger.debug(`verifyLoginStatus: zod parse success: ${parsed.success}, hasUser: ${parsed.success ? Boolean(parsed.data?.user) : false}, hasExpires: ${parsed.success ? Boolean(parsed.data?.expires) : false}`)
         return parsed.success && Boolean(parsed.data?.user || parsed.data?.expires)
-      } catch {
+      } catch (e) {
+        logger.debug(`verifyLoginStatus: JSON parse error: ${e instanceof Error ? e.message : String(e)}`)
         return false
       }
     })
-    if (apiResult.ok && apiResult.value) return true
+    logger.debug(`verifyLoginStatus: apiResult = ok:${apiResult.ok}, value:${apiResult.ok ? apiResult.value : 'N/A'}, error:${apiResult.ok ? 'none' : apiResult.error?.message}`)
+    if (apiResult.ok && apiResult.value) {
+      logger.debug('verifyLoginStatus: API check PASSED')
+      return true
+    }
+    logger.debug('verifyLoginStatus: API check FAILED/empty')
 
     // Third check: poll for /api/auth/session network response
     const networkResult = await from<boolean>(async () => {
@@ -380,11 +404,15 @@ export class BrowserManager {
               (e as PerformanceResourceTiming).responseStatus === 200
           )
         })
-        if (hasSession) return true
+        if (hasSession) {
+          logger.debug('verifyLoginStatus: network check found /api/auth/session response')
+          return true
+        }
         await page.waitForTimeout(500)
       }
       return false
     })
+    logger.debug(`verifyLoginStatus: networkResult = ok:${networkResult.ok}, value:${networkResult.ok ? networkResult.value : 'N/A'}`)
     return networkResult.ok ? networkResult.value : false
   }
 
