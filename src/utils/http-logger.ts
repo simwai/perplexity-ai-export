@@ -11,6 +11,10 @@ const HTTP_LOG_PATH = join(LOGS_DIRECTORY, HTTP_LOG_FILENAME)
 
 const PROMPT_KEYWORDS = ['"query"', '"prompt"', '"messages"']
 
+function isPlainObject(value: unknown): boolean {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
 function isPromptRequest(url: string, postData: string | null): boolean {
   const isPerplexityAiApi = url.includes('/backend-api/chat') || url.includes('/api/v1/chat')
   if (isPerplexityAiApi) return true
@@ -63,7 +67,10 @@ export async function logHttpRequest(request: Request, debug: boolean): Promise<
 
   const requestUrl = redactUrlQuery(request.url())
   const requestMethod = request.method()
-  const sanitizedHeaders = redactSensitiveData(request.headers()) as Record<string, string>
+  const redactedHeaders = redactSensitiveData(request.headers())
+  const sanitizedHeaders = isPlainObject(redactedHeaders)
+    ? (redactedHeaders as Record<string, string>)
+    : {}
   const rawPostData = request.postData()
 
   const requestBody = isPromptRequest(requestUrl, rawPostData) ? '[PROMPT REDACTED]' : rawPostData
@@ -85,11 +92,14 @@ export async function logHttpResponse(response: Response, debug: boolean): Promi
   const originalRequest = response.request()
   const responseUrl = redactUrlQuery(originalRequest.url())
   const responseStatus = response.status()
-  const sanitizedHeaders = redactSensitiveData(response.headers()) as Record<string, string>
+  const redactedResponseHeaders = redactSensitiveData(response.headers())
+  const sanitizedResponseHeaders = isPlainObject(redactedResponseHeaders)
+    ? (redactedResponseHeaders as Record<string, string>)
+    : {}
 
   let responseBody = '[BODY SKIPPED]'
 
-  const contentType = sanitizedHeaders['content-type'] ?? ''
+  const contentType = sanitizedResponseHeaders['content-type'] ?? ''
   const isJsonContent = contentType.includes('application/json')
   const isPrompt = isPromptRequest(responseUrl, originalRequest.postData())
 
@@ -103,7 +113,7 @@ export async function logHttpResponse(response: Response, debug: boolean): Promi
   const logTimestamp = new Date().toISOString()
   const logEntry = [
     `[${logTimestamp}] RESPONSE: ${responseStatus} ${responseUrl}`,
-    `Headers: ${JSON.stringify(sanitizedHeaders, null, 2)}`,
+    `Headers: ${JSON.stringify(sanitizedResponseHeaders, null, 2)}`,
     `Body: ${responseBody}`,
     '--------------------------------------------------------------------------------',
   ].join('\n')
