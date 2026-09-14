@@ -304,109 +304,6 @@ Verified evidence:
 Status:
 - Ready for review, or
 - Blocked pending evidence
-```
-
-## `DOCS_PARALLEL` template
-
-```txt
-[PHASE: DOCS_PARALLEL]
-
-# For the human
-[2-4 plain-language sentences: parallel docs lookup launched, multiple dependency types being researched concurrently]
-
-# For the agent
-
-# Parallel Lookup Groups
-Groups: [npm: N deps, pip: M deps, cargo: K deps, go: L deps, maven: P deps, gradle: Q deps]
-Active: [group name] -- [current dep / total] -- [status]
-Completed: [group name] -- [evidence recorded]
-
-# Lookup State (partitioned per group)
-npm:
-  Dependencies: [dep1, dep2, ...]
-  Evidence: [count] provisional
-  Status: [in-progress|complete|failed]
-pip:
-  Dependencies: [dep1, dep2, ...]
-  Evidence: [count] provisional
-  Status: [in-progress|complete|failed]
-cargo:
-  Dependencies: [dep1, dep2, ...]
-  Evidence: [count] provisional
-  Status: [in-progress|complete|failed]
-go:
-  Dependencies: [dep1, dep2, ...]
-  Evidence: [count] provisional
-  Status: [in-progress|complete|failed]
-maven:
-  Dependencies: [dep1, dep2, ...]
-  Evidence: [count] provisional
-  Status: [in-progress|complete|failed]
-gradle:
-  Dependencies: [dep1, dep2, ...]
-  Evidence: [count] provisional
-  Status: [in-progress|complete|failed]
-
-Aggregation: [pending|complete]
-Output: Unified evidence written to main session state on aggregation complete
-```
-
-This phase runs automatically when CHECKLIST detects multiple dependency types. Subagents spawned per dependency type with partitioned evidence collection (max 3 concurrent). The aggregation step produces unified evidence for the consolidated REVIEW phase.
-```
-
-## `PARALLEL_REVIEW` template
-
-```txt
-[PHASE: PARALLEL_REVIEW]
-
-# For the human
-[2-4 plain-language sentences: parallel review launched, N reviewers + tester reviewing concurrently]
-
-# For the agent
-
-# Parallel Progress
-Sensei-1: [phase] -- [current batch/total] -- [status] -- [layer: controllers]
-Sensei-2: [phase] -- [current batch/total] -- [status] -- [layer: services]
-Sensei-N: [phase] -- [current batch/total] -- [status] -- [layer: utils]
-Tester: [phase] -- [current batch/total] -- [status]
-Merge: [pending|complete]
-Reviewers: N (adaptive, 1 per 20 files)
-
-# Sensei State 1 (partitioned)
-Review cursor: [file:batch]
-Findings: [count] provisional
-Open questions: [count]
-Review decision: [pending|complete]
-Layer: controllers
-
-# Sensei State 2 (partitioned)
-Review cursor: [file:batch]
-Findings: [count] provisional
-Open questions: [count]
-Review decision: [pending|complete]
-Layer: services
-
-# Sensei State N (partitioned)
-Review cursor: [file:batch]
-Findings: [count] provisional
-Open questions: [count]
-Review decision: [pending|complete]
-Layer: utils
-
-# Tester State (partitioned)
-Review cursor: [file:batch]
-Findings: [count] provisional
-Test strategy: [draft|complete]
-Binding items: [count]
-Strong hints: [count]
-
-Merge protocol: See 07-protocols.md `## REVIEW Merge Protocol`
-Output: Unified findings written to main session state on merge complete
-```
-
-This phase runs automatically when CHECKLIST inventory > 1 file and not greenfield. Partitions file inventory by architectural layer (controllers/, services/, repositories/, middleware/, components/, hooks/, stores/, utils/, tests/); spawns N BabaSensei reviewers (N = max(1, ceil(files / 20))) + BabaTester. The merge step produces unified findings for the consolidated REVIEW phase.
-```
-
 ## Review mode selection
 
 REVIEW has two cadences: `interactive` and `consolidated`. The agent selects the cadence at REVIEW entry using the first match below:
@@ -861,13 +758,6 @@ plan_actual_history: [list of (timestamp, items, verdict) tuples]
 
 - [server]: [ready|unavailable|not_checked]
 
-## Parallel Budget
-
-parallel_budget: {docs: 3, checklist: 4, patch: 4}
-docs_partitions: [npm, pip, cargo, go, maven, gradle] -- [active subset]
-checklist_partitions: [layer1, layer2, ...] -- [active subset]
-patch_isolated_suites: [suite1, suite2, ...] -- [detected isolated test suites]
-
 ## Drift State
 
 prior_phase: [phase or n/a]
@@ -884,22 +774,6 @@ phase_status: {sensei: [phase|n/a], tester: [phase|n/a], dev: [phase|n/a], merge
 ## Pending Review Items
 
 - [finding_id] -- [file] -- [status: reviewing] -- [assigned_reviewer]
-
-## Sensei State 1
-
-[partitioned session state for BabaSensei reviewer 1 during PARALLEL_REVIEW; contains review_cursor, findings, open_questions, review_decision, layer]
-
-## Sensei State 2
-
-[partitioned session state for BabaSensei reviewer 2 during PARALLEL_REVIEW; contains review_cursor, findings, open_questions, review_decision, layer]
-
-## Sensei State N
-
-[partitioned session state for BabaSensei reviewer N during PARALLEL_REVIEW; contains review_cursor, findings, open_questions, review_decision, layer]
-
-## Tester State
-
-[partitioned session state for BabaTester during PARALLEL_REVIEW; contains review_cursor, findings, test_strategy, binding_items, strong_hints]
 
 ## Discovery Evidence
 

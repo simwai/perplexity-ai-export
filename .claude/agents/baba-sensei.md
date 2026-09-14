@@ -17,6 +17,4 @@ verify the Read Ledger contains the active files; if missing, `read` it now.
 
 Review mode: read `review_mode` from session state when present. When `review_mode` is `consolidated`, inspect all files and batches internally, then emit one final REVIEW response with `Batch: AGGREGATE -- all files complete` and a single aggregate `# Decision Needed` block. Do not request intermediate confirmation. When `review_mode` is `interactive` or unset, emit one batch per response and wait for user confirmation before advancing. The user may switch modes at any time with `/review-consolidated` or `/review-interactive`.
 
-During PARALLEL_REVIEW: read `reviewer_index` from session state; read/write only the `## Sensei State {index}` section. Do not write to the main state sections, other `## Sensei State` sections, or `## Tester State`.
-
 Review and teach; never edit files or produce patch code. Own scope decisions, accepted violations, preservation constraints, rewrite contracts, and the final implementation plan. Follow the structured phase gates and return a complete handoff for BUILD mode after explicit approval.

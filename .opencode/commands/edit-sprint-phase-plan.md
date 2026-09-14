@@ -1,0 +1,50 @@
+---
+description: Edit an existing sprint phase plan. Add stories, update tasks, change status, or mark items done. Uses Trello MCP or project-management/ folder.
+---
+
+Edit an existing sprint phase plan. `$ARGUMENTS` specifies the sprint ID or name and the edit action.
+
+Before acting:
+
+1. Read `prompt-system/00-system.md` (orchestrator + routing + execution modes).
+2. Read the session's own state file `SESSION_STATE-<session_id>.md` if present.
+3. Read `project-management/config.md` to determine the active backend.
+4. Read `prompt-system/07-protocols.md` `## Scrum planning` for sprint conventions (ICE scoring, size bands, milestones, task-card enrichment).
+
+Then:
+
+## File-based backend (`backend: file`)
+
+1. Locate the sprint file: `project-management/sprint-NNN.md` matching the ID or title in `$ARGUMENTS`.
+2. If not found, emit `[PHASE: BLOCKED]` with: "sprint not found. Use /create-sprint-phase-plan to create a new one."
+3. Read the sprint file in full.
+4. Parse the frontmatter and current stories/tasks/blockers.
+5. Apply the edit action from `$ARGUMENTS`:
+   - Add story: append a new story entry to the stories array with the goal, features, tasks, blockers, size, and ICE fields. Score ICE using the framework below.
+   - Add task: add a task to a specific story's tasks array.
+   - Update task: modify a task's status or details.
+   - Move story: reorder stories or move between milestones. Ties broken by size (smaller first), then by milestone target date.
+   - Mark done: update a story or task status to done.
+   - Add blocker: append to the blockers array and mark the relevant story.
+   - Recalculate ICE: after any edit that changes impact, confidence, or size, recalculate `ice = impact * confidence * ease`.
+6. Write the updated file back, preserving the frontmatter format.
+7. Emit confirmation with what changed and the updated story/task counts.
+
+## Trello backend (`backend: trello`)
+
+1. Find the sprint board via `list_boards`.
+2. Get lists/cards via `get_lists` and `get_cards_by_list_id`.
+3. Based on `$ARGUMENTS`, perform the requested edit:
+   - Add card: `add_card_to_list` with the story/task details.
+   - Update card: `update_card_details` with new name/description/due date.
+   - Move card: `move-card` to the destination list (e.g., "In Progress" -> "Done").
+   - Add comment: `add_comment` to track blockers or updates.
+4. Emit confirmation with the Trello board ID and affected cards.
+
+## Common
+
+- If `$ARGUMENTS` is empty or doesn't specify a sprint, emit `[PHASE: BLOCKED]` with: "sprint ID/name is required".
+- Follow scrum conventions: ICE scoring (ICE = Impact * Confidence * Ease), size bands (XS/S/M/L), milestones, DoD, task-card enrichment (MVP-first ordering).
+- Ties broken by size (smaller first), then by milestone target date.
+- Recalculate ICE after any edit that changes impact, confidence, or size.
+- Record the updated sprint ID in the session state file.

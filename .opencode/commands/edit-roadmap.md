@@ -1,0 +1,43 @@
+---
+description: Edit an existing roadmap. Adds, removes, or updates phases and items. Uses Trello MCP or project-management/ folder.
+---
+
+Edit an existing roadmap. `$ARGUMENTS` specifies the roadmap ID or title and the edit action.
+
+Before acting:
+
+1. Read `prompt-system/00-system.md` (orchestrator + routing + execution modes).
+2. Read the session's own state file `SESSION_STATE-<session_id>.md` if present.
+3. Read `project-management/config.md` to determine the active backend.
+
+Then:
+
+## File-based backend (`backend: file`)
+
+1. Locate the roadmap file: `project-management/roadmap-NNN.md` matching the ID or title in `$ARGUMENTS`.
+2. If not found, emit `[PHASE: BLOCKED]` with: "roadmap not found. Use /create-roadmap to make a new one."
+3. Parse the roadmap frontmatter and current phases/items.
+4. Read `project-management/roadmap-NNN.md` in full to get current state.
+5. Apply the edit action from `$ARGUMENTS`:
+   - Add phase: append a new phase entry to the frontmatter and markdown body.
+   - Add item: add an item to the specified phase's items array.
+   - Move item: remove from one phase, add to another.
+   - Remove item: remove from the specified phase's items array.
+6. Write the updated file back, preserving the frontmatter format.
+7. Emit confirmation with what changed.
+
+## Trello backend (`backend: trello`)
+
+1. Call `list_boards` to find the roadmap board by name.
+2. Call `get_lists` to get all lists on that board.
+3. Based on `$ARGUMENTS`, perform the requested edit:
+   - Add list: `add_list_to_board` with the new phase name.
+   - Add card: `add_card_to_list` with the item details.
+   - Move card: `move-card` to the destination list.
+   - Update card: `update_card_details` with new name/description.
+4. Emit confirmation with the Trello board ID and affected list/card IDs.
+
+## Common
+
+- If `$ARGUMENTS` is empty or doesn't specify a roadmap, emit `[PHASE: BLOCKED]` with: "roadmap ID/title is required".
+- Record the updated roadmap ID in the session state file.
