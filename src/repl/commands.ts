@@ -102,13 +102,13 @@ export class CommandHandler {
         } catch (error) {
           if (mode === 'auto') {
             logger.warn(
-              'Ollama is not available (required for semantic features). Falling back to Exact Text search (ripgrep).'
+              'AI Provider is not available (required for semantic features). Falling back to Exact Text search (ripgrep).'
             )
             mode = 'rg'
           } else {
             const errorMessage = error instanceof Error ? error.message : String(error)
             errorBus.emitError(errorMessage)
-            logger.info('Start Ollama with the embedding model, then run "vectorize".')
+            logger.info('Start AI Provider with the embedding model, then run "vectorize".')
             return
           }
         }
@@ -266,8 +266,8 @@ export class CommandHandler {
       message: 'Search mode:',
       choices: [
         { name: 'Auto (semantic for long queries, exact for short)', value: 'auto' },
-        { name: 'Semantic (Ollama + Vectra)', value: 'vector' },
-        { name: 'RAG (Ask history with Ollama)', value: 'rag' },
+        { name: 'Semantic (AI Provider + Vectra)', value: 'vector' },
+        { name: 'RAG (Ask history with AI Provider)', value: 'rag' },
         { name: 'Exact text (ripgrep)', value: 'rg' },
       ],
       default: 'auto',
@@ -281,7 +281,7 @@ export class CommandHandler {
 
     const shouldRetryAfterStartingOllama = await confirm({
       message:
-        'Ollama validation failed. Start Ollama (with the embedding model) and retry vectorization?',
+        'AI validation failed. Start AI Provider (with the embedding model) and retry vectorization?',
       default: false,
     })
 
@@ -307,7 +307,7 @@ export class CommandHandler {
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error)
       errorBus.emitError(errorMessage)
-      logger.info('Start Ollama with the embedding model, then run "vectorize".')
+      logger.info('Start AI Provider with the embedding model, then run "vectorize".')
       return
     }
 

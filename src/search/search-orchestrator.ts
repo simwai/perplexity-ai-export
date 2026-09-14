@@ -84,7 +84,7 @@ export class SearchOrchestrator {
   }
 
   private async performVectorOnlySearch(query: string): Promise<void> {
-    logger.info('Using vector search (Ollama + Vectra)...')
+    logger.info('Using vector search (AI Provider + Vectra)...')
     const SEARCH_RESULT_LIMIT = 10
     const searchResults = await this.vectorStore.search(query, SEARCH_RESULT_LIMIT)
 

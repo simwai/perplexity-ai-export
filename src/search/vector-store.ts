@@ -1,10 +1,10 @@
 import { errorBus } from '../utils/error-bus.js'
-import { LocalIndex } from 'vectra'
+import { LocalIndex, type MetadataFilter } from 'vectra'
 import { join } from 'node:path'
 import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { type Config } from '../utils/config.js'
 import { logger } from '../utils/logger.js'
-import { OllamaClient } from '../ai/ollama-client.js'
+import { AiClient } from '../ai/ai-client.js'
 import { chunkMarkdown } from '../utils/chunking.js'
 
 export type VectorDocMeta = Record<string, string>
@@ -44,16 +44,16 @@ export class VectorStore {
   }
 
   private readonly vectorIndex: LocalIndex
-  private readonly ollamaClient: OllamaClient
+  private readonly aiClient: AiClient
 
   constructor(private readonly config: Config) {
     this.vectorIndex = new LocalIndex(config.vectorIndexPath)
-    this.ollamaClient = new OllamaClient(config)
+    this.aiClient = new AiClient(config)
   }
 
   async validate(): Promise<void> {
     try {
-      await this.ollamaClient.validate()
+      await this.aiClient.validate()
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error)
       throw new VectorStore.VectorStoreError(`Vector store validation failed: ${errorMessage}`)
@@ -88,7 +88,7 @@ export class VectorStore {
 
   async searchWithMetadataFilter(
     query: string,
-    filter: (meta: Record<string, any>) => boolean,
+    filter: MetadataFilter,
     limit = 10
   ): Promise<VectorSearchResult[]> {
     try {
@@ -97,7 +97,7 @@ export class VectorStore {
         queryEmbedding,
         query,
         limit,
-        filter as any
+        filter
       )
       return this.formatVectorSearchResults(rawResults)
     } catch (error) {
@@ -205,7 +205,7 @@ export class VectorStore {
     batchMetas: VectorDocMeta[]
   ): Promise<void> {
     try {
-      const embeddingVectors = await this.ollamaClient.embed(batchTexts)
+      const embeddingVectors = await this.aiClient.embed(batchTexts)
 
       for (let i = 0; i < embeddingVectors.length; i++) {
         const currentVector = embeddingVectors[i]
@@ -222,7 +222,7 @@ export class VectorStore {
   }
 
   private async generateQueryEmbedding(query: string): Promise<number[]> {
-    const [queryEmbeddingVector] = await this.ollamaClient.embed([query])
+    const [queryEmbeddingVector] = await this.aiClient.embed([query])
     if (!queryEmbeddingVector) {
       throw new VectorStore.EmbeddingError('Failed to generate embedding for query')
     }
