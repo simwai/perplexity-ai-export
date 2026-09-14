@@ -5,13 +5,24 @@ import { logger } from '../utils/logger.js'
 import { confirm } from '@inquirer/prompts'
 import { errorMessageOf } from '../utils/extract-error-message.js'
 import { createNamedError } from '../utils/errors.js'
-import { ok, err, createResult, type Result } from 'super-result'
+import { ok, err, createResult, from, type Result } from 'super-result'
 import { logHttpRequest, logHttpResponse } from '../utils/http-logger.js'
 import { createWaitStrategy } from '../utils/wait-strategy.js'
+import { z } from 'zod'
 
 const SETTINGS_URL = 'https://www.perplexity.ai/settings'
 const NAVIGATION_TIMEOUT_MS = 15_000
 const CLOUDFLARE_CHALLENGE_PATTERN = /cdn-cgi\/challenge|cf-challenge|cloudflare/i
+const authSessionSchema = z.object({
+  expires: z.string(),
+  user: z
+    .object({
+      email: z.string().optional(),
+      id: z.string().optional(),
+      username: z.string().optional(),
+    })
+    .optional(),
+})
 
 export class BrowserManager {
   static readonly BrowserLaunchError = createNamedError('BrowserLaunchError')
@@ -87,24 +98,35 @@ export class BrowserManager {
   }
 
   async close(): Promise<void> {
-    if (this.activePage) {
-      await this.activePage
-        .close()
-        .catch((err) => logger.debug('close: activePage.close failed', err))
+    try {
+      if (this.activePage) {
+        await this.activePage.close()
+      }
+    } catch (err) {
+      logger.debug('close: activePage.close failed', errorMessageOf(err))
+    } finally {
+      this.activePage = null
     }
-    if (this.activeContext) {
-      await this.activeContext
-        .close()
-        .catch((err) => logger.debug('close: activeContext.close failed', err))
+
+    try {
+      if (this.activeContext) {
+        await this.activeContext.close()
+      }
+    } catch (err) {
+      logger.debug('close: activeContext.close failed', errorMessageOf(err))
+    } finally {
+      this.activeContext = null
     }
-    if (this.browserInstance) {
-      await this.browserInstance
-        .close()
-        .catch((err) => logger.debug('close: browserInstance.close failed', err))
+
+    try {
+      if (this.browserInstance) {
+        await this.browserInstance.close()
+      }
+    } catch (err) {
+      logger.debug('close: browserInstance.close failed', errorMessageOf(err))
+    } finally {
+      this.browserInstance = null
     }
-    this.activePage = null
-    this.activeContext = null
-    this.browserInstance = null
   }
 
   private async launchBrowser(headless: boolean | 'new'): Promise<Result<void, Error>> {
@@ -182,26 +204,26 @@ export class BrowserManager {
         timeout: NAVIGATION_TIMEOUT_MS,
       })
       // Wait for SPA hash routing to settle (Perplexity redirects to #settings/account)
-      await this.activePage!.waitForFunction(
-        () => {
-          const url = new URL(window.location.href)
-          return url.hash.startsWith('#settings') || url.pathname !== '/settings'
-        },
-        { timeout: NAVIGATION_TIMEOUT_MS }
-      ).catch(() => {
-        // Hash may not have settled; continue and let verifyLoginStatus handle it
+      try {
+        await this.activePage!.waitForFunction(
+          () => {
+            const url = new URL(window.location.href)
+            return url.hash.startsWith('#settings') || url.pathname !== '/settings'
+          },
+          { timeout: NAVIGATION_TIMEOUT_MS }
+        )
+      } catch {
         logger.debug('Hash routing not yet settled; proceeding to verify')
-      })
+      }
       // Confirm the settings page has loaded by waiting for a known DOM element
-      await this.waitStrategy
-        .forSelector(
+      try {
+        await this.waitStrategy.forSelector(
           this.activePage!,
           '[data-testid="settings-page"], #settings, .settings-container, [data-testid="account-settings"]'
         )
-        .catch(() => {
-          // Selector may not match; the page may use different DOM structure
-          logger.debug('Settings page DOM selector not found; continuing')
-        })
+      } catch {
+        logger.debug('Settings page DOM selector not found; continuing')
+      }
     })
   }
 
@@ -236,17 +258,17 @@ export class BrowserManager {
       }
 
       // Wait for hash routing to settle
-      await this.activePage
-        .waitForFunction(
+      try {
+        await this.activePage.waitForFunction(
           () => {
             const url = new URL(window.location.href)
             return url.hash.startsWith('#settings') || url.pathname !== '/settings'
           },
           { timeout: NAVIGATION_TIMEOUT_MS }
         )
-        .catch(() => {
-          logger.debug('Hash routing not yet settled; proceeding to verify')
-        })
+      } catch {
+        logger.debug('Hash routing not yet settled; proceeding to verify')
+      }
 
       const isLoginConfirmed = await this.verifyLoginStatus(this.activePage)
       if (isLoginConfirmed) {
@@ -296,71 +318,72 @@ export class BrowserManager {
   }
 
   private async verifyLoginStatus(page: Page): Promise<boolean> {
-    // Wait for network to settle before checking auth
-    await page.waitForLoadState('networkidle').catch(() => {})
-    await page.waitForTimeout(1000).catch(() => {})
+    // Set default timeout so evaluate calls fail fast instead of hanging
+    await page.setDefaultTimeout(10_000)
+    try {
+      await page.waitForLoadState('networkidle')
+    } catch {
+      // networkidle timeout is non-fatal; proceed with DOM/API checks
+    }
+    try {
+      await page.waitForTimeout(1000)
+    } catch {
+      // timeout is non-fatal; proceed with DOM/API checks
+    }
 
     // First check: DOM-based verification (works when SPA is hydrated)
-    const domVerified = await page
-      .evaluate(async () => {
-        try {
-          const userEmail = document.querySelector(
-            '[data-testid="user-email"], [data-testid="user-name"], [data-testid="username"], .user-email, [class*="user-email"], [class*="userName"], [class*="user-name"]'
-          )
-          const userAvatar = document.querySelector(
-            '[data-testid="user-avatar"], [data-testid="user-photo"], .user-avatar, [class*="avatar"]'
-          )
-          if (userEmail || userAvatar) return true
-        } catch {
-          // Ignore DOM errors
-        }
-        return false
+    const domResult = await from<boolean>(() =>
+      page.evaluate(() => {
+        const userEmail = document.querySelector(
+          '[data-testid="user-email"], [data-testid="user-name"], [data-testid="username"], .user-email, [class*="user-email"], [class*="userName"], [class*="user-name"]'
+        )
+        const userAvatar = document.querySelector(
+          '[data-testid="user-avatar"], [data-testid="user-photo"], .user-avatar, [class*="avatar"]'
+        )
+        return Boolean(userEmail || userAvatar)
       })
-      .catch(() => false)
-
-    if (domVerified) return true
+    )
+    if (domResult.ok && domResult.value) return true
 
     // Second check: /api/auth/session returns user info when logged in
     // Response: { expires: string, user: { email, id, username, ... } }
-    const apiVerified = await page
-      .evaluate(async () => {
-        try {
-          const res = await fetch('/api/auth/session', {
-            method: 'GET',
-            credentials: 'include',
-          })
-          if (res.status === 401 || res.status === 403) return false
-          if (!res.ok) return false
-          const text = await res.text()
-          if (!text.trim()) return false
-          const parsed = JSON.parse(text)
-          return Boolean(parsed.user || parsed.expires || parsed.email)
-        } catch {
-          return false
-        }
-      })
-      .catch(() => false)
-
-    if (apiVerified) return true
-
-    // Third check: poll for /api/auth/session network response in performance entries
-    const networkVerified = await page
-      .evaluate(async () => {
-        return new Promise<boolean>((resolve) => {
-          const check = () => {
-            const entries = performance.getEntriesByType('resource') as PerformanceResourceTiming[]
-            const hasSessionResponse = entries.some(
-              (e) => e.name.includes('/api/auth/session') && e.responseStatus === 200
-            )
-            resolve(hasSessionResponse)
-          }
-          check()
-          setTimeout(check, 500)
+    const apiResult = await from<boolean>(async () => {
+      const text = await page.evaluate(async () => {
+        const res = await fetch('/api/auth/session', {
+          method: 'GET',
+          credentials: 'include',
         })
+        if (!res.ok) return ''
+        return await res.text()
       })
-      .catch(() => false)
+      if (!text.trim()) return false
+      try {
+        const parsed = authSessionSchema.safeParse(JSON.parse(text))
+        return parsed.success && Boolean(parsed.data?.user || parsed.data?.expires)
+      } catch {
+        return false
+      }
+    })
+    if (apiResult.ok && apiResult.value) return true
 
-    return networkVerified
+    // Third check: poll for /api/auth/session network response
+    const networkResult = await from<boolean>(async () => {
+      const deadline = Date.now() + 5000
+      while (Date.now() < deadline) {
+        const hasSession = await page.evaluate(() => {
+          const entries = performance.getEntriesByType('resource')
+          return entries.some(
+            (e) =>
+              e.name.includes('/api/auth/session') &&
+              (e as PerformanceResourceTiming).responseStatus === 200
+          )
+        })
+        if (hasSession) return true
+        await page.waitForTimeout(500)
+      }
+      return false
+    })
+    return networkResult.ok ? networkResult.value : false
   }
 
   private async persistAuthenticationState(): Promise<Result<void, Error>> {
