@@ -61,8 +61,6 @@ After a successful compliance audit, inspect the resulting diff. Run the project
 
 For partial-scope patches, the verification gate checks only the scoped items. Pending review items are not verified and remain untouched in the working tree.
 
-**Parallel test execution**: Detect independent test suites by scanning project config (package.json scripts, jest.config, pytest.ini, pyproject.toml) for isolation markers: no shared `beforeAll`/`setup`, no shared DB fixtures, no global state mutations, no `@Order`/`dependsOn`. Categorize suites as `isolated` (parallel-safe) or `sequential-only`. Run `lint` + `typecheck` sequentially (required order), then execute isolated test suites concurrently via background processes (max concurrent per `parallel_budget.patch = 4`). Aggregate results with per-suite timing. Fallback: if zero isolated suites detected or `/noparallel`, run all sequentially with note `Parallel test execution skipped: no isolated suites detected`.
-
 When the patch contains a confirmed bug, the verification gate runs two extra rows before the diff inspection concludes:
 
 - **Regression baseline (expected FAIL):** PASS|FAIL/SKIPPED -- <command or n/a> -- <note or SKIPPED reason>.
@@ -93,7 +91,7 @@ The commit/push gate is the final step of PATCH when the session made file edits
 
 ### Pre-ask functional verification (Playwright MCP)
 
-Before the ask, when the gate triggers, run a Playwright MCP functional smoke of the session's work. This is the gate's verification step: REVIEW already verifies a Playwright e2e smoke at H11 verdict time; this step re-runs the same smoke as a final pre-push check.
+Before the ask, when the gate triggers, run a Playwright MCP functional smoke of the session's work. This is the gate's verification step: REVIEW already expects a Playwright e2e smoke (H11); this step carries the same expectation onto the commit path.
 
 - **Trigger (any of):**
   - Web-app entry point: the repo has a `package.json` `dev`/`start` script serving a browser UI, a frontend directory with an established dev workflow, or a documented localhost URL. Detect it with a filesystem search; never assume it, never invent it.

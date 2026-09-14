@@ -17,7 +17,7 @@ Persona system overview. Six personas, each with a defined role, ownership, and 
 
 0. Optional: start with BabaScrumMaster for goal intake, backlog, ICE prioritization, sprint plan, task cards, and spec authoring (SPEC phase only when no concrete target exists yet).
 1. Start with BabaSensei for review + plan.
-2. Hand off to BabaTester for test strategy (parallel or after).
+2. Hand off to BabaTester for test strategy.
 3. Hand off to BabaDev with approved plan + test strategy for patch.
 4. Optional: run DRIFT after PATCH (or on demand) to compare the spec against the code.
 
@@ -55,7 +55,7 @@ Additional loads: `00-system.md` (always), `00-system.md` `## Loop protection` (
 
 Quality gate. Evaluates chunk-by-chunk against H1-H12 and S1-S20. Blocks merges on hard-tier failures. Requires a complete rewrite contract before any patch. Runs hard-tier compliance audit before showing code. Verdict levels: **MERGE BLOCKED** / **APPROVED WITH FIXES** / **LGTM**. No extra module loads beyond base + phase stack.
 
-In `PARALLEL_REVIEW`, BabaReviewer does not partition files. It acts as the merge auditor after all BabaSensei partitions and BabaTester complete: it receives the merged findings, verifies the merge protocol was applied correctly (Sensei authority on hard-tier, Sensei authority on blocking L-tier findings, union on soft-tier and advisory L-tier findings), and produces the final merge verdict before the session enters REVIEW. This keeps the per-batch review voice separate from the merge/audit voice.
+In `REVIEW`, BabaReviewer does not partition files. It acts as the merge auditor after all BabaSensei partitions and BabaTester complete: it receives the merged findings, verifies the merge protocol was applied correctly (Sensei authority on hard-tier, Sensei authority on blocking L-tier findings, union on soft-tier and advisory L-tier findings), and produces the final merge verdict before the session enters REVIEW. This keeps the per-batch review voice separate from the merge/audit voice.
 
 ### Process Master
 
@@ -115,12 +115,12 @@ Required fields by transition:
 
 ```
 BabaScrumMaster  -> INTAKE -> BACKLOG -> SPRINT -> TASK_PLAN -> HANDOFF   (optional, full mode only)
-BabaSensei       -> CHECKLIST -> DOCS -> PARALLEL_REVIEW -> REVIEW -> PLAN -> HANDOFF
-BabaTester       -> CHECKLIST -> DOCS -> PARALLEL_REVIEW -> REVIEW -> TEST_STRATEGY -> HANDOFF
+BabaSensei       -> CHECKLIST -> DOCS -> REVIEW -> PLAN -> HANDOFF
+BabaTester       -> CHECKLIST -> DOCS -> REVIEW -> TEST_STRATEGY -> HANDOFF
 BabaDev          -> PLAN (from HANDOFF) -> PATCH
 ```
 
-BabaScrumMaster runs upstream of the core pipeline and only when the user supplies a goal or project spec without a concrete target. Its HANDOFF carries the approved task card, and the receiving review persona enters `CHECKLIST` with that task as target. BabaTester and BabaSensei run in parallel during `PARALLEL_REVIEW` on the same target (auto-spawned when CHECKLIST inventory > 1 file). Partitions file inventory by architectural layer; spawns N BabaSensei reviewers (N = max(1, ceil(files / 20))) + BabaTester. A merge protocol combines their findings (Sensei authority on hard-tier, Sensei authority on blocking L-tier findings, union on soft-tier and advisory L-tier findings) into a single consolidated handoff to BabaDev. BabaDev must classify all BabaTester items as BINDING / STRONG HINT / WEAK HINT before entering PATCH.
+BabaScrumMaster runs upstream of the core pipeline and only when the user supplies a goal or project spec without a concrete target. Its HANDOFF carries the approved task card, and the receiving review persona enters `CHECKLIST` with that task as target. BabaTester and BabaSensei run sequentially during REVIEW on the same target. Partitions file inventory by architectural layer; spawns N BabaSensei reviewers (N = min(ceil(files/50), 4)) + BabaTester. A merge protocol combines their findings (Sensei authority on hard-tier, Sensei authority on blocking L-tier findings, union on soft-tier and advisory L-tier findings) into a single consolidated handoff to BabaDev. BabaDev must classify all BabaTester items as BINDING / STRONG HINT / WEAK HINT before entering PATCH.
 
 ### HANDOFF template
 
@@ -171,5 +171,3 @@ Status: Contract complete. Receiver may begin at [entry phase].
 ```
 
 For consolidated REVIEW mode, the handoff must represent the complete aggregate report. Provisional findings, incomplete coverage, and unresolved required questions cannot be handed off as accepted violations. The receiving persona must retain per-file and per-batch attribution.
-
-When `PARALLEL_REVIEW` was used, the handoff carries the merged findings from the merge protocol (Sensei authority on H1-H12, union on S1-S20) plus BabaTester's complete test strategy (`binding_items`, `strong_hints`). The `## Sensei State` and `## Tester State` sections are retained in the session state file for audit but are no longer active.

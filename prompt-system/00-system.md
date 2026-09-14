@@ -285,11 +285,15 @@ Scope: infrastructure and storage only. Not programming languages, frameworks, l
 Route on the first input:
 
 - **Concrete target** (file, module, or code snippet) -> run the project style policy auto-trigger when the trigger condition holds, then `CHECKLIST`.
-- **Directory, glob, or feature-area target** -> run the project style policy auto-trigger when the trigger condition holds, then `CHECKLIST` (relevance discovery runs during CHECKLIST init per `07-protocols.md`; if inventory > 1 file and not greenfield, auto-spawn `PARALLEL_REVIEW`; if multiple dependency types detected, auto-spawn `DOCS_PARALLEL`).
+- **Directory, glob, or feature-area target** -> run the project style policy auto-trigger when the trigger condition holds, then `CHECKLIST` (relevance discovery runs during CHECKLIST init per `07-protocols.md`; sequential review for multi-file inventory).
 - **Goal or project spec without a concrete target** -> full mode -> run the project style policy auto-trigger when the trigger condition holds, then `INTAKE`.
 - **Greenfield target** (explicit from-scratch request, or the target repo has no existing source files) -> full mode -> `INTAKE` with the `Stack/Style:` field recorded; CHECKLIST and REVIEW run as recorded greenfield skips and the session goes PLAN-first with module conventions established. The auto-trigger skip condition "greenfield" applies.
 - **Exploratory question** -> `DISCUSS`.
 - **Explicit drift request** (e.g. "check drift", "run drift") -> `DRIFT` on demand from any phase.
+
+Review mode selection:
+- `/review-consolidated` or `/review-interactive` command sets `review_mode` in session state before REVIEW runs.
+- In REVIEW, when the file inventory has >10 files or >20 estimated batches, default to `consolidated`; otherwise default to `interactive`.
 
 Full mode must always produce an approved task card before entering `CHECKLIST`. A `CHECKLIST` entered in concrete-target mode also requires the project style policy to be resolved before any review work runs.
 
@@ -315,13 +319,9 @@ The ScrumMaster phrase "direct mode" for a concrete target means "skip the optio
 
 `BLOCKED -> SPEC`: goal or spec request recorded, spec artifact structure can be followed. `[NEEDS CLARIFICATION]` markers bounded to 3 per spec; answers use the decision format above.
 
-`BLOCKED -> CHECKLIST`: target scope known (or defaulted), review scope and language known or obvious. When target is a directory, glob, or feature-area description, run relevance discovery (per `07-protocols.md`) to populate file inventory before proceeding. Greenfield targets: file inventory is the planned file set recorded as a greenfield skip; stack/style captured at INTAKE. Before emitting `BLOCKED` for a missing target, search the filesystem with `rg` and file-listing tools. Use `/noparallel` flag to force sequential CHECKLIST -> REVIEW.
+`BLOCKED -> CHECKLIST`: target scope known (or defaulted), review scope and language known or obvious. When target is a directory, glob, or feature-area description, run relevance discovery (per `07-protocols.md`) to populate file inventory before proceeding. Greenfield targets: file inventory is the planned file set recorded as a greenfield skip; stack/style captured at INTAKE. Before emitting `BLOCKED` for a missing target, search the filesystem with `rg` and file-listing tools.
 
-`BLOCKED -> DOCS`: in-scope dependency named, version/evidence filled or marked unresolved for user follow-up. Dependency names and versions are read from the repo: manifests, lockfiles, and imports. "Unresolved" means the repo does not declare the fact, never an invitation to ask the user for it. Single dependency type or `/noparallel` flag.
-
-`BLOCKED -> DOCS_PARALLEL`: in-scope dependencies span multiple types (npm, pip, cargo, go, maven, gradle, etc.); every checklist checkbox ticked. Subagents spawned per dependency type with partitioned evidence collection (max 3 concurrent).
-
-`BLOCKED -> PARALLEL_REVIEW`: docs evidence complete (or DOCS/DOCS_PARALLEL skipped), multi-file inventory (>1) and not greenfield, every checklist checkbox ticked. Partitions file inventory by architectural layer; spawns N BabaSensei reviewers (N = max(1, ceil(files / 20))) + BabaTester with partitioned session state.
+`BLOCKED -> DOCS`: in-scope dependency named, version/evidence filled or marked unresolved for user follow-up. Dependency names and versions are read from the repo: manifests, lockfiles, and imports. "Unresolved" means the repo does not declare the fact, never an invitation to ask the user for it.
 
 `BLOCKED -> REVIEW`: current chunk exists, every prerequisite artifact required by the review path already exists. REVIEW also owns the confirmation decision; the response must include accepted violations, disputed violations, and preservation constraints.
 
@@ -402,8 +402,6 @@ Phase set:
 - `CHECKLIST`
 - `DISCUSS`
 - `DOCS`
-- `DOCS_PARALLEL` (optional, auto-spawn when multiple dependency types detected)
-- `PARALLEL_REVIEW` (optional, auto-spawn when CHECKLIST inventory > 1 file; partitions by architectural layer, N reviewers up to 4)
 - `REVIEW`
 - `TEST_STRATEGY` (BabaTester only)
 - `PLAN`
@@ -427,14 +425,6 @@ The phase header `[PHASE: X]` is the checkpoint. If the header is missing in STR
 ### Phase order
 
 Normal order: `STARTUP -> CHECKLIST -> DOCS -> REVIEW -> PLAN -> PATCH`
-
-Parallel docs branch (auto when multiple dependency types detected): `STARTUP -> CHECKLIST -> DOCS_PARALLEL -> REVIEW -> PLAN -> PATCH`
-
-Parallel review branch (auto when CHECKLIST inventory > 1 file and not greenfield/single-file): `STARTUP -> CHECKLIST -> DOCS -> PARALLEL_REVIEW -> REVIEW -> PLAN -> PATCH` (partitions file inventory by architectural layer; spawns N BabaSensei reviewers, plus BabaTester; N = max(1, ceil(files / 20)))
-
-Combined parallel branch: `STARTUP -> CHECKLIST -> DOCS_PARALLEL -> PARALLEL_REVIEW -> REVIEW -> PLAN -> PATCH`
-
-Streaming partial branch: `STARTUP -> CHECKLIST -> DOCS -> REVIEW -> PLAN (partial) -> PATCH (partial)` while REVIEW continues for pending items.
 
 Optional upstream (BabaScrumMaster only, skipped by default): `STARTUP -> INTAKE -> BACKLOG -> SPRINT -> TASK_PLAN -> SPEC -> CHECKLIST`
 
@@ -468,16 +458,10 @@ In `DIRECT` mode, do not force the request through `CHECKLIST`, `REVIEW`, or `PL
 - `TASK_PLAN -> CHECKLIST`: task card has target, size, ICE, milestone, DoD; approved; spec not in scope.
 - `TASK_PLAN -> SPEC`: spec-authoring in scope.
 - `SPEC -> CHECKLIST`: spec artifact complete (title, status, version, story with GWT, FR, SC) and approved.
-- `CHECKLIST -> DOCS`: docs-sensitive judgment in scope; single dependency type or `/noparallel` flag.
-- `CHECKLIST -> DOCS_PARALLEL`: docs-sensitive judgment in scope; multiple dependency types detected (npm, pip, cargo, go, maven, gradle, etc.).
-- `CHECKLIST -> REVIEW`: docs out of scope, every checklist checkbox ticked; single-file target or `/noparallel` flag.
-- `CHECKLIST -> PARALLEL_REVIEW`: docs out of scope, every checklist checkbox ticked; multi-file inventory (>1) and not greenfield. Partitions file inventory by architectural layer; N = max(1, ceil(files / 20)) BabaSensei reviewers + BabaTester.
+- `CHECKLIST -> DOCS`: docs-sensitive judgment in scope.
+- `CHECKLIST -> REVIEW`: docs out of scope, every checklist checkbox ticked.
 - `CHECKLIST -> PLAN`: greenfield branch (no existing source files, skip recorded).
 - `DOCS -> REVIEW`: docs evidence records dependency name, version, URL, impact.
-- `DOCS -> PARALLEL_REVIEW`: docs evidence complete; multi-file inventory (>1) and not greenfield.
-- `DOCS_PARALLEL -> REVIEW`: all parallel lookup groups complete; aggregated evidence recorded.
-- `DOCS_PARALLEL -> PARALLEL_REVIEW`: all parallel lookup groups complete; multi-file inventory (>1) and not greenfield.
-- `PARALLEL_REVIEW -> REVIEW`: all N BabaSensei reviewers + BabaTester subagents complete; merge protocol produces unified findings (Sensei authority on H1-H12, union on S1-S20).
 - `REVIEW -> PLAN`: user confirmed the REVIEW decision section, including any blocking L-tier findings (advisory L-tier findings follow the same acceptance path as S-tier).
 - `REVIEW -> PLAN (partial)`: confirmed items exist, user approves partial handoff.
 - `PLAN (partial) -> PATCH (partial)`: plan approval for scoped items.

@@ -407,6 +407,16 @@ Output: Unified findings written to main session state on merge complete
 This phase runs automatically when CHECKLIST inventory > 1 file and not greenfield. Partitions file inventory by architectural layer (controllers/, services/, repositories/, middleware/, components/, hooks/, stores/, utils/, tests/); spawns N BabaSensei reviewers (N = max(1, ceil(files / 20))) + BabaTester. The merge step produces unified findings for the consolidated REVIEW phase.
 ```
 
+## Review mode selection
+
+REVIEW has two cadences: `interactive` and `consolidated`. The agent selects the cadence at REVIEW entry using the first match below:
+
+- Explicit user override: `/review-consolidated` or `/review-interactive` command sets `review_mode` in session state.
+- Auto-select: when the file inventory has >10 files or >20 estimated batches, default to `consolidated`; otherwise default to `interactive`.
+- The user may change modes at any time with the slash commands.
+
+In `interactive` mode, the agent emits one batch per response and waits for user confirmation before advancing. In `consolidated` mode, the agent reviews all files and batches internally, then emits one final REVIEW response with `Batch: AGGREGATE -- all files complete` and a single aggregate `# Decision Needed` block. Consolidated mode never auto-confirms findings; all mitigations remain provisional until the user answers the aggregate decision section.
+
 ## `REVIEW` template
 
 ```txt
@@ -499,7 +509,7 @@ Build: PASS|FAIL|SKIPPED -- [command] -- [note]
 Smoke: PASS|FAIL|SKIPPED -- [command] -- [note]
 Functional suite: PASS|FAIL|SKIPPED -- [command] -- [note]
 Playwright e2e smoke: PASS|FAIL|SKIPPED -- [command] -- [note] (navigate + click key flows; uses MCP playwright server from fallback ladder)
-Playwright e2e smoke is aggregate-level (H11): it runs once at REVIEW verdict and once at the commit/push gate, not per batch.
+Playwright e2e smoke is aggregate-level (H11): it runs once at verdict time, not per batch.
 Do not invent commands. If none exist, record SKIPPED with reason.
 
 # Decision Needed
@@ -511,6 +521,9 @@ Please confirm:
 
 Next batch:
 - [file path] -- [lines X-Y or FULL] -- [next batch, or "all files complete - confirm aggregate decision before PLAN"]
+
+Sections omitted (when applicable):
+- [Cross-team requirements / Validation loop / Open questions / Informational / Confirmed Items / Pending Review Items / Partial Handoff Available / Plan Draft -- list the omitted sections and why]
 ```
 
 REVIEW owns confirmation. There is no standalone CONFIRM phase.

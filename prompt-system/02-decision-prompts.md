@@ -230,7 +230,7 @@ Scope: infrastructure and storage only. Not programming languages, frameworks, l
 Route on the first input:
 
 - **Concrete target** (file, module, or code snippet) -> run the project style policy auto-trigger when the trigger condition holds, then `CHECKLIST`.
-- **Directory, glob, or feature-area target** -> run the project style policy auto-trigger when the trigger condition holds, then `CHECKLIST` (relevance discovery runs during CHECKLIST init; if inventory > 1 file and not greenfield, auto-spawn `PARALLEL_REVIEW`; if multiple dependency types detected, auto-spawn `DOCS_PARALLEL`).
+- **Directory, glob, or feature-area target** -> run the project style policy auto-trigger when the trigger condition holds, then `CHECKLIST` (relevance discovery runs during CHECKLIST init; sequential review for multi-file inventory).
 - **Goal or project spec without a concrete target** -> full mode -> run the project style policy auto-trigger when the trigger condition holds, then `INTAKE`.
 - **Greenfield target** (explicit from-scratch request, or the target repo has no existing source files) -> full mode -> `INTAKE` with the `Stack/Style:` field recorded; CHECKLIST and REVIEW run as recorded greenfield skips and the session goes PLAN-first with module conventions established. The auto-trigger skip condition "greenfield" applies.
 - **Exploratory question** -> `DISCUSS`.
@@ -260,13 +260,9 @@ The ScrumMaster phrase "direct mode" for a concrete target means "skip the optio
 
 `BLOCKED -> SPEC`: goal or spec request recorded, spec artifact structure can be followed. `[NEEDS CLARIFICATION]` markers bounded to 3 per spec; answers use the decision format above.
 
-`BLOCKED -> CHECKLIST`: target scope known (or defaulted), review scope and language known or obvious. When target is a directory, glob, or feature-area description, run relevance discovery per `07-protocols.md` to populate file inventory before proceeding. Greenfield targets: file inventory is the planned file set recorded as a greenfield skip; stack/style captured at INTAKE. Before emitting `BLOCKED` for a missing target, search the filesystem with `rg` and file-listing tools. Use `/noparallel` flag to force sequential CHECKLIST -> REVIEW.
+`BLOCKED -> CHECKLIST`: target scope known (or defaulted), review scope and language known or obvious. When target is a directory, glob, or feature-area description, run relevance discovery per `07-protocols.md` to populate file inventory before proceeding. Greenfield targets: file inventory is the planned file set recorded as a greenfield skip; stack/style captured at INTAKE. Before emitting `BLOCKED` for a missing target, search the filesystem with `rg` and file-listing tools.
 
-`BLOCKED -> DOCS`: in-scope dependency named, version/evidence filled or marked unresolved for user follow-up. Dependency names and versions are read from the repo: manifests, lockfiles, and imports. "Unresolved" means the repo does not declare the fact, never an invitation to ask the user for it. Single dependency type or `/noparallel` flag.
-
-`BLOCKED -> DOCS_PARALLEL`: in-scope dependencies span multiple types (npm, pip, cargo, go, maven, gradle, etc.); every checklist checkbox ticked. Subagents spawned per dependency type with partitioned evidence collection (max 3 concurrent).
-
-`BLOCKED -> PARALLEL_REVIEW`: docs evidence complete (or DOCS/DOCS_PARALLEL skipped), multi-file inventory (>1) and not greenfield, every checklist checkbox ticked. Partitions file inventory by architectural layer; spawns N BabaSensei reviewers (N = max(1, ceil(files / 20))) + BabaTester with partitioned session state.
+`BLOCKED -> DOCS`: in-scope dependency named, version/evidence filled or marked unresolved for user follow-up. Dependency names and versions are read from the repo: manifests, lockfiles, and imports. "Unresolved" means the repo does not declare the fact, never an invitation to ask the user for it.
 
 `BLOCKED -> REVIEW`: current chunk exists, every prerequisite artifact required by the review path already exists. REVIEW also owns the confirmation decision; the response must include accepted violations, disputed violations, and preservation constraints.
 

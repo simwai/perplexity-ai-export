@@ -1,0 +1,11 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "plugin": [
+    "@spoons-and-mirrors/subtask2@latest",
+    "opencode-vibeguard@latest",
+    "opencode-adaptive-thinking@latest",
+    "opencode-pty",
+    "opencode-scheduler",
+    ".opencode/plugins/startup-gate.ts"
+  ]
+}
