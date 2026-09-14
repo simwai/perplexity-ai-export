@@ -107,27 +107,76 @@ function rawThreadToConversationMeta(thread: RawThread): DiscoveredConversationM
   }
 }
 
+async function evaluateThreadBatchInPage(
+  page: Page,
+  url: string,
+  offset: number
+): Promise<{ status: number; body: string }> {
+  return page.evaluate(
+    async ({ url, offset, batchSize }: { url: string; offset: number; batchSize: number }) => {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          limit: batchSize,
+          offset,
+          ascending: false,
+          include_assets: true,
+          search_term: '',
+          send_last_entry: true,
+          thread_type_filter: null,
+          with_temporary_threads: false,
+        }),
+        credentials: 'include',
+      })
+      const text = await res.text()
+      return { status: res.status, body: text }
+    },
+    { url, offset, batchSize: BATCH_SIZE }
+  )
+}
+
+async function evaluatePinnedThreadsInPage(
+  page: Page,
+  url: string
+): Promise<{ status: number; body: string }> {
+  return page.evaluate(
+    async ({ url }: { url: string }) => {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({}),
+        credentials: 'include',
+      })
+      const text = await res.text()
+      return { status: res.status, body: text }
+    },
+    { url }
+  )
+}
+
 // #endregion Helpers
 
 // #region Version Detection
 
 async function detectApiVersion(page: Page): Promise<Result<string, Error>> {
-  const result = await from<string>(async () => {
-    const response = await page.waitForResponse(
-      (res) => VERSIONED_URL_PATTERNS.some((p) => res.url().includes(p)) && res.status() === 200,
-      { timeout: 15_000 }
-    )
-    const version = extractVersionFromUrl(response.url()) ?? DEFAULT_API_VERSION
-    const pathname = new URL(response.url()).pathname
-    logger.debug(`Detected API version: ${version} (from ${pathname})`)
-    return version
-  })
-
+  const result = await from<string>(async () => await detectVersionFromResponse(page))
   if (!result.ok) {
     logger.debug(`Version detection timeout — using fallback ${DEFAULT_API_VERSION}`)
     return ok(DEFAULT_API_VERSION)
   }
   return result
+}
+
+async function detectVersionFromResponse(page: Page): Promise<string> {
+  const response = await page.waitForResponse(
+    (res) => VERSIONED_URL_PATTERNS.some((p) => res.url().includes(p)) && res.status() === 200,
+    { timeout: 15_000 }
+  )
+  const version = extractVersionFromUrl(response.url()) ?? DEFAULT_API_VERSION
+  const pathname = new URL(response.url()).pathname
+  logger.debug(`Detected API version: ${version} (from ${pathname})`)
+  return version
 }
 
 // #endregion Version Detection
@@ -140,19 +189,20 @@ async function detectApiVersion(page: Page): Promise<Result<string, Error>> {
  * cookies/CSRF are fully hydrated before we call list_ask_threads.
  */
 async function waitForLibraryReady(page: Page, timeout = 12_000): Promise<void> {
-  const result = await from(async () => {
-    await page.waitForResponse(
-      (res) => res.url().includes('/rest/userinfo') && res.status() === 200,
-      { timeout }
-    )
-    logger.debug('Library page ready (userinfo confirmed)')
-  })
-
+  const result = await from(async () => await waitForUserInfoResponse(page, timeout))
   if (!result.ok) {
     logger.debug('waitForLibraryReady: timeout — proceeding anyway')
   }
 
   await page.waitForTimeout(PAGE_READY_BUFFER_MS)
+}
+
+async function waitForUserInfoResponse(page: Page, timeout: number): Promise<void> {
+  await page.waitForResponse(
+    (res) => res.url().includes('/rest/userinfo') && res.status() === 200,
+    { timeout }
+  )
+  logger.debug('Library page ready (userinfo confirmed)')
 }
 
 // #endregion Page Readiness
@@ -166,30 +216,9 @@ async function fetchThreadBatch(
 ): Promise<Result<ThreadBatchResponse, Error>> {
   const url = `${BASE_URL}/rest/thread/list_ask_threads?version=${version}&source=default`
 
-  const rawResult = await from<{ status: number; body: string }>(async () => {
-    return page.evaluate(
-      async ({ url, offset, batchSize }: { url: string; offset: number; batchSize: number }) => {
-        const res = await fetch(url, {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({
-            limit: batchSize,
-            offset,
-            ascending: false,
-            include_assets: true,
-            search_term: '',
-            send_last_entry: true,
-            thread_type_filter: null,
-            with_temporary_threads: false,
-          }),
-          credentials: 'include',
-        })
-        const text = await res.text()
-        return { status: res.status, body: text }
-      },
-      { url, offset, batchSize: BATCH_SIZE }
-    )
-  })
+  const rawResult = await from<{ status: number; body: string }>(async () =>
+    evaluateThreadBatchInPage(page, url, offset)
+  )
 
   if (!rawResult.ok) {
     return err(rawResult.error)
@@ -240,21 +269,9 @@ async function fetchPinnedThreads(
 ): Promise<Result<RawThread[], Error>> {
   const url = `${BASE_URL}/rest/thread/list_pinned_ask_threads?version=${version}&source=default`
 
-  const rawResult = await from<{ status: number; body: string }>(async () => {
-    return page.evaluate(
-      async ({ url }: { url: string }) => {
-        const res = await fetch(url, {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({}),
-          credentials: 'include',
-        })
-        const text = await res.text()
-        return { status: res.status, body: text }
-      },
-      { url }
-    )
-  })
+  const rawResult = await from<{ status: number; body: string }>(async () =>
+    evaluatePinnedThreadsInPage(page, url)
+  )
 
   if (!rawResult.ok) {
     return err(rawResult.error)

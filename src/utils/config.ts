@@ -80,14 +80,18 @@ function parseEnvConfig(): Config {
   const result = configSchema.safeParse(rawConfig)
 
   if (!result.success) {
-    logger.error('Invalid configuration detected:')
+    const validationError = new Error('Invalid configuration detected')
     for (const issue of result.error.issues) {
       const fieldPath = issue.path.join('.')
       const envVarName = camelToSnakeCase(fieldPath).toUpperCase()
+      ;(validationError as { context?: Record<string, unknown> }).context = {
+        ...(validationError as { context?: Record<string, unknown> }).context,
+        [envVarName]: issue.message,
+      }
       logger.error(`  ${envVarName}: ${issue.message}`)
     }
     logger.error('\nPlease check your .env file and fix the above errors.')
-    process.exit(1)
+    throw validationError
   }
 
   return result.data

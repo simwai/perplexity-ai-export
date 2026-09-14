@@ -34,29 +34,33 @@ class CrossEncoder {
     }
 
     CrossEncoder.loading = true
-    const result = await from<CrossEncoderInstance | null>(async () => {
-      const transformers = await import('@huggingface/transformers').catch(() => null)
-      if (!transformers) {
-        return null
-      }
-
-      const { AutoTokenizer, AutoModelForSequenceClassification } = transformers
-
-      const tokenizer = await AutoTokenizer.from_pretrained('Xenova/ms-marco-MiniLM-L-6-v2')
-      const model = await AutoModelForSequenceClassification.from_pretrained(
-        'Xenova/ms-marco-MiniLM-L-6-v2',
-        { dtype: 'int8' }
-      )
-
-      CrossEncoder.instance = { tokenizer, model }
-      return CrossEncoder.instance
-    })
+    const result = await from<CrossEncoderInstance | null>(
+      async () => await CrossEncoder.loadCrossEncoderInstance()
+    )
     CrossEncoder.loading = false
 
     if (!result.ok) {
       logger.warn(`Failed to load cross-encoder: ${errorMessageOf(result.error)}`)
     }
     return result
+  }
+
+  private static async loadCrossEncoderInstance(): Promise<CrossEncoderInstance | null> {
+    const transformers = await import('@huggingface/transformers').catch(() => null)
+    if (!transformers) {
+      return null
+    }
+
+    const { AutoTokenizer, AutoModelForSequenceClassification } = transformers
+
+    const tokenizer = await AutoTokenizer.from_pretrained('Xenova/ms-marco-MiniLM-L-6-v2')
+    const model = await AutoModelForSequenceClassification.from_pretrained(
+      'Xenova/ms-marco-MiniLM-L-6-v2',
+      { dtype: 'int8' }
+    )
+
+    CrossEncoder.instance = { tokenizer, model }
+    return CrossEncoder.instance
   }
 
   static resetForTesting(): void {

@@ -6,7 +6,7 @@ import { errorBus } from './utils/error-bus.js'
 import { logger } from './utils/logger.js'
 import { VectorStore } from './search/vector-store.js'
 import { RagOrchestrator } from './ai/rag-orchestrator.js'
-import { from } from 'super-result'
+import { from, ok, err, type Result } from 'super-result'
 
 const BENCHMARK_QUERIES = [
   'What TypeScript patterns have I used in past projects?',
@@ -16,12 +16,11 @@ const BENCHMARK_QUERIES = [
   'What architecture decisions did I make?',
 ]
 
-async function runBenchmark(): Promise<void> {
+async function runBenchmark(): Promise<Result<void, Error>> {
   const indexJsonPath = join(config.vectorIndexPath, 'index.json')
   const isIndexPresent = existsSync(indexJsonPath)
   if (!isIndexPresent) {
-    logger.error('No vector index found. Build the index first via the main menu.')
-    process.exit(1)
+    return err(new Error('No vector index found. Build the index first via the main menu.'))
   }
 
   logger.info(`Starting benchmark with ${BENCHMARK_QUERIES.length} queries...`)
@@ -79,10 +78,12 @@ async function runBenchmark(): Promise<void> {
   if (hasFailures) {
     logger.warn(`${failedResults.length} queries failed — run with DEBUG=true for details`)
   }
+
+  return ok(undefined)
 }
 
 const result = await from(async () => runBenchmark())
 if (!result.ok) {
   errorBus.emitError('Benchmark execution failed', result.error)
-  process.exit(1)
+  throw result.error
 }

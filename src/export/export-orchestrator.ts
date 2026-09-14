@@ -9,6 +9,17 @@ import { logger } from '../utils/logger.js'
 import { errorMessageOf } from '../utils/extract-error-message.js'
 import { createResult, ok, err, type Result } from 'super-result'
 
+async function readStrategyDefaultExport(filePath: string): Promise<ExportStrategy> {
+  const moduleUrl = pathToFileURL(filePath).href
+  const strategyModule = await import(moduleUrl)
+  // why: dynamic import of strategy module; default export must match ExportStrategy interface
+  const strategyModuleDefault = strategyModule.default
+  if (!strategyModuleDefault || typeof strategyModuleDefault !== 'object') {
+    throw new ExportError(`Strategy module missing default export: ${filePath}`)
+  }
+  return strategyModuleDefault as ExportStrategy
+}
+
 export class ExportError extends Error {
   constructor(message: string) {
     super(message)
@@ -47,25 +58,13 @@ export class ExportOrchestrator {
         (file.endsWith('.strategy.ts') || file.endsWith('.strategy.js')) &&
         !file.endsWith('.d.ts')
       ) {
-        const importResult = await this.resultFactory.from(async () => {
-          const filePath = join(strategiesDir, file)
-          const moduleUrl = pathToFileURL(filePath).href
-          const strategyModule = await import(moduleUrl)
-          // why: dynamic import of strategy module; default export must match ExportStrategy interface
-          const strategy = strategyModule.default as ExportStrategy
-          return strategy
-        })
-
-        if (!importResult.ok) {
-          logger.error(
-            `Failed to load export strategy ${file}: ${errorMessageOf(importResult.error)}`
-          )
+        const filePath = join(strategiesDir, file)
+        const strategy = await this.loadExportStrategy(filePath)
+        if (!strategy) {
           continue
         }
 
-        const strategy = importResult.value
-
-        if (strategy && strategy.name && typeof strategy.format === 'function') {
+        if (strategy.name && typeof strategy.format === 'function') {
           if (this.config.exportStrategies.includes(strategy.name)) {
             this.strategies.push(strategy)
             logger.debug(`Registered export strategy: ${strategy.name}`)
@@ -73,6 +72,21 @@ export class ExportOrchestrator {
         }
       }
     }
+  }
+
+  private async loadExportStrategy(filePath: string): Promise<ExportStrategy | undefined> {
+    const importResult = await this.resultFactory.from(
+      async () => await readStrategyDefaultExport(filePath)
+    )
+
+    if (!importResult.ok) {
+      logger.error(
+        `Failed to load export strategy ${filePath}: ${errorMessageOf(importResult.error)}`
+      )
+      return undefined
+    }
+
+    return importResult.value
   }
 
   async exportConversation(
@@ -114,16 +128,9 @@ export class ExportOrchestrator {
         continue
       }
 
-      const verifyResult = this.resultFactory.from(() => {
-        if (!existsSync(destinationFilePath) || statSync(destinationFilePath).size === 0) {
-          return err(
-            new ExportOrchestrator.ExportError(
-              `Exported file is missing or empty: ${destinationFilePath}`
-            )
-          )
-        }
-        return ok(undefined)
-      })
+      const verifyResult = this.resultFactory.from(() =>
+        this.verifyExportedFile(destinationFilePath)
+      )
       if (!verifyResult.ok) {
         logger.error(
           `Failed to export with ${strategy.name} for ${conversation.id}: ${errorMessageOf(verifyResult.error)}`
@@ -147,7 +154,14 @@ export class ExportOrchestrator {
 
   private ensureRootExportDirectoryExists(): void {
     if (!existsSync(this.config.exportDir)) {
-      this.resultFactory.from(() => mkdirSync(this.config.exportDir, { recursive: true }))
+      const mkdirResult = this.resultFactory.from(() =>
+        mkdirSync(this.config.exportDir, { recursive: true })
+      )
+      if (!mkdirResult.ok) {
+        logger.error(
+          `Failed to create export directory ${this.config.exportDir}: ${errorMessageOf(mkdirResult.error)}`
+        )
+      }
     }
   }
 
@@ -209,5 +223,16 @@ export class ExportOrchestrator {
 
     scanDirectory(baseDir)
     return results
+  }
+
+  private verifyExportedFile(destinationFilePath: string): Result<void, ExportError> {
+    if (!existsSync(destinationFilePath) || statSync(destinationFilePath).size === 0) {
+      return err(
+        new ExportOrchestrator.ExportError(
+          `Exported file is missing or empty: ${destinationFilePath}`
+        )
+      )
+    }
+    return ok(undefined)
   }
 }

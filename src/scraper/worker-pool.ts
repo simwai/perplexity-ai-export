@@ -41,18 +41,20 @@ export class WorkerPool {
   ) {}
 
   async initialize(): Promise<Result<void, Error>> {
-    return this.resultFactory.from(async () => {
-      this.sharedBrowserContext = await this.browser.newContext({
-        storageState: this.config.authStoragePath,
-      })
-      for (let i = 0; i < this.config.parallelWorkers; i++) {
-        this.workers.push({
-          id: i,
-          extractor: new ConversationExtractor(this.config, this.sharedBrowserContext),
-          isBusy: false,
-        })
-      }
+    return this.resultFactory.from(async () => await this.createWorkers())
+  }
+
+  private async createWorkers(): Promise<void> {
+    this.sharedBrowserContext = await this.browser.newContext({
+      storageState: this.config.authStoragePath,
     })
+    for (let i = 0; i < this.config.parallelWorkers; i++) {
+      this.workers.push({
+        id: i,
+        extractor: new ConversationExtractor(this.config, this.sharedBrowserContext),
+        isBusy: false,
+      })
+    }
   }
 
   async processConversations(
@@ -89,7 +91,11 @@ export class WorkerPool {
 
   async close(): Promise<void> {
     // best-effort teardown; if the context is already gone, Playwright throws and we ignore.
-    await this.sharedBrowserContext?.close().catch(() => {})
+    try {
+      await this.sharedBrowserContext?.close()
+    } catch (closeError) {
+      logger.debug('close: sharedBrowserContext.close failed', errorMessageOf(closeError))
+    }
   }
 
   private async runExtraction(
@@ -222,19 +228,25 @@ export class WorkerPool {
   private async refreshContext(): Promise<void> {
     if (this.isRefreshing) return
     this.isRefreshing = true
-    const result = await this.resultFactory.from(async () => {
-      // best-effort close before re-creating; a stale context is what we are refreshing away.
-      await this.sharedBrowserContext?.close().catch(() => {})
-      this.sharedBrowserContext = await this.browser.newContext({
-        storageState: this.config.authStoragePath,
-      })
-      for (const worker of this.workers) {
-        worker.extractor = new ConversationExtractor(this.config, this.sharedBrowserContext)
-      }
-    })
+    const result = await this.resultFactory.from(async () => await this.replaceBrowserContext())
     if (!result.ok) {
       errorBus.emitError('Failed to refresh worker context', result.error)
     }
     this.isRefreshing = false
+  }
+
+  private async replaceBrowserContext(): Promise<void> {
+    // best-effort close before re-creating; a stale context is what we are refreshing away.
+    try {
+      await this.sharedBrowserContext?.close()
+    } catch (closeError) {
+      logger.debug('refreshContext: sharedBrowserContext.close failed', errorMessageOf(closeError))
+    }
+    this.sharedBrowserContext = await this.browser.newContext({
+      storageState: this.config.authStoragePath,
+    })
+    for (const worker of this.workers) {
+      worker.extractor = new ConversationExtractor(this.config, this.sharedBrowserContext)
+    }
   }
 }

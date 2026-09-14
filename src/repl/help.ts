@@ -1,11 +1,11 @@
 import { logger } from '../utils/logger.js'
 
-export function showHelp(): void {
-  const logAction = (actionName: string, actionDescription: string) => {
-    logger.info(`  ${actionName}`)
-    logger.info(`    ${actionDescription}\n`)
-  }
+function logAction(actionName: string, actionDescription: string): void {
+  logger.info(`  ${actionName}`)
+  logger.info(`    ${actionDescription}\n`)
+}
 
+export function showHelp(): void {
   logger.info('\n📚 Available Actions:\n')
 
   logAction(

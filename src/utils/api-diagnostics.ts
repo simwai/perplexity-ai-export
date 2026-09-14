@@ -21,21 +21,23 @@ export class ApiDiagnosticsWriter {
   async writeFailure(entry: Omit<ApiDiagnosticEntry, 'timestamp'>): Promise<void> {
     if (!this.config.debug) return
 
-    const result = await from(async () => {
-      const diagnosticEntry: ApiDiagnosticEntry = {
-        timestamp: new Date().toISOString(),
-        ...entry,
-      }
-
-      await fs.mkdir(this.DEBUG_DIRECTORY, { recursive: true })
-      const diagnosticLogPath = join(this.DEBUG_DIRECTORY, this.DIAGNOSTICS_FILENAME)
-
-      const entryAsJsonLine = JSON.stringify(diagnosticEntry) + '\n'
-      await fs.appendFile(diagnosticLogPath, entryAsJsonLine, 'utf8')
-    })
+    const result = await from(async () => await this.appendDiagnosticEntry(entry))
 
     if (!result.ok) {
       logger.warn(`Failed to write API diagnostic: ${errorMessageOf(result.error)}`)
     }
+  }
+
+  private async appendDiagnosticEntry(entry: Omit<ApiDiagnosticEntry, 'timestamp'>): Promise<void> {
+    const diagnosticEntry: ApiDiagnosticEntry = {
+      timestamp: new Date().toISOString(),
+      ...entry,
+    }
+
+    await fs.mkdir(this.DEBUG_DIRECTORY, { recursive: true })
+    const diagnosticLogPath = join(this.DEBUG_DIRECTORY, this.DIAGNOSTICS_FILENAME)
+
+    const entryAsJsonLine = JSON.stringify(diagnosticEntry) + '\n'
+    await fs.appendFile(diagnosticLogPath, entryAsJsonLine, 'utf8')
   }
 }

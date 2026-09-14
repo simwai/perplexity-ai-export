@@ -342,17 +342,19 @@ export class CommandHandler {
       return
     }
 
-    const rmResult = from(() => {
-      if (storageRootDir) {
-        rmSync(storageRootDir, { recursive: true, force: true })
-        logger.debug(`Deleted storage folder: ${storageRootDir}`)
-      }
-    })
+    const rmResult = from(() => deleteStorageFolder(storageRootDir))
     if (!rmResult.ok) {
       const isNotFoundError = (rmResult.error as NodeJS.ErrnoException).code === 'ENOENT'
       if (!isNotFoundError) {
         errorBus.emitError('Failed to wipe storage directory', rmResult.error)
       }
     }
+  }
+}
+
+function deleteStorageFolder(storageRootDir: string): void {
+  if (storageRootDir) {
+    rmSync(storageRootDir, { recursive: true, force: true })
+    logger.debug(`Deleted storage folder: ${storageRootDir}`)
   }
 }

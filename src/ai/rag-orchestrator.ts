@@ -92,31 +92,33 @@ export class RagOrchestrator {
   async answerQuestion(question: string): Promise<Result<void, OrchestratorError>> {
     logger.info(`Mightiest RAG is analyzing: "${question}"...`)
 
-    return this.resultFactory.from(async () => {
-      const plan = await this.developResearchPlan(question)
-      const results = await this.executeAdaptiveHybridSearch(plan)
-      const rerankedResults = await this.crossEncoderRerank(question, results)
+    return this.resultFactory.from(async () => await this.runAnswerQuestionFlow(question))
+  }
 
-      const isExhaustive = plan.strategy === 'exhaustive'
-      const extractedFacts = await this.extractFactsWithGranularMapReduce(
-        question,
-        rerankedResults,
-        isExhaustive
-      )
+  private async runAnswerQuestionFlow(question: string): Promise<void> {
+    const plan = await this.developResearchPlan(question)
+    const results = await this.executeAdaptiveHybridSearch(plan)
+    const rerankedResults = await this.crossEncoderRerank(question, results)
 
-      const answer = await this.generateMightiestResponse(question, extractedFacts, plan.strategy)
+    const isExhaustive = plan.strategy === 'exhaustive'
+    const extractedFacts = await this.extractFactsWithGranularMapReduce(
+      question,
+      rerankedResults,
+      isExhaustive
+    )
 
-      logger.info('\nMightiest Answer:\n')
-      logger.info(answer)
+    const answer = await this.generateMightiestResponse(question, extractedFacts, plan.strategy)
 
-      this.displaySourceProvenance(extractedFacts)
+    logger.info('\nMightiest Answer:\n')
+    logger.info(answer)
 
-      const feedback = await this.verifyAnswerQuality(question, answer)
-      const needsCorrection = feedback.status === 'missed-info'
-      if (needsCorrection) {
-        logger.warn(`Self-Correction: ${feedback.suggestion}`)
-      }
-    })
+    this.displaySourceProvenance(extractedFacts)
+
+    const feedback = await this.verifyAnswerQuality(question, answer)
+    const needsCorrection = feedback.status === 'missed-info'
+    if (needsCorrection) {
+      logger.warn(`Self-Correction: ${feedback.suggestion}`)
+    }
   }
 
   async chat(

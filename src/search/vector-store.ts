@@ -143,56 +143,9 @@ export class VectorStore {
   ): Promise<Result<void, VectorStoreError>> {
     await this.vectorIndex.beginUpdate()
 
-    const batchResult = await this.resultFactory.from(async () => {
-      const EMBEDDING_BATCH_SIZE = 10
-      let pendingTextsToEmbed: string[] = []
-      let pendingMetadataToInsert: VectorDocMeta[] = []
-      const batchFailures: string[] = []
-
-      for (let i = 0; i < filePaths.length; i++) {
-        const currentFilePath = filePaths[i]!
-        const { contentChunks, fileMetadata } = this.extractContentAndMetadata(currentFilePath)
-
-        for (let chunkIndex = 0; chunkIndex < contentChunks.length; chunkIndex++) {
-          const textChunk = contentChunks[chunkIndex]!
-          pendingTextsToEmbed.push(textChunk)
-          pendingMetadataToInsert.push({
-            ...fileMetadata,
-            id: `${fileMetadata['id']}_part_${chunkIndex}`,
-            title: `${fileMetadata['title']} (Part ${chunkIndex + 1})`,
-            snippet: textChunk,
-          })
-
-          if (pendingTextsToEmbed.length >= EMBEDDING_BATCH_SIZE) {
-            const batchFailure = await this.processAndInsertEmbeddingBatch(
-              pendingTextsToEmbed,
-              pendingMetadataToInsert
-            )
-            if (batchFailure) batchFailures.push(batchFailure)
-            pendingTextsToEmbed = []
-            pendingMetadataToInsert = []
-          }
-        }
-
-        if ((i + 1) % 10 === 0) {
-          logger.debug(`Processed ${i + 1}/${filePaths.length} files...`)
-        }
-      }
-
-      if (pendingTextsToEmbed.length > 0) {
-        const batchFailure = await this.processAndInsertEmbeddingBatch(
-          pendingTextsToEmbed,
-          pendingMetadataToInsert
-        )
-        if (batchFailure) batchFailures.push(batchFailure)
-      }
-
-      if (batchFailures.length > 0) {
-        throw new VectorStoreError(
-          `Index build failed: ${batchFailures.length} batch(es) dropped - ${batchFailures.join('; ')}`
-        )
-      }
-    })
+    const batchResult = await this.resultFactory.from(async () =>
+      this.buildEmbeddingBatch(filePaths)
+    )
 
     const endUpdateResult = await this.resultFactory.from(() => this.vectorIndex.endUpdate())
     if (!endUpdateResult.ok) {
@@ -204,6 +157,60 @@ export class VectorStore {
     }
 
     return batchResult
+  }
+
+  private async buildEmbeddingBatch(filePaths: string[]): Promise<void> {
+    const EMBEDDING_BATCH_SIZE = 10
+    let pendingTextsToEmbed: string[] = []
+    let pendingMetadataToInsert: VectorDocMeta[] = []
+    const batchFailures: string[] = []
+
+    for (let i = 0; i < filePaths.length; i++) {
+      const currentFilePath = filePaths[i]
+      if (!currentFilePath) continue
+
+      const { contentChunks, fileMetadata } = this.extractContentAndMetadata(currentFilePath)
+
+      for (let chunkIndex = 0; chunkIndex < contentChunks.length; chunkIndex++) {
+        const textChunk = contentChunks[chunkIndex]
+        if (!textChunk) continue
+        pendingTextsToEmbed.push(textChunk)
+        pendingMetadataToInsert.push({
+          ...fileMetadata,
+          id: `${fileMetadata['id']}_part_${chunkIndex}`,
+          title: `${fileMetadata['title']} (Part ${chunkIndex + 1})`,
+          snippet: textChunk,
+        })
+
+        if (pendingTextsToEmbed.length >= EMBEDDING_BATCH_SIZE) {
+          const batchFailure = await this.processAndInsertEmbeddingBatch(
+            pendingTextsToEmbed,
+            pendingMetadataToInsert
+          )
+          if (batchFailure) batchFailures.push(batchFailure)
+          pendingTextsToEmbed = []
+          pendingMetadataToInsert = []
+        }
+      }
+
+      if ((i + 1) % 10 === 0) {
+        logger.debug(`Processed ${i + 1}/${filePaths.length} files...`)
+      }
+    }
+
+    if (pendingTextsToEmbed.length > 0) {
+      const batchFailure = await this.processAndInsertEmbeddingBatch(
+        pendingTextsToEmbed,
+        pendingMetadataToInsert
+      )
+      if (batchFailure) batchFailures.push(batchFailure)
+    }
+
+    if (batchFailures.length > 0) {
+      throw new VectorStoreError(
+        `Index build failed: ${batchFailures.length} batch(es) dropped - ${batchFailures.join('; ')}`
+      )
+    }
   }
 
   private extractContentAndMetadata(filePath: string): {

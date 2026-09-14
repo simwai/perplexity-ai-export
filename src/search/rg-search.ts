@@ -44,26 +44,35 @@ export class RipgrepSearch {
   constructor(private readonly config: Config) {}
 
   async search(options: RipgrepSearchOptions): Promise<Result<void, Error>> {
+    const validationResult = this.validateSearchOptions(options)
+    if (!validationResult.ok) {
+      return validationResult
+    }
     return this.runRipgrep(options, { json: false }) as Promise<Result<void, Error>>
   }
 
   async captureSearchMatches(
     options: RipgrepSearchOptions
   ): Promise<Result<RipgrepMatch[], Error>> {
+    const validationResult = this.validateSearchOptions(options)
+    if (!validationResult.ok) {
+      return validationResult
+    }
     return this.runRipgrep(options, { json: true }) as Promise<Result<RipgrepMatch[], Error>>
+  }
+
+  private validateSearchOptions(options: RipgrepSearchOptions): Result<void, Error> {
+    if (!options.pattern || options.pattern.trim().length === 0) {
+      return err(new RipgrepSearch.RipgrepSearchError('Search pattern must not be empty'))
+    }
+    return ok(undefined)
   }
 
   private async runRipgrep(
     options: RipgrepSearchOptions,
     { json }: { json: boolean }
   ): Promise<Result<void | RipgrepMatch[], Error>> {
-    const checkResult = this.resultFactory.from(() => {
-      if (!existsSync(this.config.exportDir)) {
-        throw new RipgrepSearch.RipgrepSearchError(
-          'No exports directory found. Please run the "start" command first to export your history.'
-        )
-      }
-    })
+    const checkResult = this.resultFactory.from(() => ensureExportDirExists(this.config.exportDir))
     if (!checkResult.ok) return checkResult
 
     const MAX_MATCHES = 100
@@ -178,6 +187,14 @@ export class RipgrepSearch {
     return (
       'Bundled ripgrep (rg) not found or failed to execute. ' +
       'Please ensure the application was installed correctly.'
+    )
+  }
+}
+
+function ensureExportDirExists(exportDir: string): void {
+  if (!existsSync(exportDir)) {
+    throw new RipgrepSearch.RipgrepSearchError(
+      'No exports directory found. Please run the "start" command first to export your history.'
     )
   }
 }

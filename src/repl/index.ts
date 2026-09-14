@@ -82,6 +82,5 @@ export class Repl {
     if (!this.isRunning) return
     this.isRunning = false
     logger.info('\n👋 Goodbye!\n')
-    process.exit(0)
   }
 }

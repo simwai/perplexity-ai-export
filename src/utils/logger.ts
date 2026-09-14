@@ -11,6 +11,12 @@ const MAIN_LOG_PATH = join(LOGS_DIRECTORY, MAIN_LOG_FILENAME)
 const SENSITIVE_KEY_PATTERN =
   /token|secret|authorization|cookie|password|api[_-]?key|access[_-]?token|bearer/i
 
+/**
+ * Redact sensitive values from an unknown payload before logging.
+ *
+ * why: logger args can include request/response bodies; this prevents secrets
+ * from reaching the console or file log.
+ */
 export function redactSensitiveData(obj: unknown): unknown {
   if (obj === null || obj === undefined) return obj
   if (typeof obj === 'string') return obj
