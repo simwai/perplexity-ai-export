@@ -5,7 +5,7 @@ import { logger } from '../utils/logger.js'
 import { confirm } from '@inquirer/prompts'
 import { errorMessageOf } from '../utils/extract-error-message.js'
 import { createNamedError } from '../utils/errors.js'
-import { ok, err, createResult, from, type Result } from 'super-result'
+import { ok, err, createResult, type Result } from 'super-result'
 import { logHttpRequest, logHttpResponse } from '../utils/http-logger.js'
 import { createWaitStrategy } from '../utils/wait-strategy.js'
 
@@ -183,8 +183,10 @@ export class BrowserManager {
       })
       // Wait for SPA hash routing to settle (Perplexity redirects to #settings/account)
       await this.activePage!.waitForFunction(
-        (url) => new URL(url).hash.startsWith('#settings') || new URL(url).pathname !== '/settings',
-        this.activePage!.url(),
+        () => {
+          const url = new URL(window.location.href)
+          return url.hash.startsWith('#settings') || url.pathname !== '/settings'
+        },
         { timeout: NAVIGATION_TIMEOUT_MS }
       ).catch(() => {
         // Hash may not have settled; continue and let verifyLoginStatus handle it
@@ -236,9 +238,10 @@ export class BrowserManager {
       // Wait for hash routing to settle
       await this.activePage
         .waitForFunction(
-          (url) =>
-            new URL(url).hash.startsWith('#settings') || new URL(url).pathname !== '/settings',
-          this.activePage.url(),
+          () => {
+            const url = new URL(window.location.href)
+            return url.hash.startsWith('#settings') || url.pathname !== '/settings'
+          },
           { timeout: NAVIGATION_TIMEOUT_MS }
         )
         .catch(() => {
@@ -303,10 +306,10 @@ export class BrowserManager {
         try {
           // Look for user identity indicators in the page DOM
           const userEmail = document.querySelector(
-            '[data-testid="user-email"], [data-testid="user-name"], .user-email, [class*="user-email"], [class*="userName"]'
+            '[data-testid="user-email"], [data-testid="user-name"], [data-testid="username"], .user-email, [class*="user-email"], [class*="userName"], [class*="user-name"]'
           )
           const userAvatar = document.querySelector(
-            '[data-testid="user-avatar"], .user-avatar, [class*="avatar"]'
+            '[data-testid="user-avatar"], [data-testid="user-photo"], .user-avatar, [class*="avatar"]'
           )
           if (userEmail || userAvatar) return true
         } catch {
@@ -318,45 +321,70 @@ export class BrowserManager {
 
     if (domVerified) return true
 
-    // Second check: API-based verification
-    const result = await page.evaluate(async () => {
-      try {
-        const res = await fetch('/api/auth/session', {
-          method: 'GET',
-          credentials: 'include',
-        })
-        // Check if this is a Cloudflare challenge response
-        const contentType = res.headers.get('content-type') || ''
-        if (contentType.includes('text/html') && res.status === 200) {
+    // Second check: network-based verification via /rest/userinfo
+    // Perplexity uses /rest/userinfo (NOT /api/auth/session) for auth checks
+    const hasUserinfo = await page
+      .evaluate(async () => {
+        try {
+          const res = await fetch('/rest/userinfo', {
+            method: 'GET',
+            credentials: 'include',
+          })
+          if (res.status === 401 || res.status === 403) return false
+          if (!res.ok) return false
           const text = await res.text()
-          if (text.includes('cdn-cgi') || text.includes('cloudflare')) {
-            return { body: '', cloudflare: true }
-          }
+          if (!text.trim()) return false
+          // Perplexity returns user info JSON; presence of any parseable JSON
+          // with user data indicates authenticated state
+          const parsed = JSON.parse(text)
+          return Boolean(parsed.user || parsed.username || parsed.email || parsed.uuid || parsed.id)
+        } catch {
+          return false
         }
-        const text = await res.text()
-        return { body: text }
-      } catch {
-        return { body: '' }
-      }
-    })
+      })
+      .catch(() => false)
 
-    // Cloudflare challenge detected via API call
-    if (result.cloudflare) {
-      logger.warn('verifyLoginStatus: Cloudflare challenge detected via API')
-      return false
-    }
+    if (hasUserinfo) return true
 
-    const trimmed = result.body.trim()
-    logger.debug(
-      `verifyLoginStatus: hasBody=${Boolean(trimmed)}, hasUser=false, hasExpires=false, hasEmail=false`
-    )
+    // Third check: poll for /rest/userinfo network response (fires after page init)
+    const networkVerified = await page
+      .evaluate(async () => {
+        return new Promise<boolean>((resolve) => {
+          const check = () => {
+            // Check if any completed /rest/userinfo response exists in performance entries
+            const entries = performance.getEntriesByType('resource') as PerformanceResourceTiming[]
+            const hasUserinfoResponse = entries.some(
+              (e) => e.name.includes('/rest/userinfo') && e.responseStatus === 200
+            )
+            resolve(hasUserinfoResponse)
+          }
+          // Check immediately and after a short delay
+          check()
+          setTimeout(check, 500)
+        })
+      })
+      .catch(() => false)
 
-    if (!trimmed) return false
+    if (networkVerified) return true
 
-    const parseResult = from(() => JSON.parse(trimmed))
-    if (!parseResult.ok) return false
-    const parsed = parseResult.value as Record<string, unknown>
-    return Boolean(parsed.user || parsed.expires || parsed.email)
+    // Last resort: check if we're on settings page with user indicators
+    const settingsPage = await page
+      .evaluate(async () => {
+        try {
+          const url = new URL(window.location.href)
+          if (!url.hash.includes('settings') && url.pathname !== '/settings') return false
+          // Check for any logged-in user element
+          const userName = document.querySelector(
+            '[class*="user"], [class*="account"], [class*="profile"]'
+          )
+          return Boolean(userName)
+        } catch {
+          return false
+        }
+      })
+      .catch(() => false)
+
+    return settingsPage
   }
 
   private async persistAuthenticationState(): Promise<Result<void, Error>> {
