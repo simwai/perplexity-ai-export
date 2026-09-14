@@ -3,6 +3,7 @@ import { select } from '@inquirer/prompts'
 import { logger } from '../utils/logger.js'
 import { CommandHandler } from './commands.js'
 import { type Config } from '../utils/config.js'
+import { from } from 'super-result'
 
 export class Repl {
   private readonly commandHandler: CommandHandler
@@ -17,29 +18,34 @@ export class Repl {
     logger.info('Select commands to execute. Press Ctrl+C to exit.\n')
 
     while (this.isRunning) {
-      try {
-        const selectedAction = await select({
-          message: 'perplexity>',
-          choices: [
-            { name: 'Start scraper (Library)', value: 'start-library' },
-            { name: 'Search conversations', value: 'search' },
-            { name: 'Chat with history', value: 'chat' },
-            { name: 'Build vector index', value: 'vectorize' },
-            { name: 'Reset all data', value: 'reset' },
-            { name: 'Help', value: 'help' },
-            { name: 'Exit', value: 'exit' },
-          ],
-        })
+      const selectResult = await from<string>(
+        async () =>
+          await select({
+            message: 'perplexity>',
+            choices: [
+              { name: 'Start scraper (Library)', value: 'start-library' },
+              { name: 'Search conversations', value: 'search' },
+              { name: 'Chat with history', value: 'chat' },
+              { name: 'Build vector index', value: 'vectorize' },
+              { name: 'Reset all data', value: 'reset' },
+              { name: 'Help', value: 'help' },
+              { name: 'Exit', value: 'exit' },
+            ],
+          })
+      )
 
-        await this.dispatchCommand(selectedAction)
-      } catch (error) {
-        const isUserExit = error instanceof Error && error.name === 'ExitPromptError'
+      if (!selectResult.ok) {
+        const isUserExit =
+          selectResult.error instanceof Error && selectResult.error.name === 'ExitPromptError'
         if (isUserExit) {
           this.terminate()
         } else {
-          throw error
+          errorBus.emitError('Command selection failed', selectResult.error)
         }
+        continue
       }
+
+      await this.dispatchCommand(selectResult.value)
     }
   }
 

@@ -55,7 +55,7 @@ Additional loads: `00-system.md` (always), `00-system.md` `## Loop protection` (
 
 Quality gate. Evaluates chunk-by-chunk against H1-H12 and S1-S20. Blocks merges on hard-tier failures. Requires a complete rewrite contract before any patch. Runs hard-tier compliance audit before showing code. Verdict levels: **MERGE BLOCKED** / **APPROVED WITH FIXES** / **LGTM**. No extra module loads beyond base + phase stack.
 
-In `PARALLEL_REVIEW`, BabaReviewer does not partition files. It acts as the merge auditor after all BabaSensei partitions and BabaTester complete: it receives the merged findings, verifies the merge protocol was applied correctly (Sensei authority on hard-tier, union on soft-tier), and produces the final merge verdict before the session enters REVIEW. This keeps the per-batch review voice separate from the merge/audit voice.
+In `PARALLEL_REVIEW`, BabaReviewer does not partition files. It acts as the merge auditor after all BabaSensei partitions and BabaTester complete: it receives the merged findings, verifies the merge protocol was applied correctly (Sensei authority on hard-tier, Sensei authority on blocking L-tier findings, union on soft-tier and advisory L-tier findings), and produces the final merge verdict before the session enters REVIEW. This keeps the per-batch review voice separate from the merge/audit voice.
 
 ### Process Master
 
@@ -75,6 +75,7 @@ The handing-off persona must include the fields required by the receiver's entry
 | `accepted_violations` | BabaSensei -> BabaDev | Confirmed violation list with criterion IDs |
 | `excluded_violations` | BabaSensei -> BabaDev | Explicitly excluded findings with justification |
 | `preserve_constraints` | BabaSensei -> BabaDev | Constraints the patch must not break |
+| `logical_violations` | BabaSensei -> BabaDev | Confirmed logical violations with severity (blocking/advisory) |
 | `approved_plan` | BabaSensei -> BabaDev | Full PLAN phase output, approved by user |
 | `rewrite_contract` | BabaSensei -> BabaDev | Complete rewrite contract (target, preserve, eliminate, forbidden) |
 | `test_strategy` | BabaTester -> BabaDev | Full TEST_STRATEGY output |
@@ -105,7 +106,7 @@ If any required field is missing, output the `BLOCKED` template. Do not guess. D
 Required fields by transition:
 
 - ScrumMaster -> CHECKLIST: `target`, `task_card`, `task_size`, `ice_score`, `milestone`, `definition_of_done`.
-- Sensei -> PLAN/HANDOFF: `target`, `accepted_violations`, `excluded_violations`, `preserve_constraints`, `plan_output`, `rewrite_contract`, `teaching_note`.
+- Sensei -> PLAN/HANDOFF: `target`, `accepted_violations`, `excluded_violations`, `preserve_constraints`, `logical_violations`, `plan_output`, `rewrite_contract`, `teaching_note`.
 - Tester -> HANDOFF: `target`, `test_strategy`, `binding_items`, `strong_hints`.
 - BabaDev -> PATCH: approved plan plus complete rewrite contract; tester fields required when a tester handoff was loaded.
 - DRIFT -> PLAN/BabaDev: `spec_version` and `drift_findings` required when handoff originates from a DRIFT run with findings; `n/a` otherwise.
@@ -119,7 +120,7 @@ BabaTester       -> CHECKLIST -> DOCS -> PARALLEL_REVIEW -> REVIEW -> TEST_STRAT
 BabaDev          -> PLAN (from HANDOFF) -> PATCH
 ```
 
-BabaScrumMaster runs upstream of the core pipeline and only when the user supplies a goal or project spec without a concrete target. Its HANDOFF carries the approved task card, and the receiving review persona enters `CHECKLIST` with that task as target. BabaTester and BabaSensei run in parallel during `PARALLEL_REVIEW` on the same target (auto-spawned when CHECKLIST inventory > 1 file). Partitions file inventory by architectural layer; spawns N BabaSensei reviewers (N = min(ceil(files/50), 4)) + BabaTester. A merge protocol combines their findings (Sensei authority on hard-tier, union on soft-tier) into a single consolidated handoff to BabaDev. BabaDev must classify all BabaTester items as BINDING / STRONG HINT / WEAK HINT before entering PATCH.
+BabaScrumMaster runs upstream of the core pipeline and only when the user supplies a goal or project spec without a concrete target. Its HANDOFF carries the approved task card, and the receiving review persona enters `CHECKLIST` with that task as target. BabaTester and BabaSensei run in parallel during `PARALLEL_REVIEW` on the same target (auto-spawned when CHECKLIST inventory > 1 file). Partitions file inventory by architectural layer; spawns N BabaSensei reviewers (N = max(1, ceil(files / 20))) + BabaTester. A merge protocol combines their findings (Sensei authority on hard-tier, Sensei authority on blocking L-tier findings, union on soft-tier and advisory L-tier findings) into a single consolidated handoff to BabaDev. BabaDev must classify all BabaTester items as BINDING / STRONG HINT / WEAK HINT before entering PATCH.
 
 ### HANDOFF template
 
@@ -142,6 +143,8 @@ Excluded violations:
 - [criterion id] -- [one-line exclusion and justification]
 Preserve constraints:
 - [constraint]
+Logical violations:
+- [criterion id] -- [severity: blocking|advisory] -- [one-line description]
 Plan output: [PLAN phase output or "see above"]
 Rewrite contract:
   Target: [file]

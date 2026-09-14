@@ -153,6 +153,13 @@ If any `.sh` or `.ps1` scripts exist in the repo that should run as hooks, they 
 - Do not add a formatter hook that modifies files without also staging those changes. Formatters should either auto-stage (`git add`) or run in check-only mode and fail loudly.
 - Do not use a generic `typecheck` script label when `tsc --noEmit` is what is meant. Be explicit.
 
+### A11y and SEO validation
+
+For projects with frontend UI:
+- Run axe-core or pa11y against changed pages/components when the change touches markup, templates, or component structure
+- Run lighthouse CI or equivalent for SEO score when the change touches page-level content, meta tags, or routing
+- A11y/SEO failures are soft-tier findings (S23-S26) unless they constitute an accessibility violation under applicable law (e.g., WCAG 2.1 AA required for public sector) - in which case they escalate to H-tier with legal risk noted
+
 ## Cross-team requirements
 
 When REVIEW identifies a finding that crosses a team boundary (e.g., a contract change that affects a downstream service, a schema change that requires a migration in a sibling repo, an API deprecation that requires client updates), the cross-team protocol applies.
@@ -984,13 +991,15 @@ A protocol that enhances CHECKLIST file inventory initialization when the target
 
 ## REVIEW Merge Protocol
 
-When `PARALLEL_REVIEW` completes, N BabaSensei reviewers and BabaTester subagent have produced findings in their partitioned state sections (`## Sensei State 1`, `## Sensei State 2`, ..., `## Sensei State N`, `## Tester State`). BabaReviewer acts as the merge auditor: it receives the merged findings, verifies the merge protocol was applied correctly (Sensei authority on hard-tier, union on soft-tier), and produces the final merge verdict before the session enters REVIEW. The merge protocol produces unified findings for the consolidated REVIEW phase.
+When `PARALLEL_REVIEW` completes, N BabaSensei reviewers and BabaTester subagent have produced findings in their partitioned state sections (`## Sensei State 1`, `## Sensei State 2`, ..., `## Sensei State N`, `## Tester State`). BabaReviewer acts as the merge auditor: it receives the merged findings, verifies the merge protocol was applied correctly (Sensei authority on hard-tier, Sensei authority on blocking L-tier findings, union on soft-tier and advisory L-tier findings), and produces the final merge verdict before the session enters REVIEW. The merge protocol produces unified findings for the consolidated REVIEW phase.
 
 ### Merge Rules
 
 1. **Hard-tier (H1-H12) - Sensei authority**: For any criterion where multiple reviewers reported findings on the same file/line range, the highest-confidence Sensei verdict takes precedence. The merged finding uses that reviewer's confidence, verdict, and mitigation. Other reviewers' findings are recorded as cross-reference notes.
 
-2. **Soft-tier (S1-S20) - Union**: All findings from all reviewers are included. Duplicate findings (same criterion, same file, overlapping line range) are deduplicated keeping the highest confidence. Non-overlapping findings from any reviewer are included as-is.
+2. **Logical tier (L1-L10) - Sensei authority on blocking, union on advisory**: Blocking L-tier findings follow the same rule as hard-tier (highest-confidence Sensei verdict takes precedence). Advisory L-tier findings follow the soft-tier union rule.
+
+3. **Soft-tier (S1-S20) - Union**: All findings from all reviewers are included. Duplicate findings (same criterion, same file, overlapping line range) are deduplicated keeping the highest confidence. Non-overlapping findings from any reviewer are included as-is.
 
 3. **Test strategy items**: BabaTester's `binding_items` and `strong_hints` are preserved in full and carried into the consolidated handoff to BabaDev.
 
@@ -1008,7 +1017,7 @@ When N > 12, emit warning: "Merge may exceed 10 minutes; consider splitting into
 ### Partial Merge
 
 When streaming partial handoffs are active, the merge protocol supports partial output:
-- Confirmed findings merge immediately into unified `accepted_violations`, `excluded_violations`, `preserve_constraints` lists.
+- Confirmed findings merge immediately into unified `accepted_violations`, `excluded_violations`, `preserve_constraints`, `logical_violations` lists.
 - Pending findings remain in partitioned `## Sensei State N` sections and are not merged until confirmed.
 - The merge verdict includes `merged: partial` when pending items remain.
 - A subsequent merge run consumes the pending partitions and produces `merged: complete`.
@@ -1020,7 +1029,7 @@ Conflicts are detected when:
 - Same file path
 - Overlapping line ranges (any intersection)
 
-Conflicts are resolved per Rule 1 (hard-tier) or Rule 2 (soft-tier) without user intervention. The merge is deterministic and recorded in the session state file under `## Phase Artifacts`.
+Conflicts are resolved per Rule 1 (hard-tier) or Rule 2 (logical tier) or Rule 3 (soft-tier) without user intervention. The merge is deterministic and recorded in the session state file under `## Phase Artifacts`.
 
 ### Progress Tracking
 

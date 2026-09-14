@@ -4,9 +4,9 @@ import { createInterface } from 'node:readline'
 import { type Config } from '../utils/config.js'
 import { logger } from '../utils/logger.js'
 import { rgPath } from '@vscode/ripgrep'
-import { errorMessageOf } from '../utils/extract-error-message.js'
 import { createNamedError } from '../utils/errors.js'
 import { z } from 'zod'
+import { createResult, ok, err, type Result } from 'super-result'
 
 // why: ripgrep emits this exact substring on stderr when the binary is missing or unreadable
 const RIPGREP_ENOENT_MESSAGE = 'No such file or directory'
@@ -37,29 +37,40 @@ export class RipgrepSearch {
   static readonly RipgrepSearchError = createNamedError('RipgrepSearchError')
   static readonly RipgrepNotFoundError = createNamedError('RipgrepNotFoundError')
 
+  private readonly resultFactory = createResult<Error>((error: unknown) =>
+    error instanceof Error ? error : new Error(String(error))
+  )
+
   constructor(private readonly config: Config) {}
 
-  async search(options: RipgrepSearchOptions): Promise<void> {
-    await this.runRipgrep(options, { json: false })
+  async search(options: RipgrepSearchOptions): Promise<Result<void, Error>> {
+    return this.runRipgrep(options, { json: false }) as Promise<Result<void, Error>>
   }
 
-  async captureSearchMatches(options: RipgrepSearchOptions): Promise<RipgrepMatch[]> {
-    // why: runRipgrep resolves with RipgrepMatch[] when called with json:true; the union return type
-    // cannot be expressed without a private wrapper, and the runtime contract is enforced below
-    return this.runRipgrep(options, { json: true }) as Promise<RipgrepMatch[]>
+  async captureSearchMatches(
+    options: RipgrepSearchOptions
+  ): Promise<Result<RipgrepMatch[], Error>> {
+    return this.runRipgrep(options, { json: true }) as Promise<Result<RipgrepMatch[], Error>>
   }
 
-  private runRipgrep(
+  private async runRipgrep(
     options: RipgrepSearchOptions,
     { json }: { json: boolean }
-  ): Promise<void | RipgrepMatch[]> {
-    this.ensureExportDirectoryIsAccessible()
+  ): Promise<Result<void | RipgrepMatch[], Error>> {
+    const checkResult = this.resultFactory.from(() => {
+      if (!existsSync(this.config.exportDir)) {
+        throw new RipgrepSearch.RipgrepSearchError(
+          'No exports directory found. Please run the "start" command first to export your history.'
+        )
+      }
+    })
+    if (!checkResult.ok) return checkResult
 
     const MAX_MATCHES = 100
     const TIMEOUT_MS = 15000
     const args = this.buildArgs(options, json)
 
-    return new Promise((resolve, reject) => {
+    return new Promise<Result<void | RipgrepMatch[], Error>>((resolve) => {
       const matches: RipgrepMatch[] = []
       let hasOutput = false
 
@@ -80,17 +91,15 @@ export class RipgrepSearch {
             child.kill()
             return
           }
-          try {
-            const parsed = RipgrepMatchJsonSchema.safeParse(JSON.parse(line))
-            if (parsed.success && parsed.data.type === 'match') {
-              matches.push({
-                path: parsed.data.data.path.text,
-                line: parsed.data.data.line_number,
-                text: parsed.data.data.lines.text,
-              })
-            }
-          } catch (error) {
-            logger.debug(`Failed to parse ripgrep JSON line: ${errorMessageOf(error)}`)
+          const parsed = RipgrepMatchJsonSchema.safeParse(JSON.parse(line))
+          if (parsed.success && parsed.data.type === 'match') {
+            matches.push({
+              path: parsed.data.data.path.text,
+              line: parsed.data.data.line_number,
+              text: parsed.data.data.lines.text,
+            })
+          } else {
+            logger.debug(`Failed to parse ripgrep JSON line`)
           }
         })
         child.on('close', () => rl.close())
@@ -107,13 +116,15 @@ export class RipgrepSearch {
           }
         })
       }
-      child.on('error', (err) => {
+      child.on('error', (error) => {
         clearTimeout(timeout)
-        const isMissing = err.message.includes('ENOENT')
-        reject(
-          isMissing
-            ? new RipgrepSearch.RipgrepNotFoundError(this.getRipgrepInstallationInstructions())
-            : new RipgrepSearch.RipgrepSearchError(`Search failed: ${err.message}`)
+        const isMissing = error.message.includes('ENOENT')
+        resolve(
+          err(
+            isMissing
+              ? new RipgrepSearch.RipgrepNotFoundError(this.getRipgrepInstallationInstructions())
+              : new RipgrepSearch.RipgrepSearchError(`Search failed: ${error.message}`)
+          )
         )
       })
       child.on('close', (code) => {
@@ -123,9 +134,9 @@ export class RipgrepSearch {
           if (!json && code === 1 && !hasOutput) {
             logger.info('No results found.')
           }
-          resolve(json ? matches : undefined)
+          resolve(ok(json ? matches : undefined))
         } else {
-          reject(new RipgrepSearch.RipgrepSearchError(`ripgrep exited with code ${code}`))
+          resolve(err(new RipgrepSearch.RipgrepSearchError(`ripgrep exited with code ${code}`)))
         }
       })
     })
@@ -161,14 +172,6 @@ export class RipgrepSearch {
     }
 
     return args
-  }
-
-  private ensureExportDirectoryIsAccessible(): void {
-    if (!existsSync(this.config.exportDir)) {
-      throw new RipgrepSearch.RipgrepSearchError(
-        'No exports directory found. Please run the "start" command first to export your history.'
-      )
-    }
   }
 
   private getRipgrepInstallationInstructions(): string {

@@ -6,6 +6,7 @@ import { errorBus } from './utils/error-bus.js'
 import { logger } from './utils/logger.js'
 import { VectorStore } from './search/vector-store.js'
 import { RagOrchestrator } from './ai/rag-orchestrator.js'
+import { from } from 'super-result'
 
 const BENCHMARK_QUERIES = [
   'What TypeScript patterns have I used in past projects?',
@@ -80,7 +81,8 @@ async function runBenchmark(): Promise<void> {
   }
 }
 
-runBenchmark().catch((error) => {
-  errorBus.emitError('Benchmark execution failed', error)
+const result = await from(async () => runBenchmark())
+if (!result.ok) {
+  errorBus.emitError('Benchmark execution failed', result.error)
   process.exit(1)
-})
+}

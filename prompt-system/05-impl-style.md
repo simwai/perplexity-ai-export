@@ -16,7 +16,7 @@ Implementation style core. Stack variants are inline sections below; pick the on
 
 ## Greenfield projects (new projects and new files)
 
-When the target is a new project from scratch, or new files being added to a repo that has no established local conventions (empty or near-empty source tree, no existing style), the defaults in this file ARE the project conventions until the user explicitly overrides them:
+When the target is a new project from scratch, or new files being added to a repo that has no existing source files, the defaults in this file ARE the project conventions until the user explicitly overrides them:
 
 - the mandated stacks and helpers (see the per-stack sections)
 - the error-handling idiom for the stack
@@ -242,9 +242,10 @@ The defaults above are a floor, not a ceiling. They never replace the per-edit l
 - DI container: **tsyringe**. Favor constructor injection; wire the composition root at the application entry point. Default to transient lifetime unless a clear singleton or scoped rationale exists.
 - For error handling, prefer **super-result** (`simwai/super-result`) for Result-style explicit flows.
   - **Style: caller-handled, no chaining.** Use `if (result.ok)` / `if (result.err)` type narrowing.
-  - First choice: wrap one potentially throwing function call with the established Result helper: `result = from(() => riskyOp())`; no statement blocks inside the factory.
-  - A `try/catch` whose only purpose is to convert one function call's thrown error into `err(...)` is always a code smell. Prefer the Result helper instead.
-  - Use `try/catch` only when the catch block has additional responsibilities that the Result helper cannot express clearly, such as handling multiple operations, branching on the exception, or performing required cleanup.
+  - `from(fn)` / `safe(fn)` wrap exactly one function call. The wrapped body must be a single expression; statement blocks inside the wrapper are forbidden.
+  - `try/catch` is forbidden unless a `finally` block is also present. Do not use `try/catch` as a replacement for `from`.
+  - `.catch()` on promises is forbidden. Do not convert Promise rejections via `.catch()`.
+  - When the logic needs more than one statement, extract a named function or method and pass that as the single call: `from(async () => await fetchJson<RpcResponse>(url, body))`.
   - Do not use `.map()`, `.andThen()`, `.match()`, `.unwrapOr()` or other chaining methods on results.
 - If `neverthrow` is already established in the codebase, continue using it; do not mix both.
 
@@ -340,6 +341,18 @@ The defaults above are a floor, not a ceiling. They never replace the per-edit l
 - CSS: scoped styles; CSS custom properties for theming; no inline styles except for dynamic values.
 - State: Pinia (Vue) or stores (Svelte); never component-to-component mutation through props drilling more than one level.
 - Accessibility: ARIA only when semantic HTML cannot express the relationship; keyboard navigation for every interactive element; `prefers-reduced-motion` respected.
+- Accessibility defaults:
+  - Use semantic HTML5 elements (`<nav>`, `<main>`, `<article>`, `<button>`, `<label>`) over generic `<div>` soup
+  - Every interactive element must be keyboard-accessible (Tab, Enter, Escape, Arrow keys as appropriate)
+  - Color is never the sole indicator of state; pair with icons, text, or ARIA attributes
+  - Images and icons require `alt` text or `aria-hidden` when decorative
+  - Forms require associated `<label>` elements or `aria-label`
+- SEO defaults:
+  - Every page requires a unique `<title>` and `<meta name="description">`
+  - Heading hierarchy is sequential (`<h1>` -> `<h2>` -> `<h3>`, no skipping)
+  - Structured data (JSON-LD) for pages representing entities (products, articles, events, organizations)
+  - Canonical URL tag on every indexable page
+  - Open Graph and Twitter Card meta tags on shareable content pages
 
 ## Stack: PowerShell
 

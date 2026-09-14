@@ -194,15 +194,12 @@ export class VectorStore {
       }
     })
 
-    // Handle cleanup in finally-like manner
-    try {
-      await this.vectorIndex.endUpdate()
-    } catch (endError) {
-      logger.warn(`Failed to endUpdate cleanly: ${errorMessageOf(endError)}`)
-      try {
-        await this.vectorIndex.cancelUpdate()
-      } catch (cancelError) {
-        logger.warn(`Failed to cancelUpdate: ${errorMessageOf(cancelError)}`)
+    const endUpdateResult = await this.resultFactory.from(() => this.vectorIndex.endUpdate())
+    if (!endUpdateResult.ok) {
+      logger.warn(`Failed to endUpdate cleanly: ${errorMessageOf(endUpdateResult.error)}`)
+      const cancelResult = await this.resultFactory.from(() => this.vectorIndex.cancelUpdate())
+      if (!cancelResult.ok) {
+        logger.warn(`Failed to cancelUpdate: ${errorMessageOf(cancelResult.error)}`)
       }
     }
 

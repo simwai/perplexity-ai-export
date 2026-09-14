@@ -93,7 +93,7 @@ The commit/push gate is the final step of PATCH when the session made file edits
 
 ### Pre-ask functional verification (Playwright MCP)
 
-Before the ask, when the gate triggers, run a Playwright MCP functional smoke of the session's work. This is the gate's verification step: REVIEW already expects a Playwright e2e smoke (H11); this step carries the same expectation onto the commit path.
+Before the ask, when the gate triggers, run a Playwright MCP functional smoke of the session's work. This is the gate's verification step: REVIEW already verifies a Playwright e2e smoke at H11 verdict time; this step re-runs the same smoke as a final pre-push check.
 
 - **Trigger (any of):**
   - Web-app entry point: the repo has a `package.json` `dev`/`start` script serving a browser UI, a frontend directory with an established dev workflow, or a documented localhost URL. Detect it with a filesystem search; never assume it, never invent it.

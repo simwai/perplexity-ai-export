@@ -12,7 +12,7 @@ import { type ChatMessage } from '../ai/ollama-client.js'
 import { logger } from '../utils/logger.js'
 import { errorMessageOf } from '../utils/extract-error-message.js'
 import { createNamedError } from '../utils/errors.js'
-import { ok, err, type Result } from 'super-result'
+import { ok, err, from, type Result } from 'super-result'
 import { showHelp } from './help.js'
 import { LibraryDiscovery } from '../scraper/library-discovery.js'
 import { type Config } from '../utils/config.js'
@@ -179,7 +179,12 @@ export class CommandHandler {
   private async runDiscoveryPhase(page: Page): Promise<void> {
     logger.info('\n=== Phase 1: Library Discovery ===\n')
     const discoveryTool = new LibraryDiscovery()
-    const discoveredConversations = await discoveryTool.discoverAllConversationsFromLibrary(page)
+    const discoveredResult = await discoveryTool.discoverAllConversationsFromLibrary(page)
+    if (!discoveredResult.ok) {
+      errorBus.emitError('Failed to discover conversations', discoveredResult.error)
+      return
+    }
+    const discoveredConversations = discoveredResult.value
     const setResult =
       await this.checkpointManager.setDiscoveredConversations(discoveredConversations)
     if (!setResult.ok) {
@@ -273,45 +278,51 @@ export class CommandHandler {
     let isChatting = true
 
     while (isChatting) {
-      try {
-        const query = await input({
-          message: 'chat>',
-          validate: (value) => (value.trim().length === 0 ? 'Please enter a message.' : true),
-        })
+      const queryResult = await from<string>(
+        async () =>
+          await input({
+            message: 'chat>',
+            validate: (value) => (value.trim().length === 0 ? 'Please enter a message.' : true),
+          })
+      )
 
-        if (query.toLowerCase() === 'exit' || query.toLowerCase() === 'quit') {
-          isChatting = false
-          continue
-        }
-
-        const chatResult = await this.ragOrchestrator.chat(query, history)
-        if (!chatResult.ok) {
-          const errorMessage = errorMessageOf(chatResult.error)
-          errorBus.emitError(errorMessage)
-          continue
-        }
-
-        const response = chatResult.value
-
-        logger.log('\nAssistant:\n')
-        logger.log(response.content)
-        logger.info(
-          `\nTokens: ${response.usage.totalTokens} (${response.usage.promptTokens} prompt + ${response.usage.completionTokens} completion)\n`
-        )
-
-        history.push({ role: 'user', content: query })
-        history.push({ role: 'assistant', content: response.content })
-
-        if (history.length > this.MAX_HISTORY_MESSAGES) {
-          history.splice(0, 2)
-        }
-      } catch (error) {
-        if (error instanceof Error && error.name === 'ExitPromptError') {
+      if (!queryResult.ok) {
+        if (queryResult.error instanceof Error && queryResult.error.name === 'ExitPromptError') {
           isChatting = false
         } else {
-          const errorMessage = errorMessageOf(error)
+          const errorMessage = errorMessageOf(queryResult.error)
           errorBus.emitError(errorMessage)
         }
+        continue
+      }
+
+      const query = queryResult.value
+
+      if (query.toLowerCase() === 'exit' || query.toLowerCase() === 'quit') {
+        isChatting = false
+        continue
+      }
+
+      const chatResult = await this.ragOrchestrator.chat(query, history)
+      if (!chatResult.ok) {
+        const errorMessage = errorMessageOf(chatResult.error)
+        errorBus.emitError(errorMessage)
+        continue
+      }
+
+      const response = chatResult.value
+
+      logger.log('\nAssistant:\n')
+      logger.log(response.content)
+      logger.info(
+        `\nTokens: ${response.usage.totalTokens} (${response.usage.promptTokens} prompt + ${response.usage.completionTokens} completion)\n`
+      )
+
+      history.push({ role: 'user', content: query })
+      history.push({ role: 'assistant', content: response.content })
+
+      if (history.length > this.MAX_HISTORY_MESSAGES) {
+        history.splice(0, 2)
       }
     }
   }
@@ -331,15 +342,16 @@ export class CommandHandler {
       return
     }
 
-    try {
+    const rmResult = from(() => {
       if (storageRootDir) {
         rmSync(storageRootDir, { recursive: true, force: true })
         logger.debug(`Deleted storage folder: ${storageRootDir}`)
       }
-    } catch (error) {
-      const isNotFoundError = (error as NodeJS.ErrnoException).code === 'ENOENT'
+    })
+    if (!rmResult.ok) {
+      const isNotFoundError = (rmResult.error as NodeJS.ErrnoException).code === 'ENOENT'
       if (!isNotFoundError) {
-        errorBus.emitError('Failed to wipe storage directory', error)
+        errorBus.emitError('Failed to wipe storage directory', rmResult.error)
       }
     }
   }

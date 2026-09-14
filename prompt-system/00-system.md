@@ -321,7 +321,7 @@ The ScrumMaster phrase "direct mode" for a concrete target means "skip the optio
 
 `BLOCKED -> DOCS_PARALLEL`: in-scope dependencies span multiple types (npm, pip, cargo, go, maven, gradle, etc.); every checklist checkbox ticked. Subagents spawned per dependency type with partitioned evidence collection (max 3 concurrent).
 
-`BLOCKED -> PARALLEL_REVIEW`: docs evidence complete (or DOCS/DOCS_PARALLEL skipped), multi-file inventory (>1) and not greenfield, every checklist checkbox ticked. Partitions file inventory by architectural layer; spawns N BabaSensei reviewers (N = min(ceil(files/50), 4)) + BabaTester with partitioned session state.
+`BLOCKED -> PARALLEL_REVIEW`: docs evidence complete (or DOCS/DOCS_PARALLEL skipped), multi-file inventory (>1) and not greenfield, every checklist checkbox ticked. Partitions file inventory by architectural layer; spawns N BabaSensei reviewers (N = max(1, ceil(files / 20))) + BabaTester with partitioned session state.
 
 `BLOCKED -> REVIEW`: current chunk exists, every prerequisite artifact required by the review path already exists. REVIEW also owns the confirmation decision; the response must include accepted violations, disputed violations, and preservation constraints.
 
@@ -478,7 +478,7 @@ In `DIRECT` mode, do not force the request through `CHECKLIST`, `REVIEW`, or `PL
 - `DOCS_PARALLEL -> REVIEW`: all parallel lookup groups complete; aggregated evidence recorded.
 - `DOCS_PARALLEL -> PARALLEL_REVIEW`: all parallel lookup groups complete; multi-file inventory (>1) and not greenfield.
 - `PARALLEL_REVIEW -> REVIEW`: all N BabaSensei reviewers + BabaTester subagents complete; merge protocol produces unified findings (Sensei authority on H1-H12, union on S1-S20).
-- `REVIEW -> PLAN`: user confirmed the REVIEW decision section.
+- `REVIEW -> PLAN`: user confirmed the REVIEW decision section, including any blocking L-tier findings (advisory L-tier findings follow the same acceptance path as S-tier).
 - `REVIEW -> PLAN (partial)`: confirmed items exist, user approves partial handoff.
 - `PLAN (partial) -> PATCH (partial)`: plan approval for scoped items.
 - `REVIEW -> TEST_STRATEGY`: active persona is BabaTester and user confirmed.

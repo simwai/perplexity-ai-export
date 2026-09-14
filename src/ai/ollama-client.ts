@@ -167,10 +167,7 @@ export class OllamaClient {
       })
 
       if (!httpResponse.ok) {
-        let rawErrorBody = ''
-        try {
-          rawErrorBody = await httpResponse.text()
-        } catch {}
+        const rawErrorBody = await httpResponse.text().catch(() => '')
 
         errorBus.emitError(`Ollama HTTP ${httpResponse.status}`, undefined, {
           body: requestBody,

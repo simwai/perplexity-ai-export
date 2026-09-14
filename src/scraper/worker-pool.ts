@@ -1,6 +1,6 @@
 import { errorBus } from '../utils/error-bus.js'
 import { type Browser, type BrowserContext } from '@playwright/test'
-import { ConversationExtractor } from './conversation-extractor.js'
+import { ConversationExtractor, type ExtractedConversation } from './conversation-extractor.js'
 import { CheckpointManager, type ConversationMeta } from './checkpoint-manager.js'
 import { logger } from '../utils/logger.js'
 import { type Config } from '../utils/config.js'
@@ -97,46 +97,59 @@ export class WorkerPool {
     item: QueueItem,
     queue: QueueItem[]
   ): Promise<void> {
-    try {
-      const result = await worker.extractor.extract(item.meta.url, item.meta.id)
-      await this.handleSuccess(worker, item.meta, result)
-    } catch (error) {
-      await this.handleFailure(worker, item, queue, error)
+    const extractResult = await worker.extractor.extract(item.meta.url, item.meta.id)
+    if (!extractResult.ok) {
+      await this.handleFailure(worker, item, queue, extractResult.error)
+      return
     }
+    await this.handleSuccess(worker, item.meta, extractResult)
   }
 
   private async handleSuccess(
     worker: ExtractionWorker,
     meta: ConversationMeta,
-    result: Awaited<ReturnType<ConversationExtractor['extract']>>
+    result: Result<ExtractedConversation, Error>
   ): Promise<void> {
     const existingHash = this.checkpointManager.getContentHash(meta.id)
     const { processed, total } = this.checkpointManager.getProcessingProgress()
     const progressLabel = `[${processed}/${total}]`
 
-    if (existingHash && existingHash === result.contentHash) {
+    if (!result.ok) {
+      errorBus.emitError('Extraction returned error', result.error)
+      return
+    }
+
+    const conversation = result.value
+
+    if (existingHash && existingHash === conversation.contentHash) {
       const markResult = await this.checkpointManager.markAsProcessed(meta.id)
       if (!markResult.ok) errorBus.emitError('Failed to mark as processed', markResult.error)
-      logger.info(`${progressLabel} Up to date: ${result.title} (skipped write)`)
+      logger.info(`${progressLabel} Up to date: ${conversation.title} (skipped write)`)
     } else {
       const writeResult = await this.writeConversationAsMarkdown(result)
       if (!writeResult.ok) {
         errorBus.emitError('Failed to write conversation', writeResult.error)
         return
       }
-      const markResult = await this.checkpointManager.markAsProcessed(meta.id, result.contentHash)
+      const markResult = await this.checkpointManager.markAsProcessed(
+        meta.id,
+        conversation.contentHash
+      )
       if (!markResult.ok) errorBus.emitError('Failed to mark as processed', markResult.error)
-      logger.info(`${progressLabel} Processed: ${result.title}`)
+      logger.info(`${progressLabel} Processed: ${conversation.title}`)
     }
 
     worker.extractor.recoverTimeout()
   }
 
   private async writeConversationAsMarkdown(
-    conversation: Awaited<ReturnType<ConversationExtractor['extract']>>
+    conversation: Result<ExtractedConversation, Error>
   ): Promise<Result<void, Error>> {
+    if (!conversation.ok) return err(new Error('Missing conversation'))
+
+    const data = conversation.value
     const outputDir = this.config.exportDir
-    const safeSpaceName = sanitizeSpaceName(conversation.spaceName)
+    const safeSpaceName = sanitizeSpaceName(data.spaceName)
     const spaceSpecificDirectory = join(outputDir, safeSpaceName)
 
     if (!existsSync(spaceSpecificDirectory)) {
@@ -147,16 +160,16 @@ export class WorkerPool {
         return err(new Error(`Failed to create directory: ${errorMessageOf(mkdirResult.error)}`))
     }
 
-    const safeFileTitle = sanitizeFilename(conversation.title)
-    const fileName = `${safeFileTitle} (${conversation.id}).md`
+    const safeFileTitle = sanitizeFilename(data.title)
+    const fileName = `${safeFileTitle} (${data.id}).md`
     const destinationFilePath = join(spaceSpecificDirectory, fileName)
 
-    const headerTitle = `# ${conversation.title}\n\n`
+    const headerTitle = `# ${data.title}\n\n`
     const metadataBlock =
-      `**Space:** ${conversation.spaceName}  \n` +
-      `**ID:** ${conversation.id}  \n` +
-      `**Date:** ${conversation.timestamp.toISOString()}  \n\n`
-    const content = headerTitle + metadataBlock + conversation.content
+      `**Space:** ${data.spaceName}  \n` +
+      `**ID:** ${data.id}  \n` +
+      `**Date:** ${data.timestamp.toISOString()}  \n\n`
+    const content = headerTitle + metadataBlock + data.content
 
     const tmpPath = `${destinationFilePath}.tmp`
     const writeResult = this.resultFactory.from(() => writeFileSync(tmpPath, content, 'utf-8'))

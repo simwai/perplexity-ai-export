@@ -2,6 +2,7 @@ import { appendFileSync, existsSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import type { Request, Response } from '@playwright/test'
 import { redactSensitiveData } from './logger.js'
+import { from } from 'super-result'
 
 const LOGS_DIRECTORY = 'logs'
 const LOG_FILE_TIMESTAMP = new Date().toISOString().replace(/[:.]/g, '-')
@@ -15,8 +16,9 @@ function isPromptRequest(url: string, postData: string | null): boolean {
   if (isPerplexityAiApi) return true
 
   if (postData) {
-    try {
-      const parsedPostData = JSON.parse(postData)
+    const parseResult = from(() => JSON.parse(postData))
+    if (parseResult.ok) {
+      const parsedPostData = parseResult.value
       const hasPromptFields =
         parsedPostData.query ||
         parsedPostData.prompt ||
@@ -24,8 +26,7 @@ function isPromptRequest(url: string, postData: string | null): boolean {
       if (hasPromptFields) {
         return true
       }
-    } catch {
-      // why: postData is not JSON; fall back to substring scan
+    } else {
       const containsPromptKeyword = PROMPT_KEYWORDS.some((keyword) => postData.includes(keyword))
       if (containsPromptKeyword) {
         return true
@@ -42,19 +43,17 @@ function ensureLogsDirectoryExists(): void {
 }
 
 function redactUrlQuery(url: string): string {
-  try {
-    const urlObj = new URL(url)
-    const sensitiveQueryPattern =
-      /token|secret|authorization|cookie|password|api[_-]?key|access[_-]?token|bearer/i
-    for (const [key] of urlObj.searchParams.entries()) {
-      if (sensitiveQueryPattern.test(key)) {
-        urlObj.searchParams.set(key, '[REDACTED]')
-      }
+  const urlResult = from(() => new URL(url))
+  if (!urlResult.ok) return url
+  const urlObj = urlResult.value
+  const sensitiveQueryPattern =
+    /token|secret|authorization|cookie|password|api[_-]?key|access[_-]?token|bearer/i
+  for (const [key] of urlObj.searchParams.entries()) {
+    if (sensitiveQueryPattern.test(key)) {
+      urlObj.searchParams.set(key, '[REDACTED]')
     }
-    return urlObj.toString()
-  } catch {
-    return url
   }
+  return urlObj.toString()
 }
 
 export async function logHttpRequest(request: Request, debug: boolean): Promise<void> {
@@ -95,13 +94,10 @@ export async function logHttpResponse(response: Response, debug: boolean): Promi
   const isPrompt = isPromptRequest(responseUrl, originalRequest.postData())
 
   if (isJsonContent && !isPrompt) {
-    try {
-      const jsonResponse = await response.json()
-      responseBody = JSON.stringify(jsonResponse, null, 2)
-    } catch {
-      // why: response claimed JSON but body was unparseable; record a placeholder for the log
-      responseBody = '[COULD NOT PARSE JSON BODY]'
-    }
+    const jsonResult = await from(async () => await response.json())
+    responseBody = jsonResult.ok
+      ? JSON.stringify(jsonResult.value, null, 2)
+      : '[COULD NOT PARSE JSON BODY]'
   }
 
   const logTimestamp = new Date().toISOString()

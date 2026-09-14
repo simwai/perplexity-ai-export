@@ -163,64 +163,75 @@ async function fetchThreadBatch(
   page: Page,
   version: string,
   offset: number
-): Promise<ThreadBatchResponse> {
+): Promise<Result<ThreadBatchResponse, Error>> {
   const url = `${BASE_URL}/rest/thread/list_ask_threads?version=${version}&source=default`
 
-  const raw = await page.evaluate(
-    async ({ url, offset, batchSize }: { url: string; offset: number; batchSize: number }) => {
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          limit: batchSize,
-          offset,
-          ascending: false,
-          include_assets: true,
-          search_term: '',
-          send_last_entry: true,
-          thread_type_filter: null,
-          with_temporary_threads: false,
-        }),
-        credentials: 'include',
-      })
-      const text = await res.text()
-      return { status: res.status, body: text }
-    },
-    { url, offset, batchSize: BATCH_SIZE }
-  )
+  const rawResult = await from<{ status: number; body: string }>(async () => {
+    return page.evaluate(
+      async ({ url, offset, batchSize }: { url: string; offset: number; batchSize: number }) => {
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            limit: batchSize,
+            offset,
+            ascending: false,
+            include_assets: true,
+            search_term: '',
+            send_last_entry: true,
+            thread_type_filter: null,
+            with_temporary_threads: false,
+          }),
+          credentials: 'include',
+        })
+        const text = await res.text()
+        return { status: res.status, body: text }
+      },
+      { url, offset, batchSize: BATCH_SIZE }
+    )
+  })
+
+  if (!rawResult.ok) {
+    return err(rawResult.error)
+  }
+
+  const raw = rawResult.value
 
   logger.debug(`list_ask_threads offset=${offset}: status=${raw.status}`)
   logger.debug(`list_ask_threads offset=${offset}: body=${raw.body.slice(0, 500)}`)
 
   if (raw.status !== 200) {
-    throw new LibraryDiscovery.ApiError(`list_ask_threads returned HTTP ${raw.status}`)
+    return err(new LibraryDiscovery.ApiError(`list_ask_threads returned HTTP ${raw.status}`))
   }
 
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(raw.body)
-  } catch {
-    // why: invalid JSON from API is an unrecoverable error for this endpoint
-    throw new LibraryDiscovery.ApiError(
-      `list_ask_threads: invalid JSON — body: ${raw.body.slice(0, 200)}`
+  const parseResult = from(() => JSON.parse(raw.body))
+  if (!parseResult.ok) {
+    return err(
+      new LibraryDiscovery.ApiError(
+        `list_ask_threads: invalid JSON — body: ${raw.body.slice(0, 200)}`
+      )
     )
   }
 
+  const parsed = parseResult.value
+
   if (!Array.isArray(parsed)) {
-    throw new LibraryDiscovery.ApiError(`list_ask_threads: expected array, got ${typeof parsed}`)
+    return err(
+      new LibraryDiscovery.ApiError(`list_ask_threads: expected array, got ${typeof parsed}`)
+    )
   }
 
   // why: Array.isArray(parsed) above guarantees an array; per-element shape validated by downstream zod
   const threads = parsed as RawThread[]
   const total = threads[0]?.total_threads ?? 0
 
-  return {
+  return ok({
     threads,
     // Stop only when the API returns a partial page — avoids relying on
     // total_threads which may be server-capped (observed cap: 100).
     hasMore: threads.length === BATCH_SIZE,
     total,
-  }
+  })
 }
 
 async function fetchPinnedThreads(
@@ -276,13 +287,18 @@ async function fetchPinnedThreads(
   return ok(parsed as RawThread[])
 }
 
-async function fetchFirstBatch(page: Page, version: string): Promise<ThreadBatchResponse> {
+async function fetchFirstBatch(
+  page: Page,
+  version: string
+): Promise<Result<ThreadBatchResponse, Error>> {
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     const result = await fetchThreadBatch(page, version, 0)
 
-    if (result.threads.length > 0) {
-      logger.debug(`First batch OK — ${result.threads.length} threads (total: ${result.total})`)
-      return result
+    if (result.ok && result.value.threads.length > 0) {
+      logger.debug(
+        `First batch OK — ${result.value.threads.length} threads (total: ${result.value.total})`
+      )
+      return ok(result.value)
     }
 
     if (attempt < MAX_RETRIES) {
@@ -291,8 +307,10 @@ async function fetchFirstBatch(page: Page, version: string): Promise<ThreadBatch
     }
   }
 
-  throw new LibraryDiscovery.DiscoveryError(
-    `list_ask_threads returned empty after ${MAX_RETRIES} attempts — API may be unavailable or the library is empty`
+  return err(
+    new LibraryDiscovery.DiscoveryError(
+      `list_ask_threads returned empty after ${MAX_RETRIES} attempts — API may be unavailable or the library is empty`
+    )
   )
 }
 
@@ -304,7 +322,9 @@ export class LibraryDiscovery {
   static readonly DiscoveryError = createNamedError('DiscoveryError')
   static readonly ApiError = createNamedError('ApiError')
 
-  async discoverAllConversationsFromLibrary(page: Page): Promise<DiscoveredConversationMeta[]> {
+  async discoverAllConversationsFromLibrary(
+    page: Page
+  ): Promise<Result<DiscoveredConversationMeta[], Error>> {
     logger.info('Discovering threads via REST API...')
 
     // Start version detection BEFORE navigation so we catch the first matching response
@@ -326,23 +346,21 @@ export class LibraryDiscovery {
 
     // First batch with retry logic
     const allThreads: RawThread[] = []
-    let firstBatch: ThreadBatchResponse
+    const firstBatchResult = await fetchFirstBatch(page, version)
 
-    try {
-      firstBatch = await fetchFirstBatch(page, version)
-    } catch (error) {
+    if (!firstBatchResult.ok) {
       if (pinnedThreads.length > 0) {
-        // why: pinned-only library is a valid empty case, not a real failure
         logger.info(
-          `No regular threads found; returning pinned threads only: ${errorMessageOf(error)}`
+          `No regular threads found; returning pinned threads only: ${errorMessageOf(firstBatchResult.error)}`
         )
         const conversations = pinnedThreads.map(rawThreadToConversationMeta)
         logger.success(`Discovered ${conversations.length} threads`)
-        return conversations
+        return ok(conversations)
       }
-      throw error
+      return err(firstBatchResult.error)
     }
 
+    const firstBatch = firstBatchResult.value
     allThreads.push(...firstBatch.threads)
 
     logger.debug(`Total threads on server: ${firstBatch.total}`)
@@ -356,12 +374,10 @@ export class LibraryDiscovery {
       const delay = MIN_DELAY_MS + Math.random() * JITTER_MS
       await page.waitForTimeout(delay)
 
-      const batchResult = await from<ThreadBatchResponse>(async () =>
-        fetchThreadBatch(page, version, offset)
-      )
+      const batchResult = await fetchThreadBatch(page, version, offset)
 
       if (!batchResult.ok) {
-        throw batchResult.error
+        return err(batchResult.error)
       }
 
       const batch = batchResult.value
@@ -385,7 +401,7 @@ export class LibraryDiscovery {
 
     const conversations = merged.map(rawThreadToConversationMeta)
     logger.success(`Discovered ${conversations.length} threads`)
-    return conversations
+    return ok(conversations)
   }
 }
 

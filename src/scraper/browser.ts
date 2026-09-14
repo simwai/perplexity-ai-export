@@ -5,7 +5,7 @@ import { logger } from '../utils/logger.js'
 import { confirm } from '@inquirer/prompts'
 import { errorMessageOf } from '../utils/extract-error-message.js'
 import { createNamedError } from '../utils/errors.js'
-import { ok, err, createResult, type Result } from 'super-result'
+import { ok, err, createResult, from, type Result } from 'super-result'
 import { logHttpRequest, logHttpResponse } from '../utils/http-logger.js'
 
 const SETTINGS_URL = 'https://www.perplexity.ai/settings'
@@ -62,7 +62,7 @@ export class BrowserManager {
     const navResult2 = await this.navigateToSettingsPage()
     if (!navResult2.ok) return err(navResult2.error)
     const authResult = await this.ensureUserIsAuthenticated()
-    if (!authResult.ok) throw authResult.error
+    if (!authResult.ok) return err(authResult.error)
 
     const shouldRestartInHeadless = this.config.headless !== false
     if (shouldRestartInHeadless) {
@@ -126,14 +126,18 @@ export class BrowserManager {
     }
     if (existsSync(this.config.authStoragePath)) {
       logger.info('Loading saved authentication state...')
-      try {
+      const storageResult = this.resultFactory.from(() => {
         const storageStateJson = readFileSync(this.config.authStoragePath, 'utf-8')
-        const storageStateData = JSON.parse(storageStateJson)
+        return JSON.parse(storageStateJson)
+      })
+      if (storageResult.ok) {
         this.activeContext = await this.browserInstance.newContext({
-          storageState: storageStateData,
+          storageState: storageResult.value,
         })
-      } catch (error) {
-        logger.warn(`Failed to load saved auth state, starting fresh: ${errorMessageOf(error)}`)
+      } else {
+        logger.warn(
+          `Failed to load saved auth state, starting fresh: ${errorMessageOf(storageResult.error)}`
+        )
         this.activeContext = await this.browserInstance.newContext()
       }
     } else {
@@ -244,16 +248,10 @@ export class BrowserManager {
 
     if (!trimmed) return false
 
-    try {
-      const parsed = JSON.parse(trimmed)
-      return Boolean(
-        (parsed as Record<string, unknown>).user ||
-        (parsed as Record<string, unknown>).expires ||
-        (parsed as Record<string, unknown>).email
-      )
-    } catch {
-      return false
-    }
+    const parseResult = from(() => JSON.parse(trimmed))
+    if (!parseResult.ok) return false
+    const parsed = parseResult.value as Record<string, unknown>
+    return Boolean(parsed.user || parsed.expires || parsed.email)
   }
 
   private async persistAuthenticationState(): Promise<Result<void, Error>> {

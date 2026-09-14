@@ -266,7 +266,7 @@ The ScrumMaster phrase "direct mode" for a concrete target means "skip the optio
 
 `BLOCKED -> DOCS_PARALLEL`: in-scope dependencies span multiple types (npm, pip, cargo, go, maven, gradle, etc.); every checklist checkbox ticked. Subagents spawned per dependency type with partitioned evidence collection (max 3 concurrent).
 
-`BLOCKED -> PARALLEL_REVIEW`: docs evidence complete (or DOCS/DOCS_PARALLEL skipped), multi-file inventory (>1) and not greenfield, every checklist checkbox ticked. Partitions file inventory by architectural layer; spawns N BabaSensei reviewers (N = min(ceil(files/50), 4)) + BabaTester with partitioned session state.
+`BLOCKED -> PARALLEL_REVIEW`: docs evidence complete (or DOCS/DOCS_PARALLEL skipped), multi-file inventory (>1) and not greenfield, every checklist checkbox ticked. Partitions file inventory by architectural layer; spawns N BabaSensei reviewers (N = max(1, ceil(files / 20))) + BabaTester with partitioned session state.
 
 `BLOCKED -> REVIEW`: current chunk exists, every prerequisite artifact required by the review path already exists. REVIEW also owns the confirmation decision; the response must include accepted violations, disputed violations, and preservation constraints.
 

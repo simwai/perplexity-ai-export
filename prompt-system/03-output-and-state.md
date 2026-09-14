@@ -221,17 +221,18 @@ Soft tier:
   - Greenfield skip: mark `[x] S1-S17 -- skipped (greenfield)` when CHECKLIST/REVIEW are skipped per the greenfield branch.
 
 Logical tier (L1-L10):
-- [ ] L1
-- [ ] L2
-- [ ] L3
-- [ ] L4
-- [ ] L5
-- [ ] L6
-- [ ] L7
-- [ ] L8
-- [ ] L9
-- [ ] L10
+- [ ] L1 -- [blocking|advisory]
+- [ ] L2 -- [blocking|advisory]
+- [ ] L3 -- [blocking|advisory]
+- [ ] L4 -- [blocking|advisory]
+- [ ] L5 -- [blocking|advisory]
+- [ ] L6 -- [blocking|advisory]
+- [ ] L7 -- [blocking|advisory]
+- [ ] L8 -- [blocking|advisory]
+- [ ] L9 -- [blocking|advisory]
+- [ ] L10 -- [blocking|advisory]
   - Greenfield skip: mark `[x] L1-L10 -- skipped (greenfield)` when CHECKLIST/REVIEW are skipped per the greenfield branch.
+  - Blocking vs advisory is determined at discovery time per `04-rubrics.md`.
 
 Verification:
 - Build: pending -- [command]
@@ -445,6 +446,20 @@ Validation loop (run when any finding is at confidence <= 70%):
 - Final confidence: [X]%
 - Terminal classification: [confirmed | disputed]
 
+## Logical Findings
+- [criterion id] -- [line/range] -- [one-sentence logical issue] ([severity: blocking|advisory])
+  - Severity: [blocking|advisory] -- [one-line rationale]
+  - Mitigations:
+    - **A.** [short action] (Recommended)
+      - Pros: [one line]
+      - Cons: [one line]
+    - B. [short action]
+      - Pros: [one line]
+      - Cons: [one line]
+    - C. [short action, if needed]
+      - Pros: [one line]
+      - Cons: [one line]
+
 ## Informational (when applicable)
 - [criterion id] -- [line/range] -- [one-sentence note]
 
@@ -484,7 +499,7 @@ Build: PASS|FAIL|SKIPPED -- [command] -- [note]
 Smoke: PASS|FAIL|SKIPPED -- [command] -- [note]
 Functional suite: PASS|FAIL|SKIPPED -- [command] -- [note]
 Playwright e2e smoke: PASS|FAIL|SKIPPED -- [command] -- [note] (navigate + click key flows; uses MCP playwright server from fallback ladder)
-Playwright e2e smoke is aggregate-level (H11): it runs once at verdict time, not per batch.
+Playwright e2e smoke is aggregate-level (H11): it runs once at REVIEW verdict and once at the commit/push gate, not per batch.
 Do not invent commands. If none exist, record SKIPPED with reason.
 
 # Decision Needed
@@ -556,6 +571,9 @@ Conventions:
 
 Risks:
 - [risk]
+
+Logical constraints:
+- [constraint from L-tier findings that the fix must preserve]
 
 Awaiting:
 - Plan approval

@@ -7,7 +7,7 @@ import { type Config } from '../utils/config.js'
 import { z } from 'zod'
 import { errorMessageOf } from '../utils/extract-error-message.js'
 import { getCrossEncoder } from './cross-encoder.js'
-import { createResult, ok, err, type Result } from 'super-result'
+import { createResult, ok, err, from, type Result } from 'super-result'
 
 const VECTOR_SEARCH_LIMIT = 40
 const ANALYSIS_BATCH_SIZE = 10
@@ -36,17 +36,16 @@ const verificationResultSchema = z.object({
 function parseJsonWithSchema<T>(response: string, schema: z.ZodType<T>, defaultValue: T): T {
   const match = response.match(/(\{[\s\S]*\}|\[[\s\S]*\])/)
   if (!match?.[0]) return defaultValue
-  try {
-    const parsed = JSON.parse(match[0])
-    const result = schema.safeParse(parsed)
-    if (!result.success) {
-      logger.debug(`Schema validation failed: ${result.error.message}`)
-    }
-    return result.success ? result.data : defaultValue
-  } catch (error) {
-    logger.debug(`JSON parse failed: ${errorMessageOf(error)}`)
+  const parseResult = from(() => JSON.parse(match[0]!))
+  if (!parseResult.ok) {
+    logger.debug(`JSON parse failed`)
     return defaultValue
   }
+  const result = schema.safeParse(parseResult.value)
+  if (!result.success) {
+    logger.debug(`Schema validation failed: ${result.error.message}`)
+  }
+  return result.success ? result.data : defaultValue
 }
 
 interface ResearchPlan {
@@ -295,21 +294,23 @@ Return JSON: ${jsonTemplate}
     const keywordPools = await Promise.all(
       (plan.hardKeywords || []).map(async (hardKeyword) => {
         logger.debug(`Executing keyword search: "${hardKeyword}"`)
-        try {
-          const matches = await this.ripgrep.captureSearchMatches({ pattern: hardKeyword })
-          return matches.map<VectorSearchResult>((match) => ({
-            meta: {
-              path: join(this.config.exportDir, match.path),
-              snippet: match.text,
-              title: match.path.split('/').pop() || 'Untitled',
-              id: match.path + match.line,
-            },
-            score: 1.0,
-          }))
-        } catch (error) {
-          logger.warn(`Keyword search failed for "${hardKeyword}": ${errorMessageOf(error)}`)
+        const matchesResult = await this.ripgrep.captureSearchMatches({ pattern: hardKeyword })
+        if (!matchesResult.ok) {
+          logger.warn(
+            `Keyword search failed for "${hardKeyword}": ${errorMessageOf(matchesResult.error)}`
+          )
           return []
         }
+        const matches = matchesResult.value
+        return matches.map<VectorSearchResult>((match) => ({
+          meta: {
+            path: join(this.config.exportDir, match.path),
+            snippet: match.text,
+            title: match.path.split('/').pop() || 'Untitled',
+            id: match.path + match.line,
+          },
+          score: 1.0,
+        }))
       })
     )
 
@@ -455,11 +456,28 @@ Return JSON array: [{"fact": "...", "node_id": N}]
 - Do NOT include a "thread" field - it will be filled from the source title
 - Limit: at most 1 fact per unique source title in this batch
 `
-      try {
-        const response = await this.ollamaClient.generate(researchPrompt)
-        if (!response.ok) {
+      const response = await this.ollamaClient.generate(researchPrompt)
+      if (!response.ok) {
+        logger.warn(
+          `Fact extraction batch ${batchNumber}/${totalBatches} failed for question "${question}": ${errorMessageOf(response.error)}`
+        )
+        for (const res of currentBatch) {
+          extractedFindings.push({
+            fact: res.meta['snippet'] ?? '',
+            source_title: res.meta['title'] ?? '',
+            thread: res.meta['title'] ?? '',
+          })
+        }
+        continue
+      }
+      const match = response.value.match(/\[[\s\S]*\]/)
+      if (!match) {
+        const parseErrorResult = await this.resultFactory.from(() => {
+          throw new OrchestratorError('No JSON array found in response')
+        })
+        if (!parseErrorResult.ok) {
           logger.warn(
-            `Fact extraction batch ${batchNumber}/${totalBatches} failed for question "${question}": ${errorMessageOf(response.error)}`
+            `Fact extraction batch ${batchNumber}/${totalBatches} failed for question "${question}": ${errorMessageOf(parseErrorResult.error)}`
           )
           for (const res of currentBatch) {
             extractedFindings.push({
@@ -470,50 +488,30 @@ Return JSON array: [{"fact": "...", "node_id": N}]
           }
           continue
         }
-        const match = response.value.match(/\[[\s\S]*\]/)
-        if (!match?.[0]) {
+      }
+      const jsonText = (match as RegExpMatchArray)[0]
+      if (!jsonText) {
+        const parseErrorResult = await this.resultFactory.from(() => {
           throw new OrchestratorError('No JSON array found in response')
-        }
-        let parsedJson: unknown
-        const parseResult = this.resultFactory.from(() => JSON.parse(match[0]!))
-        if (!parseResult.ok) {
-          throw new OrchestratorError(
-            `Invalid JSON in response: ${errorMessageOf(parseResult.error)}`
+        })
+        if (!parseErrorResult.ok) {
+          logger.warn(
+            `Fact extraction batch ${batchNumber}/${totalBatches} failed for question "${question}": ${errorMessageOf(parseErrorResult.error)}`
           )
-        }
-        parsedJson = parseResult.value
-        if (!Array.isArray(parsedJson)) {
-          throw new OrchestratorError('Response is not a JSON array')
-        }
-
-        for (const factEntry of parsedJson) {
-          try {
-            const validated = extractedFactSchema.safeParse(factEntry)
-            if (!validated.success) {
-              logger.debug(`Skipping invalid fact entry: ${validated.error.message}`)
-              continue
-            }
-            const f = validated.data
-            if (f.node_id >= processingPool.length) {
-              logger.debug(
-                `Skipping out-of-range node_id: ${f.node_id} (pool size ${processingPool.length})`
-              )
-              continue
-            }
-            const originalSnippet = processingPool[f.node_id]
-            const sourceTitle = originalSnippet?.meta['title'] || 'Unknown'
+          for (const res of currentBatch) {
             extractedFindings.push({
-              fact: f.fact,
-              source_title: sourceTitle,
-              thread: sourceTitle,
+              fact: res.meta['snippet'] ?? '',
+              source_title: res.meta['title'] ?? '',
+              thread: res.meta['title'] ?? '',
             })
-          } catch (entryError) {
-            logger.debug(`Skipping malformed fact entry: ${errorMessageOf(entryError)}`)
           }
+          continue
         }
-      } catch (error) {
+      }
+      const parseResult = await this.resultFactory.from(() => JSON.parse(jsonText))
+      if (!parseResult.ok) {
         logger.warn(
-          `Fact extraction batch ${batchNumber}/${totalBatches} failed for question "${question}": ${errorMessageOf(error)}`
+          `Fact extraction batch ${batchNumber}/${totalBatches} failed for question "${question}": ${errorMessageOf(parseResult.error)}`
         )
         for (const res of currentBatch) {
           extractedFindings.push({
@@ -522,6 +520,48 @@ Return JSON array: [{"fact": "...", "node_id": N}]
             thread: res.meta['title'] ?? '',
           })
         }
+        continue
+      }
+      const parsedJson = parseResult.value
+      const arrayCheckResult = await this.resultFactory.from(() => {
+        if (!Array.isArray(parsedJson)) {
+          throw new OrchestratorError('Response is not a JSON array')
+        }
+      })
+      if (!arrayCheckResult.ok) {
+        logger.warn(
+          `Fact extraction batch ${batchNumber}/${totalBatches} failed for question "${question}": ${errorMessageOf(arrayCheckResult.error)}`
+        )
+        for (const res of currentBatch) {
+          extractedFindings.push({
+            fact: res.meta['snippet'] ?? '',
+            source_title: res.meta['title'] ?? '',
+            thread: res.meta['title'] ?? '',
+          })
+        }
+        continue
+      }
+
+      for (const factEntry of parsedJson) {
+        const validated = extractedFactSchema.safeParse(factEntry)
+        if (!validated.success) {
+          logger.debug(`Skipping invalid fact entry: ${validated.error.message}`)
+          continue
+        }
+        const f = validated.data
+        if (f.node_id >= processingPool.length) {
+          logger.debug(
+            `Skipping out-of-range node_id: ${f.node_id} (pool size ${processingPool.length})`
+          )
+          continue
+        }
+        const originalSnippet = processingPool[f.node_id]
+        const sourceTitle = originalSnippet?.meta['title'] || 'Unknown'
+        extractedFindings.push({
+          fact: f.fact,
+          source_title: sourceTitle,
+          thread: sourceTitle,
+        })
       }
     }
 
@@ -542,44 +582,41 @@ ${facts.map((f, i) => `${i}: ${f.fact} (source: ${f.source_title})`).join('\n')}
 For each fact, is it related to the question? Mark relevant=true if the fact contains information that could be relevant context for answering the question.
 Return JSON array: [{"index": 0, "relevant": true}, {"index": 1, "relevant": false}, ...]
 `
-    try {
-      const response = await this.ollamaClient.generate(filterPrompt)
-      if (!response.ok) {
-        logger.warn(
-          `Relevance filter failed for question "${question}": ${errorMessageOf(response.error)}`
-        )
-        return facts
-      }
-      const match = response.value.match(/\[[\s\S]*\]/)
-      if (!match?.[0]) return facts
-      const parsed: Array<{ index: number; relevant: boolean }> = JSON.parse(match[0])
-      const relevantIndices = new Set(parsed.filter((p) => p.relevant).map((p) => p.index))
-      let filtered = facts.filter((_, i) => relevantIndices.has(i))
-
-      if (filtered.length === 0) {
-        logger.debug(`Filtered ${facts.length} -> 0, relaxing to keep all`)
-        filtered = facts
-      }
-
-      const seenSources = new Set<string>()
-      const deduped: ExtractedFact[] = []
-      for (const fact of filtered) {
-        const key = fact.source_title.toLowerCase().trim()
-        if (!seenSources.has(key)) {
-          seenSources.add(key)
-          deduped.push(fact)
-        }
-      }
-
-      if (deduped.length !== filtered.length) {
-        logger.debug(`Deduplicated ${filtered.length} -> ${deduped.length} unique sources`)
-      }
-
-      return deduped
-    } catch (error) {
-      logger.warn(`Relevance filter failed for question "${question}": ${errorMessageOf(error)}`)
+    const filterResponse = await this.ollamaClient.generate(filterPrompt)
+    if (!filterResponse.ok) {
+      logger.warn(
+        `Relevance filter failed for question "${question}": ${errorMessageOf(filterResponse.error)}`
+      )
       return facts
     }
+    const match = filterResponse.value.match(/\[[\s\S]*\]/)
+    if (!match?.[0]) return facts
+    const parseResult = from(() => JSON.parse(match[0]!))
+    if (!parseResult.ok) return facts
+    const parsed: Array<{ index: number; relevant: boolean }> = parseResult.value
+    const relevantIndices = new Set(parsed.filter((p) => p.relevant).map((p) => p.index))
+    let filtered = facts.filter((_, i) => relevantIndices.has(i))
+
+    if (filtered.length === 0) {
+      logger.debug(`Filtered ${facts.length} -> 0, relaxing to keep all`)
+      filtered = facts
+    }
+
+    const seenSources = new Set<string>()
+    const deduped: ExtractedFact[] = []
+    for (const fact of filtered) {
+      const key = fact.source_title.toLowerCase().trim()
+      if (!seenSources.has(key)) {
+        seenSources.add(key)
+        deduped.push(fact)
+      }
+    }
+
+    if (deduped.length !== filtered.length) {
+      logger.debug(`Deduplicated ${filtered.length} -> ${deduped.length} unique sources`)
+    }
+
+    return deduped
   }
 
   private async generateHydePassage(question: string): Promise<string> {
@@ -587,15 +624,8 @@ Return JSON array: [{"index": 0, "relevant": true}, {"index": 1, "relevant": fal
 Write 1-2 sentences that would plausibly appear in a saved answer to the question: "${question}"
 Write as if it's content already stored in a document, not as a direct reply.
 `
-    try {
-      const response = await this.ollamaClient.generate(hydePrompt)
-      return response.ok ? response.value : ''
-    } catch (error) {
-      logger.warn(
-        `HyDE passage generation failed for question "${question}": ${errorMessageOf(error)}`
-      )
-      return ''
-    }
+    const response = await this.ollamaClient.generate(hydePrompt)
+    return response.ok ? response.value : ''
   }
 
   private async generateMightiestResponse(
@@ -653,14 +683,11 @@ Answer: "${answer.slice(0, 500)}..."
 Did I miss anything important?
 Return JSON: {"status": "ok" | "missed-info", "suggestion": "..."}
 `
-    try {
-      const response = await this.ollamaClient.generate(verificationPrompt)
-      return parseJsonWithSchema(response.ok ? response.value : '', verificationResultSchema, {
-        status: 'ok',
-      })
-    } catch (error) {
-      logger.warn(`Answer verification failed: ${errorMessageOf(error)}`)
-      return { status: 'ok' }
-    }
+    const verifyResponse = await this.ollamaClient.generate(verificationPrompt)
+    return parseJsonWithSchema(
+      verifyResponse.ok ? verifyResponse.value : '',
+      verificationResultSchema,
+      { status: 'ok' }
+    )
   }
 }
