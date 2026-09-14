@@ -210,6 +210,7 @@ export class BrowserManager {
             const url = new URL(window.location.href)
             return url.hash.startsWith('#settings') || url.pathname !== '/settings'
           },
+          undefined,
           { timeout: NAVIGATION_TIMEOUT_MS }
         )
       } catch {
@@ -264,6 +265,7 @@ export class BrowserManager {
             const url = new URL(window.location.href)
             return url.hash.startsWith('#settings') || url.pathname !== '/settings'
           },
+          undefined,
           { timeout: NAVIGATION_TIMEOUT_MS }
         )
       } catch {
