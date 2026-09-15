@@ -7,37 +7,6 @@ const LOG_FILE_TIMESTAMP = new Date().toISOString().replace(/[:.]/g, '-')
 const MAIN_LOG_FILENAME = `main-log-${LOG_FILE_TIMESTAMP}.txt`
 const MAIN_LOG_PATH = join(LOGS_DIRECTORY, MAIN_LOG_FILENAME)
 
-const SENSITIVE_KEY_PATTERN =
-  /token|secret|authorization|cookie|password|api[_-]?key|access[_-]?token|bearer/i
-
-/**
- * Redact sensitive values from an unknown payload before logging.
- *
- * why: logger args can include request/response bodies; this prevents secrets
- * from reaching the console or file log.
- */
-export function redactSensitiveData(obj: unknown): unknown {
-  if (obj === null || obj === undefined) return obj
-  if (typeof obj === 'string') return obj
-  if (Array.isArray(obj)) return obj.map(redactSensitiveData)
-  if (typeof obj === 'object') {
-    const result: Record<string, unknown> = {}
-    for (const [key, value] of Object.entries(obj as Record<string, unknown>)) {
-      if (SENSITIVE_KEY_PATTERN.test(key)) {
-        result[key] = '[REDACTED]'
-      } else {
-        result[key] = redactSensitiveData(value)
-      }
-    }
-    return result
-  }
-  return obj
-}
-
-export function redactArgs(args: unknown[]): unknown[] {
-  return args.map(redactSensitiveData)
-}
-
 const baseLogger = createColorino(
   {
     error: '#ff5555',
