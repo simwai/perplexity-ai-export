@@ -188,41 +188,31 @@ export class BrowserManager {
     this.activePage = await this.activeContext.newPage()
 
     return this.resultFactory.from(async () => {
-      console.log('[navigateToSettingsPage] About to goto settings URL')
-      await this.activePage!.goto(SETTINGS_URL, {
-        waitUntil: 'networkidle',
+      if (!this.activePage) {
+        throw new BrowserManager.NavigationError(
+          '[navigateToSettingsPage] Failed to create new active page'
+        )
+      }
+      await this.activePage.goto(SETTINGS_URL, {
         timeout: NAVIGATION_TIMEOUT_MS,
+        waitUntil: 'domcontentloaded',
       })
-      console.log('[navigateToSettingsPage] goto completed, current URL:', this.activePage!.url())
+
       // Wait for SPA hash routing to settle (Perplexity redirects to #settings/account)
-      try {
-        console.log('[navigateToSettingsPage] Waiting for hash routing...')
-        await this.activePage!.waitForFunction(
-          () => {
-            const url = new URL(window.location.href)
-            return url.hash.startsWith('#settings') || url.pathname !== '/settings'
-          },
-          undefined,
-          { timeout: NAVIGATION_TIMEOUT_MS }
-        )
-        console.log('[navigateToSettingsPage] Hash routing settled, URL:', this.activePage!.url())
-      } catch {
-        logger.debug('Hash routing not yet settled; proceeding to verify')
-        console.log('[navigateToSettingsPage] Hash routing timeout, continuing...')
-      }
+      await this.activePage.waitForFunction(
+        () => {
+          const url = new URL(window.location.href)
+          return url.hash.startsWith('#settings') || url.pathname !== '/settings'
+        },
+        undefined,
+        { timeout: NAVIGATION_TIMEOUT_MS }
+      )
+
       // Confirm the settings page has loaded by waiting for a known DOM element
-      try {
-        console.log('[navigateToSettingsPage] Waiting for DOM selector...')
-        await this.waitStrategy.forSelector(
-          this.activePage!,
-          '[data-testid="settings-page"], #settings, .settings-container, [data-testid="account-settings"]'
-        )
-        console.log('[navigateToSettingsPage] DOM selector found')
-      } catch {
-        logger.debug('Settings page DOM selector not found; continuing')
-        console.log('[navigateToSettingsPage] DOM selector timeout, continuing...')
-      }
-      console.log('[navigateToSettingsPage] navigateToSettingsPage completed')
+      await this.waitStrategy.forSelector(
+        this.activePage,
+        '[data-testid="settings-page"], #settings, .settings-container, [data-testid="account-settings"]'
+      )
     })
   }
 
@@ -257,8 +247,9 @@ export class BrowserManager {
       }
 
       // Wait for hash routing to settle
-      try {
-        await this.activePage.waitForFunction(
+      const hashResult = await this.resultFactory.from(async () => {
+        if (!this.activePage) throw new BrowserManager.AuthError('Page not initialized')
+        return await this.activePage.waitForFunction(
           () => {
             const url = new URL(window.location.href)
             return url.hash.startsWith('#settings') || url.pathname !== '/settings'
@@ -266,7 +257,8 @@ export class BrowserManager {
           undefined,
           { timeout: NAVIGATION_TIMEOUT_MS }
         )
-      } catch {
+      })
+      if (!hashResult.ok) {
         logger.debug('Hash routing not yet settled; proceeding to verify')
       }
 
@@ -297,35 +289,30 @@ export class BrowserManager {
     const currentUrl = page.url()
     if (CLOUDFLARE_CHALLENGE_PATTERN.test(currentUrl)) return true
 
-    let hasChallenge = false
-    try {
-      hasChallenge = await page.evaluate(async () => {
-        try {
-          const body = document.body.innerText
-          return (
-            body.includes('Checking your browser') ||
-            body.includes('Verifying your identity') ||
-            body.includes('One moment') ||
-            body.includes('cf-turnstile') ||
-            body.includes('cloudflare')
-          )
-        } catch {
-          return false
-        }
-      })
-    } catch {
-      // ignore evaluation errors
-    }
-
-    return hasChallenge
+    const result = await this.resultFactory.from(
+      async () =>
+        await page.evaluate(async () => {
+          try {
+            const body = document.body.innerText
+            return (
+              body.includes('Checking your browser') ||
+              body.includes('Verifying your identity') ||
+              body.includes('One moment') ||
+              body.includes('cf-turnstile') ||
+              body.includes('cloudflare')
+            )
+          } catch {
+            return false
+          }
+        })
+    )
+    return result.ok ? result.value : false
   }
 
   private async verifyLoginStatus(page: Page): Promise<boolean> {
-    console.log('[verifyLoginStatus] Starting verification...')
     await page.waitForTimeout(1000).catch(() => {})
     await page.waitForLoadState('domcontentloaded').catch(() => {})
 
-    console.log('[verifyLoginStatus] Calling /api/auth/session...')
     const result = await page.evaluate(async () => {
       try {
         const res = await fetch('/api/auth/session', {
@@ -335,17 +322,12 @@ export class BrowserManager {
         const text = await res.text()
         return { body: text }
       } catch (e) {
-        console.log('[verifyLoginStatus] fetch error:', e instanceof Error ? e.message : String(e))
         return { body: '' }
       }
     })
 
-    console.log('[verifyLoginStatus] Response received, length:', result.body.length)
-    console.log('[verifyLoginStatus] Preview:', result.body.slice(0, 200))
-
     const trimmed = result.body.trim()
     if (!trimmed) {
-      console.log('[verifyLoginStatus] Empty response, returning false')
       return false
     }
 
@@ -354,10 +336,8 @@ export class BrowserManager {
       const hasUser = Boolean(parsed.user)
       const hasExpires = Boolean(parsed.expires)
       const hasEmail = Boolean(parsed.email)
-      console.log('[verifyLoginStatus] Parsed: hasUser:', hasUser, 'hasExpires:', hasExpires, 'hasEmail:', hasEmail)
       return hasUser || hasExpires || hasEmail
     } catch (e) {
-      console.log('[verifyLoginStatus] JSON parse error:', e instanceof Error ? e.message : String(e))
       return false
     }
   }
