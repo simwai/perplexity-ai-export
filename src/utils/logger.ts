@@ -1,8 +1,7 @@
 import { createColorino } from 'colorino'
 import { join } from 'node:path'
 
-const IS_DEBUG_MODE =
-  process.env['DEBUG_MODE'] === 'true' || process.env['DIAGNOSIS_MODE'] === 'true'
+const IS_DEBUG_MODE = process.env['DEBUG'] === 'true' || process.env['DEBUG'] === '"true"'
 const LOGS_DIRECTORY = 'logs'
 const LOG_FILE_TIMESTAMP = new Date().toISOString().replace(/[:.]/g, '-')
 const MAIN_LOG_FILENAME = `main-log-${LOG_FILE_TIMESTAMP}.txt`
@@ -50,6 +49,20 @@ const baseLogger = createColorino(
   },
   {
     level: 'trace',
+    sanitization: {
+      enabled: true,
+      keys: [
+        'token',
+        'secret',
+        'authorization',
+        'cookie',
+        'password',
+        'apiKey',
+        'accessToken',
+        'bearer',
+      ],
+      replacement: '[REDACTED]',
+    },
     ...(IS_DEBUG_MODE
       ? {
           fileLogging: {
@@ -68,9 +81,8 @@ function logWithRedaction(
   prefix: string,
   args: unknown[]
 ): void {
-  const redacted = redactArgs(args)
   const colorinoLevel = level === 'success' ? 'log' : level
-  ;(baseLogger[colorinoLevel] as (...args: unknown[]) => void)(prefix, ...redacted)
+  ;(baseLogger[colorinoLevel] as (...args: unknown[]) => void)(prefix, ...args)
 }
 
 export const logger = {
