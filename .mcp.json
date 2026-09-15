@@ -7,10 +7,6 @@
     "playwright": {
         "command": "npx",
         "args": ["-y", "@playwright/mcp@0.0.80"]
-    },
-    "trello": {
-        "type": "http",
-        "url": "https://mcp.trello.com/v1"
     }
     }
 }

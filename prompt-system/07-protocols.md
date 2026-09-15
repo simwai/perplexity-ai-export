@@ -939,7 +939,7 @@ Every backlog item carries one milestone tag. A milestone is reached when all ta
 - Story grouping: tasks sharing a `Story` id belong to one user story. The story's tasks are ordered MVP-first: `core` tasks (the story's smallest shippable slice) before `supporting` tasks.
 - MVP-first precedence: MVP ordering applies WITHIN a story. Across stories, ICE remains the deterministic pull order (then size, then milestone date).
 - Test-first flag: a plan-level ordering signal that test work precedes implementation for that task. It is never a test-authoring grant: tests are authored only on user request or via the BabaTester handoff.
-- Split rule still applies: a grouped or parallel-marked card at L size, or with multiple independent deliverables, MUST be split (or carry an explicit one-line rationale).
+- Split rule still applies: a grouped card at L size, or with multiple independent deliverables, MUST be split (or carry an explicit one-line rationale).
 
 ## Relevance Discovery
 

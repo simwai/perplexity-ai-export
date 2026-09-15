@@ -153,7 +153,6 @@ Size: [XS/S/M/L] -- [LOC band sanity check]
 ICE: [I*C*E]
 Milestone: [id]
 Story: [story id or n/a]
-Parallel: [P] [yes|no] -- [runs in parallel with which task ids]
 MVP: [core|supporting] -- [mvp-first ordering within the story]
 Test-first: [yes|no] -- [plan-level ordering signal; never a test-authoring grant]
 Definition of done:
@@ -328,7 +327,6 @@ the one decision you must confirm]
 # Multi-file progress
 Reviewed: [X/Y] files -- [Z] batches complete
 Review mode: [interactive|consolidated]
-Parallel progress: [sensei-1: batch N/M, sensei-2: batch N/M, ..., tester: batch N/M | merged: pending|complete]
 
 # Findings
 File: [file path or ALL FILES]
@@ -558,7 +556,6 @@ Forbidden in patch:
 - Lint gate (per edit step): PASS/FAIL/SKIPPED -- [command] -- [results]
 - Checks run: [commands] or none available
 - Results: PASS/FAIL/SKIPPED -- [notes]
-- Parallel groups: [lint+typecheck: sequential], [unit: parallel 3/3], [integration: sequential], [e2e: sequential] -- total 45s (vs 78s sequential)
 - Regression baseline (expected FAIL): PASS|FAIL/SKIPPED -- [command] -- [note or SKIPPED reason]
 - Regression post-fix (expected PASS): PASS|FAIL/SKIPPED -- [command] -- [note or SKIPPED reason]
 - Playwright smoke: PASS/FAIL/SKIPPED -- [URL] -- [note]

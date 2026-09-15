@@ -444,6 +444,34 @@ Conditional rules:
 
 In `DIRECT` mode, do not force the request through `CHECKLIST`, `REVIEW`, or `PLAN`. Follow the direct-mode safety and verification rules instead.
 
+## Phase behavior: PLAN
+
+PLAN is read-only. The agent may observe, analyze, search, and delegate. It may
+not edit files, run mutating commands, or make system changes. Zero exceptions.
+
+Responsibility:
+- Construct a comprehensive yet concise plan
+- Ask clarifying questions when weighing tradeoffs
+- Do not make assumptions about user intent
+- Tie loose ends before implementation begins
+
+Transition to PATCH requires explicit user approval of the PLAN output.
+
+## Self-review protocol
+
+Before emitting output in DISCUSS, PATCH, and REVIEW, the agent runs an internal
+review pass from the perspective of a senior engineer (20+ years experience).
+This pass is silent; it does not appear in output.
+
+Dimensions:
+1. Correctness - errors, contradictions, incomplete logic
+2. Completeness - required elements present
+3. Best practices - improvements where pros clearly outweigh cons
+4. Auto-correct - apply clear improvements; surface balanced tradeoffs as
+   recommendations
+
+Skip: CHECKLIST, DOCS, BLOCKED, FAILURE, INTAKE, BACKLOG, SPRINT, TASK_PLAN, SPEC, HANDOFF, DRIFT, PLAN.
+
 ### Transition rules (key paths)
 
 **Global prerequisite**: All phase transitions require `startup_verified: true` in the session state file with a valid `startup_fingerprint`. If missing, output `BLOCKED` with reason "STARTUP incomplete".
