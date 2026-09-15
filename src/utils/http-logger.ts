@@ -2,9 +2,18 @@ import { appendFileSync, existsSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import type { Request, Response } from '@playwright/test'
 import { from } from 'super-result'
+import { z } from 'zod'
 
 const SENSITIVE_KEY_PATTERN =
   /token|secret|authorization|cookie|password|api[_-]?key|access[_-]?token|bearer/i
+
+const PromptPostDataSchema = z
+  .object({
+    query: z.string().optional(),
+    prompt: z.string().optional(),
+    messages: z.array(z.unknown()).optional(),
+  })
+  .passthrough()
 
 function redactSensitiveData(obj: unknown): unknown {
   if (obj === null || obj === undefined) return obj
@@ -42,19 +51,21 @@ function isPromptRequest(url: string, postData: string | null): boolean {
   if (postData) {
     const parseResult = from(() => JSON.parse(postData))
     if (parseResult.ok) {
-      const parsedPostData = parseResult.value
-      const hasPromptFields =
-        parsedPostData.query ||
-        parsedPostData.prompt ||
-        (parsedPostData.messages && Array.isArray(parsedPostData.messages))
-      if (hasPromptFields) {
-        return true
+      const validated = PromptPostDataSchema.safeParse(parseResult.value)
+      if (validated.success) {
+        const hasPromptFields =
+          validated.data.query ||
+          validated.data.prompt ||
+          (validated.data.messages && Array.isArray(validated.data.messages))
+        if (hasPromptFields) {
+          return true
+        }
       }
-    } else {
-      const containsPromptKeyword = PROMPT_KEYWORDS.some((keyword) => postData.includes(keyword))
-      if (containsPromptKeyword) {
-        return true
-      }
+    }
+
+    const containsPromptKeyword = PROMPT_KEYWORDS.some((keyword) => postData.includes(keyword))
+    if (containsPromptKeyword) {
+      return true
     }
   }
   return false

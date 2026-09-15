@@ -8,10 +8,38 @@ import { createNamedError } from '../utils/errors.js'
 import { ok, err, createResult, type Result } from 'super-result'
 import { logHttpRequest, logHttpResponse } from '../utils/http-logger.js'
 import { createWaitStrategy } from '../utils/wait-strategy.js'
+import { z } from 'zod'
 
 const SETTINGS_URL = 'https://www.perplexity.ai/settings'
 const NAVIGATION_TIMEOUT_MS = 15_000
 const CLOUDFLARE_CHALLENGE_PATTERN = /cdn-cgi\/challenge|cf-challenge|cloudflare/i
+
+const PlaywrightStorageStateSchema = z.object({
+  cookies: z.array(
+    z.object({
+      name: z.string(),
+      value: z.string(),
+      domain: z.string(),
+      path: z.string(),
+      expires: z.number(),
+      httpOnly: z.boolean(),
+      secure: z.boolean(),
+      sameSite: z.enum(['None', 'Strict', 'Lax']),
+    })
+  ),
+  origins: z.array(
+    z.object({
+      origin: z.string(),
+      localStorage: z.array(z.object({ name: z.string(), value: z.string() })),
+    })
+  ),
+})
+
+const AuthSessionSchema = z.object({
+  user: z.unknown().optional(),
+  expires: z.unknown().optional(),
+  email: z.unknown().optional(),
+})
 
 export class BrowserManager {
   static readonly BrowserLaunchError = createNamedError('BrowserLaunchError')
@@ -147,9 +175,15 @@ export class BrowserManager {
         return JSON.parse(storageStateJson)
       })
       if (storageResult.ok) {
-        this.activeContext = await this.browserInstance.newContext({
-          storageState: storageResult.value,
-        })
+        const validated = PlaywrightStorageStateSchema.safeParse(storageResult.value)
+        if (validated.success) {
+          this.activeContext = await this.browserInstance.newContext({
+            storageState: validated.data,
+          })
+        } else {
+          logger.warn(`Failed to validate saved auth state, starting fresh: ${validated.error}`)
+          this.activeContext = await this.browserInstance.newContext()
+        }
       } else {
         logger.warn(
           `Failed to load saved auth state, starting fresh: ${errorMessageOf(storageResult.error)}`
@@ -207,10 +241,7 @@ export class BrowserManager {
         { timeout: NAVIGATION_TIMEOUT_MS }
       )
 
-      await this.waitStrategy.forSelector(
-        this.activePage,
-        '[data-testid="settings-page"], #settings, .settings-container, [data-testid="account-settings"]'
-      )
+      await this.waitStrategy.forSelector(this.activePage, '[name="account.profile.username"]')
     })
   }
 
@@ -333,10 +364,13 @@ export class BrowserManager {
     }
 
     try {
-      const parsed = JSON.parse(trimmed) as Record<string, unknown>
-      const hasUser = Boolean(parsed.user)
-      const hasExpires = Boolean(parsed.expires)
-      const hasEmail = Boolean(parsed.email)
+      const parsed = AuthSessionSchema.safeParse(JSON.parse(trimmed))
+      if (!parsed.success) {
+        return false
+      }
+      const hasUser = Boolean(parsed.data.user)
+      const hasExpires = Boolean(parsed.data.expires)
+      const hasEmail = Boolean(parsed.data.email)
       return hasUser || hasExpires || hasEmail
     } catch (e) {
       return false

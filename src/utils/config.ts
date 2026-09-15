@@ -1,9 +1,12 @@
 import { config as loadEnv } from 'dotenv'
 import { existsSync, mkdirSync } from 'node:fs'
 import { join, dirname } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { z } from 'zod'
 import { logger } from './logger.js'
 import { err, ok, type Result } from 'super-result'
+
+const __dirname = dirname(fileURLToPath(import.meta.url))
 
 const configSchema = z.object({
   authStoragePath: z.string().min(1),
@@ -96,8 +99,10 @@ export function createConfig(envOverrides?: EnvOverrides): Result<Config, Error>
     headless = 'new'
   }
 
+  const PROJECT_ROOT = join(__dirname, '..', '..')
+
   const rawConfig = {
-    authStoragePath: env['AUTH_STORAGE_PATH'] ?? join('.storage', 'auth.json'),
+    authStoragePath: env['AUTH_STORAGE_PATH'] ?? join(PROJECT_ROOT, '.storage', 'auth.json'),
     waitMode: env['WAIT_MODE'] ?? 'dynamic',
     rateLimitMs: parseInt(env['RATE_LIMIT_MS'] ?? DEFAULT_RATE_LIMIT_MS, 10),
     parallelWorkers: parseInt(env['PARALLEL_WORKERS'] ?? DEFAULT_PARALLEL_WORKERS, 10),
@@ -109,9 +114,9 @@ export function createConfig(envOverrides?: EnvOverrides): Result<Config, Error>
       env['CHECKPOINT_SAVE_INTERVAL'] ?? DEFAULT_CHECKPOINT_INTERVAL,
       10
     ),
-    exportDir: env['EXPORT_DIR'] ?? 'exports',
-    checkpointPath: env['CHECKPOINT_PATH'] ?? join('.storage', 'checkpoint.json'),
-    vectorIndexPath: env['VECTOR_INDEX_PATH'] ?? join('.storage', 'vector-index'),
+    exportDir: env['EXPORT_DIR'] ?? join(PROJECT_ROOT, 'exports'),
+    checkpointPath: env['CHECKPOINT_PATH'] ?? join(PROJECT_ROOT, '.storage', 'checkpoint.json'),
+    vectorIndexPath: env['VECTOR_INDEX_PATH'] ?? join(PROJECT_ROOT, '.storage', 'vector-index'),
     ollamaUrl: env['OLLAMA_URL'] ?? DEFAULT_OLLAMA_URL,
     ollamaModel: env['OLLAMA_MODEL'] ?? 'llama3.1',
     ollamaEmbedModel: env['OLLAMA_EMBED_MODEL'] ?? 'nomic-embed-text',

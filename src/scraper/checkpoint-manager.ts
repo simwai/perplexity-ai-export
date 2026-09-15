@@ -147,13 +147,11 @@ export class CheckpointManager {
     const readResult = this.resultFactory.from(() => readFileSync(this.checkpointFilePath, 'utf-8'))
     if (!readResult.ok) return readResult
 
-    const parseResult = this.resultFactory.from(() => JSON.parse(readResult.value))
-    if (!parseResult.ok) return parseResult
+    const parsedResult = this.resultFactory.from(() => JSON.parse(readResult.value))
+    if (!parsedResult.ok) return parsedResult
 
-    const validateResult = this.resultFactory.from(() =>
-      CheckpointDataSchema.parse(parseResult.value)
-    )
-    if (!validateResult.ok) {
+    const validateResult = CheckpointDataSchema.safeParse(parsedResult.value)
+    if (!validateResult.success) {
       logger.warn(
         `Corrupt checkpoint file at ${this.checkpointFilePath}, resetting to defaults: ${validateResult.error}`
       )
@@ -164,7 +162,7 @@ export class CheckpointManager {
       })
     }
 
-    return ok(validateResult.value)
+    return ok(validateResult.data)
   }
 
   private saveCheckpoint(): Result<void, Error> {

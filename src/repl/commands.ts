@@ -15,6 +15,7 @@ import { createNamedError } from '../utils/errors.js'
 import { ok, err, from, type Result } from 'super-result'
 import { showHelp } from './help.js'
 import { LibraryDiscovery } from '../scraper/library-discovery.js'
+import { ApiDiagnosticsWriter } from '../utils/api-diagnostics.js'
 import { type Config } from '../utils/config.js'
 
 export class CommandHandler {
@@ -27,11 +28,13 @@ export class CommandHandler {
   private readonly checkpointManager: CheckpointManager
   private readonly searchOrchestrator: SearchOrchestrator
   private readonly ragOrchestrator: RagOrchestrator
+  private readonly diagnosticsWriter: ApiDiagnosticsWriter
 
   constructor(private readonly config: Config) {
     this.checkpointManager = new CheckpointManager(config)
     this.searchOrchestrator = new SearchOrchestrator(config)
     this.ragOrchestrator = new RagOrchestrator(config)
+    this.diagnosticsWriter = new ApiDiagnosticsWriter(config)
   }
 
   private async ensureVectorSearchAvailable(mode: 'auto' | 'vector' | 'rag'): Promise<boolean> {
@@ -168,7 +171,7 @@ export class CommandHandler {
 
   private async runDiscoveryPhase(page: Page): Promise<void> {
     logger.info('\n=== Phase 1: Library Discovery ===\n')
-    const discoveryTool = new LibraryDiscovery()
+    const discoveryTool = new LibraryDiscovery(this.diagnosticsWriter)
     const discoveredResult = await discoveryTool.discoverAllConversationsFromLibrary(page)
     if (!discoveredResult.ok) {
       errorBus.emitError('Failed to discover conversations', discoveredResult.error)

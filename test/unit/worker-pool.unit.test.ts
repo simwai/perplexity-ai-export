@@ -34,7 +34,7 @@ describe('WorkerPool Skip Logic (Unit)', () => {
   let mockConfig: any
 
   beforeEach(() => {
-    mockConfig = { parallelWorkers: 1, authStoragePath: '/tmp/auth.json' }
+    mockConfig = { parallelWorkers: 1, extractionConcurrency: 1, authStoragePath: '/tmp/auth.json' }
     mockCheckpoint = {
       getContentHash: vi.fn(),
       markAsProcessed: vi.fn(),

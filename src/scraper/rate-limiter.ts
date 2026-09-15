@@ -1,27 +1,30 @@
-import { createResult, ok, err, type Result } from 'super-result'
-
 export class RateLimiter {
   private readonly limit: number
   private current: number
-  private readonly pending: Promise<void>[] = []
+  private readonly waiters: (() => void)[] = []
 
   constructor(limit: number) {
     this.limit = limit
     this.current = 0
   }
 
-  async acquire(): Promise<Result<void, Error>> {
-    while (this.current >= this.limit) {
-      const next = Promise.race(this.pending)
-      this.pending.shift()
-      await next
+  async acquire(): Promise<void> {
+    if (this.current < this.limit) {
+      this.current++
+      return
     }
 
+    await new Promise<void>((resolve) => {
+      this.waiters.push(resolve)
+    })
     this.current++
-    return ok(undefined)
   }
 
   release(): void {
     this.current--
+    const next = this.waiters.shift()
+    if (next) {
+      next()
+    }
   }
 }

@@ -4,6 +4,8 @@ import { DEFAULT_API_VERSION } from './api-version.js'
 import { errorMessageOf } from '../utils/extract-error-message.js'
 import { createNamedError } from '../utils/errors.js'
 import { from, ok, err, type Result } from 'super-result'
+import { z } from 'zod'
+import { ApiDiagnosticsWriter } from '../utils/api-diagnostics.js'
 
 // #region Constants
 
@@ -39,28 +41,13 @@ interface RawThread {
   uuid: string
   slug: string
   title: string
-  query_str: string
-  first_answer: string
-  answer_preview: string
   last_query_datetime: string
   mode: string
-  status: string
-  display_model: string
-  thread_access: number
-  has_next_page: boolean
-  total_threads: number
-  collection: Collection | null
-  sources: string[]
-  query_count: number
-  search_focus: string
+  thread_number: number
+  context_uuid?: string
+  frontend_uuid?: string
+  frontend_context_uuid?: string
   [key: string]: unknown
-}
-
-interface Collection {
-  uuid: string
-  title: string
-  emoji: string
-  slug: string
 }
 
 export interface DiscoveredConversationMeta {
@@ -69,18 +56,12 @@ export interface DiscoveredConversationMeta {
   uuid: string
   slug: string
   title: string
-  query_str: string
-  first_answer: string
-  answer_preview: string
   last_query_datetime: string
   mode: string
-  status: string
-  display_model: string
-  thread_access: number
-  collection: Collection | null
-  sources: string[]
-  query_count: number
-  search_focus: string
+  thread_number: number
+  context_uuid?: string
+  frontend_uuid?: string
+  frontend_context_uuid?: string
   [key: string]: unknown
 }
 
@@ -89,6 +70,28 @@ interface ThreadBatchResponse {
   hasMore: boolean
   total: number
 }
+
+const RawThreadSchema = z
+  .object({
+    uuid: z.string(),
+    slug: z.string(),
+    title: z.string(),
+    last_query_datetime: z.string(),
+    mode: z.string(),
+    thread_number: z.number(),
+    context_uuid: z.string().optional(),
+    frontend_uuid: z.string().optional(),
+    frontend_context_uuid: z.string().optional(),
+  })
+  .passthrough()
+
+const ThreadBatchResponseSchema = z
+  .object({
+    threads: z.array(RawThreadSchema),
+    hasMore: z.boolean(),
+    total: z.number().optional(),
+  })
+  .passthrough()
 
 // #endregion Types
 
@@ -212,7 +215,8 @@ async function waitForUserInfoResponse(page: Page, timeout: number): Promise<voi
 async function fetchThreadBatch(
   page: Page,
   version: string,
-  offset: number
+  offset: number,
+  diagnosticsWriter: ApiDiagnosticsWriter
 ): Promise<Result<ThreadBatchResponse, Error>> {
   const url = `${BASE_URL}/rest/thread/list_ask_threads?version=${version}&source=default`
 
@@ -242,30 +246,34 @@ async function fetchThreadBatch(
     )
   }
 
-  const parsed = parseResult.value
-
-  if (!Array.isArray(parsed)) {
+  const validated = ThreadBatchResponseSchema.safeParse(parseResult.value)
+  if (!validated.success) {
+    const zodErrorPaths = validated.error.issues.map((issue) => issue.path.join('.'))
+    diagnosticsWriter.writeFailure({
+      url: `${BASE_URL}/rest/thread/list_ask_threads?version=${version}&source=default`,
+      errorType: 'zod_error',
+      zodErrorPaths,
+    })
     return err(
-      new LibraryDiscovery.ApiError(`list_ask_threads: expected array, got ${typeof parsed}`)
+      new LibraryDiscovery.ApiError(
+        `list_ask_threads: schema validation failed — body: ${raw.body.slice(0, 200)}`
+      )
     )
   }
 
-  // why: Array.isArray(parsed) above guarantees an array; per-element shape validated by downstream zod
-  const threads = parsed as RawThread[]
-  const total = threads[0]?.total_threads ?? 0
+  const threads = validated.data.threads
 
   return ok({
     threads,
-    // Stop only when the API returns a partial page — avoids relying on
-    // total_threads which may be server-capped (observed cap: 100).
     hasMore: threads.length === BATCH_SIZE,
-    total,
+    total: 0,
   })
 }
 
 async function fetchPinnedThreads(
   page: Page,
-  version: string
+  version: string,
+  diagnosticsWriter: ApiDiagnosticsWriter
 ): Promise<Result<RawThread[], Error>> {
   const url = `${BASE_URL}/rest/thread/list_pinned_ask_threads?version=${version}&source=default`
 
@@ -293,28 +301,31 @@ async function fetchPinnedThreads(
     return ok([])
   }
 
-  const parsed = parseResult.value
-
-  if (!Array.isArray(parsed)) {
-    logger.debug(`list_pinned_ask_threads: expected array, got ${typeof parsed} — skipping pinned`)
+  const validated = z.array(RawThreadSchema).safeParse(parseResult.value)
+  if (!validated.success) {
+    const zodErrorPaths = validated.error.issues.map((issue) => issue.path.join('.'))
+    diagnosticsWriter.writeFailure({
+      url: `${BASE_URL}/rest/thread/list_pinned_ask_threads?version=${version}&source=default`,
+      errorType: 'zod_error',
+      zodErrorPaths,
+    })
+    logger.debug(`list_pinned_ask_threads: schema validation failed — skipping pinned`)
     return ok([])
   }
 
-  // why: Array.isArray(parsed) above guarantees an array; per-element shape validated by downstream zod
-  return ok(parsed as RawThread[])
+  return ok(validated.data)
 }
 
 async function fetchFirstBatch(
   page: Page,
-  version: string
+  version: string,
+  diagnosticsWriter: ApiDiagnosticsWriter
 ): Promise<Result<ThreadBatchResponse, Error>> {
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-    const result = await fetchThreadBatch(page, version, 0)
+    const result = await fetchThreadBatch(page, version, 0, diagnosticsWriter)
 
     if (result.ok && result.value.threads.length > 0) {
-      logger.debug(
-        `First batch OK — ${result.value.threads.length} threads (total: ${result.value.total})`
-      )
+      logger.debug(`First batch OK — ${result.value.threads.length} threads`)
       return ok(result.value)
     }
 
@@ -339,6 +350,8 @@ export class LibraryDiscovery {
   static readonly DiscoveryError = createNamedError('DiscoveryError')
   static readonly ApiError = createNamedError('ApiError')
 
+  constructor(private readonly diagnosticsWriter: ApiDiagnosticsWriter) {}
+
   async discoverAllConversationsFromLibrary(
     page: Page
   ): Promise<Result<DiscoveredConversationMeta[], Error>> {
@@ -356,12 +369,12 @@ export class LibraryDiscovery {
     logger.info(`Detected API version: ${version}`)
 
     // Fetch pinned threads first (separate endpoint, no pagination)
-    const pinnedResult = await fetchPinnedThreads(page, version)
+    const pinnedResult = await fetchPinnedThreads(page, version, this.diagnosticsWriter)
     const pinnedThreads = pinnedResult.ok ? pinnedResult.value : []
     logger.debug(`Pinned threads: ${pinnedThreads.length}`)
 
     const allThreads: RawThread[] = []
-    const firstBatchResult = await fetchFirstBatch(page, version)
+    const firstBatchResult = await fetchFirstBatch(page, version, this.diagnosticsWriter)
 
     if (!firstBatchResult.ok) {
       if (pinnedThreads.length > 0) {
@@ -377,8 +390,6 @@ export class LibraryDiscovery {
 
     const firstBatch = firstBatchResult.value
     allThreads.push(...firstBatch.threads)
-
-    logger.debug(`Total threads on server: ${firstBatch.total}`)
 
     const remainingThreadsResult = await this.paginateRemainingBatches(page, version, firstBatch)
     if (!remainingThreadsResult.ok) {
@@ -410,7 +421,7 @@ export class LibraryDiscovery {
       const delay = MIN_DELAY_MS + Math.random() * JITTER_MS
       await page.waitForTimeout(delay)
 
-      const batchResult = await fetchThreadBatch(page, version, offset)
+      const batchResult = await fetchThreadBatch(page, version, offset, this.diagnosticsWriter)
 
       if (!batchResult.ok) {
         return err(batchResult.error)

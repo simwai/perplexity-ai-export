@@ -94,10 +94,9 @@ export class ConversationExtractor {
   }
 
   private async navigateToConversationUrl(page: Page, url: string): Promise<Result<void, Error>> {
-    const NAVIGATION_TIMEOUT_MS = 30000
     const navigationResponse = await page.goto(url, {
       waitUntil: 'domcontentloaded',
-      timeout: NAVIGATION_TIMEOUT_MS,
+      timeout: this.currentTimeoutMs,
     })
     return this.validateNavigationResponse(navigationResponse)
   }

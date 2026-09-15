@@ -74,12 +74,15 @@ export class WorkerPool {
         const item = queue.shift()!
         worker.isBusy = true
 
-        const task = this.runExtraction(worker, item, queue).finally(() => {
+        const task = this.runExtraction(worker, item, queue)
+        activeTasks.push(task)
+
+        try {
+          await task
+        } finally {
           worker.isBusy = false
           activeTasks.splice(activeTasks.indexOf(task), 1)
-        })
-
-        activeTasks.push(task)
+        }
       } else {
         await new Promise((resolve) => setTimeout(resolve, POLLING_INTERVAL_MS))
       }
@@ -109,12 +112,18 @@ export class WorkerPool {
     item: QueueItem,
     queue: QueueItem[]
   ): Promise<void> {
-    const extractResult = await worker.extractor.extract(item.meta.url, item.meta.id)
-    if (!extractResult.ok) {
-      await this.handleFailure(worker, item, queue, extractResult.error)
-      return
+    await this.rateLimiter.acquire()
+
+    try {
+      const extractResult = await worker.extractor.extract(item.meta.url, item.meta.id)
+      if (!extractResult.ok) {
+        await this.handleFailure(worker, item, queue, extractResult.error)
+        return
+      }
+      await this.handleSuccess(worker, item.meta, extractResult)
+    } finally {
+      this.rateLimiter.release()
     }
-    await this.handleSuccess(worker, item.meta, extractResult)
   }
 
   private async handleSuccess(
@@ -221,6 +230,7 @@ export class WorkerPool {
     if (item.attempts < MAX_RETRIES) {
       item.attempts++
       logger.warn(`Retrying ${item.meta.url} (attempt ${item.attempts}/${MAX_RETRIES})...`)
+      await new Promise((resolve) => setTimeout(resolve, 500 * item.attempts))
       queue.push(item)
       return
     }
