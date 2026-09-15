@@ -188,12 +188,15 @@ export class BrowserManager {
     this.activePage = await this.activeContext.newPage()
 
     return this.resultFactory.from(async () => {
+      console.log('[navigateToSettingsPage] About to goto settings URL')
       await this.activePage!.goto(SETTINGS_URL, {
         waitUntil: 'networkidle',
         timeout: NAVIGATION_TIMEOUT_MS,
       })
+      console.log('[navigateToSettingsPage] goto completed, current URL:', this.activePage!.url())
       // Wait for SPA hash routing to settle (Perplexity redirects to #settings/account)
       try {
+        console.log('[navigateToSettingsPage] Waiting for hash routing...')
         await this.activePage!.waitForFunction(
           () => {
             const url = new URL(window.location.href)
@@ -202,18 +205,24 @@ export class BrowserManager {
           undefined,
           { timeout: NAVIGATION_TIMEOUT_MS }
         )
+        console.log('[navigateToSettingsPage] Hash routing settled, URL:', this.activePage!.url())
       } catch {
         logger.debug('Hash routing not yet settled; proceeding to verify')
+        console.log('[navigateToSettingsPage] Hash routing timeout, continuing...')
       }
       // Confirm the settings page has loaded by waiting for a known DOM element
       try {
+        console.log('[navigateToSettingsPage] Waiting for DOM selector...')
         await this.waitStrategy.forSelector(
           this.activePage!,
           '[data-testid="settings-page"], #settings, .settings-container, [data-testid="account-settings"]'
         )
+        console.log('[navigateToSettingsPage] DOM selector found')
       } catch {
         logger.debug('Settings page DOM selector not found; continuing')
+        console.log('[navigateToSettingsPage] DOM selector timeout, continuing...')
       }
+      console.log('[navigateToSettingsPage] navigateToSettingsPage completed')
     })
   }
 
@@ -312,9 +321,11 @@ export class BrowserManager {
   }
 
   private async verifyLoginStatus(page: Page): Promise<boolean> {
+    console.log('[verifyLoginStatus] Starting verification...')
     await page.waitForTimeout(1000).catch(() => {})
     await page.waitForLoadState('domcontentloaded').catch(() => {})
 
+    console.log('[verifyLoginStatus] Calling /api/auth/session...')
     const result = await page.evaluate(async () => {
       try {
         const res = await fetch('/api/auth/session', {
@@ -323,22 +334,30 @@ export class BrowserManager {
         })
         const text = await res.text()
         return { body: text }
-      } catch {
+      } catch (e) {
+        console.log('[verifyLoginStatus] fetch error:', e instanceof Error ? e.message : String(e))
         return { body: '' }
       }
     })
 
-    logger.debug(
-      `verifyLoginStatus: body length=${result.body.length}, preview=${result.body.slice(0, 200)}`
-    )
+    console.log('[verifyLoginStatus] Response received, length:', result.body.length)
+    console.log('[verifyLoginStatus] Preview:', result.body.slice(0, 200))
 
     const trimmed = result.body.trim()
-    if (!trimmed) return false
+    if (!trimmed) {
+      console.log('[verifyLoginStatus] Empty response, returning false')
+      return false
+    }
 
     try {
       const parsed = JSON.parse(trimmed) as Record<string, unknown>
-      return Boolean(parsed.user || parsed.expires || parsed.email)
-    } catch {
+      const hasUser = Boolean(parsed.user)
+      const hasExpires = Boolean(parsed.expires)
+      const hasEmail = Boolean(parsed.email)
+      console.log('[verifyLoginStatus] Parsed: hasUser:', hasUser, 'hasExpires:', hasExpires, 'hasEmail:', hasEmail)
+      return hasUser || hasExpires || hasEmail
+    } catch (e) {
+      console.log('[verifyLoginStatus] JSON parse error:', e instanceof Error ? e.message : String(e))
       return false
     }
   }
