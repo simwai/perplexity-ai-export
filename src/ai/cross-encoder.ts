@@ -34,9 +34,7 @@ class CrossEncoder {
     }
 
     CrossEncoder.loading = true
-    const result = await from<CrossEncoderInstance | null>(
-      async () => await CrossEncoder.loadCrossEncoderInstance()
-    )
+    const result = await CrossEncoder.loadCrossEncoderInstance()
     CrossEncoder.loading = false
 
     if (!result.ok) {
@@ -45,10 +43,17 @@ class CrossEncoder {
     return result
   }
 
-  private static async loadCrossEncoderInstance(): Promise<CrossEncoderInstance | null> {
-    const transformers = await import('@huggingface/transformers').catch(() => null)
+  private static async loadCrossEncoderInstance(): Promise<
+    Result<CrossEncoderInstance | null, Error>
+  > {
+    const importResult = await from(import('@huggingface/transformers'))
+    if (!importResult.ok) {
+      logger.warn(`Failed to load transformers: ${errorMessageOf(importResult.error)}`)
+      return ok(null)
+    }
+    const transformers = importResult.value
     if (!transformers) {
-      return null
+      return ok(null)
     }
 
     const { AutoTokenizer, AutoModelForSequenceClassification } = transformers
@@ -60,7 +65,7 @@ class CrossEncoder {
     )
 
     CrossEncoder.instance = { tokenizer, model }
-    return CrossEncoder.instance
+    return ok(CrossEncoder.instance)
   }
 
   static resetForTesting(): void {

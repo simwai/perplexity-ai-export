@@ -348,8 +348,7 @@ export class LibraryDiscovery {
     const versionResult = await detectApiVersion(page)
     const version = versionResult.ok ? versionResult.value : DEFAULT_API_VERSION
 
-    // Navigate to library
-    await page.goto(LIBRARY_URL, { waitUntil: 'domcontentloaded' })
+    await this.navigateToLibrary(page)
 
     // Wait for page to be fully ready (userinfo fired + hydration buffer)
     await waitForLibraryReady(page)
@@ -361,7 +360,6 @@ export class LibraryDiscovery {
     const pinnedThreads = pinnedResult.ok ? pinnedResult.value : []
     logger.debug(`Pinned threads: ${pinnedThreads.length}`)
 
-    // First batch with retry logic
     const allThreads: RawThread[] = []
     const firstBatchResult = await fetchFirstBatch(page, version)
 
@@ -382,9 +380,30 @@ export class LibraryDiscovery {
 
     logger.debug(`Total threads on server: ${firstBatch.total}`)
 
-    // Paginate remaining batches
+    const remainingThreadsResult = await this.paginateRemainingBatches(page, version, firstBatch)
+    if (!remainingThreadsResult.ok) {
+      return err(remainingThreadsResult.error)
+    }
+    allThreads.push(...remainingThreadsResult.value)
+
+    const conversations = this.mergeAndDeduplicateThreads(pinnedThreads, allThreads)
+    logger.success(`Discovered ${conversations.length} threads`)
+    return ok(conversations)
+  }
+
+  private async navigateToLibrary(page: Page): Promise<void> {
+    await page.goto(LIBRARY_URL, { waitUntil: 'domcontentloaded' })
+  }
+
+  private async paginateRemainingBatches(
+    page: Page,
+    version: string,
+    firstBatch: ThreadBatchResponse
+  ): Promise<Result<RawThread[], Error>> {
+    const remaining: RawThread[] = []
     let offset = firstBatch.threads.length
     let hasMore = firstBatch.hasMore
+    let totalFetched = firstBatch.threads.length
 
     while (hasMore) {
       // Randomized delay to avoid Cloudflare triggers (from PR #12)
@@ -398,14 +417,21 @@ export class LibraryDiscovery {
       }
 
       const batch = batchResult.value
-      allThreads.push(...batch.threads)
+      remaining.push(...batch.threads)
+      totalFetched += batch.threads.length
       offset += batch.threads.length
       hasMore = batch.hasMore
 
-      logger.debug(`Fetched ${allThreads.length} threads`)
+      logger.debug(`Fetched ${totalFetched} threads`)
     }
 
-    // Merge pinned + regular, deduplicate by uuid
+    return ok(remaining)
+  }
+
+  private mergeAndDeduplicateThreads(
+    pinnedThreads: RawThread[],
+    allThreads: RawThread[]
+  ): DiscoveredConversationMeta[] {
     const seen = new Set<string>()
     const merged: RawThread[] = []
 
@@ -416,9 +442,7 @@ export class LibraryDiscovery {
       }
     }
 
-    const conversations = merged.map(rawThreadToConversationMeta)
-    logger.success(`Discovered ${conversations.length} threads`)
-    return ok(conversations)
+    return merged.map(rawThreadToConversationMeta)
   }
 }
 

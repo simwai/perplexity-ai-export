@@ -9,15 +9,16 @@ import { logger } from '../utils/logger.js'
 import { errorMessageOf } from '../utils/extract-error-message.js'
 import { createResult, ok, err, type Result } from 'super-result'
 
-async function readStrategyDefaultExport(filePath: string): Promise<ExportStrategy> {
+async function readStrategyDefaultExport(
+  filePath: string
+): Promise<Result<ExportStrategy, ExportError>> {
   const moduleUrl = pathToFileURL(filePath).href
   const strategyModule = await import(moduleUrl)
-  // why: dynamic import of strategy module; default export must match ExportStrategy interface
   const strategyModuleDefault = strategyModule.default
   if (!strategyModuleDefault || typeof strategyModuleDefault !== 'object') {
-    throw new ExportError(`Strategy module missing default export: ${filePath}`)
+    return err(new ExportError(`Strategy module missing default export: ${filePath}`))
   }
-  return strategyModuleDefault as ExportStrategy
+  return ok(strategyModuleDefault as ExportStrategy)
 }
 
 export class ExportError extends Error {
@@ -75,9 +76,7 @@ export class ExportOrchestrator {
   }
 
   private async loadExportStrategy(filePath: string): Promise<ExportStrategy | undefined> {
-    const importResult = await this.resultFactory.from(
-      async () => await readStrategyDefaultExport(filePath)
-    )
+    const importResult = await readStrategyDefaultExport(filePath)
 
     if (!importResult.ok) {
       logger.error(

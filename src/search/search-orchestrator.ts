@@ -4,7 +4,7 @@ import { logger } from '../utils/logger.js'
 import { type Config } from '../utils/config.js'
 import { RagOrchestrator } from '../ai/rag-orchestrator.js'
 import { errorMessageOf } from '../utils/extract-error-message.js'
-import { ok, err, createResult, type Result } from 'super-result'
+import { ok, err, type Result } from 'super-result'
 
 export type SearchMode = 'rg' | 'vector' | 'auto' | 'rag'
 
@@ -26,10 +26,6 @@ export class SearchOrchestrator {
   private readonly rgSearch: RipgrepSearch
   private readonly vectorStore: VectorStore
   private readonly ragOrchestrator: RagOrchestrator
-
-  private readonly resultFactory = createResult<SearchOrchestratorError>((error: unknown) =>
-    error instanceof SearchOrchestratorError ? error : new SearchOrchestratorError(String(error))
-  )
 
   constructor(private readonly config: Config) {
     this.rgSearch = new RipgrepSearch(config)
@@ -61,38 +57,36 @@ export class SearchOrchestrator {
     mode: SearchMode,
     rgOptions: RipgrepSearchOptions
   ): Promise<Result<void, SearchOrchestratorError>> {
-    return this.resultFactory.from(async () => {
-      switch (mode) {
-        case 'rg':
-          await this.rgSearch.search(rgOptions)
-          break
-        case 'vector':
-          {
-            const result = await this.performVectorOnlySearch(query)
-            if (!result.ok) throw result.error
-          }
-          break
-        case 'rag':
-          await this.ragOrchestrator.answerQuestion(query)
-          break
-        case 'auto':
-        default:
-          await this.executeAutoSearch(query, rgOptions)
-          break
-      }
-    })
+    switch (mode) {
+      case 'rg':
+        await this.rgSearch.search(rgOptions)
+        return ok(undefined)
+      case 'vector':
+        return this.performVectorOnlySearch(query)
+      case 'rag':
+        await this.ragOrchestrator.answerQuestion(query)
+        return ok(undefined)
+      case 'auto':
+      default:
+        return this.executeAutoSearch(query, rgOptions)
+    }
   }
 
-  private async executeAutoSearch(query: string, rgOptions: RipgrepSearchOptions): Promise<void> {
+  private async executeAutoSearch(
+    query: string,
+    rgOptions: RipgrepSearchOptions
+  ): Promise<Result<void, SearchOrchestratorError>> {
     const LONG_QUERY_WORD_COUNT_THRESHOLD = 5
     const queryWordCount = query.trim().split(/\s+/).length
     const isLongQuery = queryWordCount > LONG_QUERY_WORD_COUNT_THRESHOLD
 
     if (isLongQuery) {
-      await this.performVectorOnlySearch(query)
-    } else {
-      await this.rgSearch.search(rgOptions)
+      return this.performVectorOnlySearch(query)
     }
+    const searchResult = await this.rgSearch.search(rgOptions)
+    return searchResult.ok
+      ? searchResult
+      : err(new SearchOrchestratorError(errorMessageOf(searchResult.error)))
   }
 
   private async performVectorOnlySearch(

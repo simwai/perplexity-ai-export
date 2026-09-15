@@ -74,7 +74,7 @@ export class VectorStore {
     const batchResult = await this.processMarkdownFilesByBatches(markdownFilePaths)
     if (!batchResult.ok) return batchResult
 
-    logger.success('Vector index rebuild complete.')
+    logger.info('Vector index rebuild complete.')
     return ok(undefined)
   }
 
@@ -143,9 +143,7 @@ export class VectorStore {
   ): Promise<Result<void, VectorStoreError>> {
     await this.vectorIndex.beginUpdate()
 
-    const batchResult = await this.resultFactory.from(async () =>
-      this.buildEmbeddingBatch(filePaths)
-    )
+    const batchResult = await this.buildEmbeddingBatch(filePaths)
 
     const endUpdateResult = await this.resultFactory.from(() => this.vectorIndex.endUpdate())
     if (!endUpdateResult.ok) {
@@ -159,7 +157,7 @@ export class VectorStore {
     return batchResult
   }
 
-  private async buildEmbeddingBatch(filePaths: string[]): Promise<void> {
+  private async buildEmbeddingBatch(filePaths: string[]): Promise<Result<void, VectorStoreError>> {
     const EMBEDDING_BATCH_SIZE = 10
     let pendingTextsToEmbed: string[] = []
     let pendingMetadataToInsert: VectorDocMeta[] = []
@@ -207,10 +205,14 @@ export class VectorStore {
     }
 
     if (batchFailures.length > 0) {
-      throw new VectorStoreError(
-        `Index build failed: ${batchFailures.length} batch(es) dropped - ${batchFailures.join('; ')}`
+      return err(
+        new VectorStoreError(
+          `Index build failed: ${batchFailures.length} batch(es) dropped - ${batchFailures.join('; ')}`
+        )
       )
     }
+
+    return ok(undefined)
   }
 
   private extractContentAndMetadata(filePath: string): {

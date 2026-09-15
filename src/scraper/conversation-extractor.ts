@@ -75,12 +75,15 @@ export class ConversationExtractor {
       return err(new ConversationExtractor.ExtractionError('Failed to create new page'))
     }
 
-    await this.navigateToConversationUrl(conversationPage, conversationUrl)
+    const navigationResult = await this.navigateToConversationUrl(conversationPage, conversationUrl)
+    if (!navigationResult.ok) return err(navigationResult.error)
     await createWaitStrategy(this.config).afterScroll(conversationPage)
 
-    await conversationPage.close().catch((closeError) => {
+    try {
+      await conversationPage.close()
+    } catch (closeError) {
       logger.warn(`Failed to close page: ${errorMessageOf(closeError)}`)
-    })
+    }
 
     return err(new ConversationExtractor.NoDataError('Conversation extraction not yet implemented'))
   }
@@ -90,14 +93,13 @@ export class ConversationExtractor {
     return pagesResult.ok ? ok(undefined) : err(pagesResult.error)
   }
 
-  private async navigateToConversationUrl(page: Page, url: string): Promise<void> {
+  private async navigateToConversationUrl(page: Page, url: string): Promise<Result<void, Error>> {
     const NAVIGATION_TIMEOUT_MS = 30000
     const navigationResponse = await page.goto(url, {
       waitUntil: 'domcontentloaded',
       timeout: NAVIGATION_TIMEOUT_MS,
     })
-    const validationResult = this.validateNavigationResponse(navigationResponse)
-    if (!validationResult.ok) throw validationResult.error
+    return this.validateNavigationResponse(navigationResponse)
   }
 
   private validateNavigationResponse(response: Response | null): Result<void, Error> {

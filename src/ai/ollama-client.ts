@@ -148,7 +148,7 @@ export class OllamaClient {
     const embedResult = await this.embed(['ping'])
     if (!embedResult.ok) return embedResult
 
-    logger.success('Ollama embeddings look good.')
+    logger.info('Ollama embeddings look good.')
     return ok(undefined)
   }
 
@@ -167,7 +167,8 @@ export class OllamaClient {
       })
 
       if (!httpResponse.ok) {
-        const rawErrorBody = await httpResponse.text().catch(() => '')
+        const rawErrorBodyResult = await from(httpResponse.text())
+        const rawErrorBody = rawErrorBodyResult.ok ? rawErrorBodyResult.value : ''
 
         errorBus.emitError(`Ollama HTTP ${httpResponse.status}`, undefined, {
           body: requestBody,

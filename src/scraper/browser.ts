@@ -42,7 +42,7 @@ export class BrowserManager {
       if (!launchResult.ok) return err(launchResult.error)
       const contextResult = await this.newContextWithSavedState()
       if (!contextResult.ok) return err(contextResult.error)
-      const navResult = await this.navigateToSettingsPage()
+      const navResult = await this.waitForSettingsPageLoaded()
       if (!navResult.ok) return err(navResult.error)
 
       const pageResult = this.getActivePage()
@@ -64,7 +64,7 @@ export class BrowserManager {
     if (!launchResult2.ok) return err(launchResult2.error)
     const contextResult2 = await this.newFreshContext()
     if (!contextResult2.ok) return err(contextResult2.error)
-    const navResult2 = await this.navigateToSettingsPage()
+    const navResult2 = await this.waitForSettingsPageLoaded()
     if (!navResult2.ok) return err(navResult2.error)
     const authResult = await this.ensureUserIsAuthenticated()
     if (!authResult.ok) return err(authResult.error)
@@ -77,7 +77,7 @@ export class BrowserManager {
       if (!launchResult3.ok) return err(launchResult3.error)
       const contextResult3 = await this.newContextWithSavedState()
       if (!contextResult3.ok) return err(contextResult3.error)
-      const navResult3 = await this.navigateToSettingsPage()
+      const navResult3 = await this.waitForSettingsPageLoaded()
       if (!navResult3.ok) return err(navResult3.error)
     }
 
@@ -180,7 +180,7 @@ export class BrowserManager {
     return ok(undefined)
   }
 
-  private async navigateToSettingsPage(): Promise<Result<void, Error>> {
+  private async waitForSettingsPageLoaded(): Promise<Result<void, Error>> {
     if (!this.activeContext) {
       return err(new BrowserManager.NavigationError('No browser context available'))
     }
@@ -190,7 +190,7 @@ export class BrowserManager {
     return this.resultFactory.from(async () => {
       if (!this.activePage) {
         throw new BrowserManager.NavigationError(
-          '[navigateToSettingsPage] Failed to create new active page'
+          '[waitForSettingsPageLoaded] Failed to create new active page'
         )
       }
       await this.activePage.goto(SETTINGS_URL, {
@@ -198,7 +198,6 @@ export class BrowserManager {
         waitUntil: 'domcontentloaded',
       })
 
-      // Wait for SPA hash routing to settle (Perplexity redirects to #settings/account)
       await this.activePage.waitForFunction(
         () => {
           const url = new URL(window.location.href)
@@ -208,7 +207,6 @@ export class BrowserManager {
         { timeout: NAVIGATION_TIMEOUT_MS }
       )
 
-      // Confirm the settings page has loaded by waiting for a known DOM element
       await this.waitStrategy.forSelector(
         this.activePage,
         '[data-testid="settings-page"], #settings, .settings-container, [data-testid="account-settings"]'
@@ -246,18 +244,7 @@ export class BrowserManager {
         )
       }
 
-      // Wait for hash routing to settle
-      const hashResult = await this.resultFactory.from(async () => {
-        if (!this.activePage) throw new BrowserManager.AuthError('Page not initialized')
-        return await this.activePage.waitForFunction(
-          () => {
-            const url = new URL(window.location.href)
-            return url.hash.startsWith('#settings') || url.pathname !== '/settings'
-          },
-          undefined,
-          { timeout: NAVIGATION_TIMEOUT_MS }
-        )
-      })
+      const hashResult = await this.waitForHashRoutingToSettle(this.activePage)
       if (!hashResult.ok) {
         logger.debug('Hash routing not yet settled; proceeding to verify')
       }
@@ -307,6 +294,20 @@ export class BrowserManager {
         })
     )
     return result.ok ? result.value : false
+  }
+
+  private async waitForHashRoutingToSettle(page: Page): Promise<Result<void, Error>> {
+    return this.resultFactory.from(async () => {
+      if (!page) throw new BrowserManager.AuthError('Page not initialized')
+      await page.waitForFunction(
+        () => {
+          const url = new URL(window.location.href)
+          return url.hash.startsWith('#settings') || url.pathname !== '/settings'
+        },
+        undefined,
+        { timeout: NAVIGATION_TIMEOUT_MS }
+      )
+    })
   }
 
   private async verifyLoginStatus(page: Page): Promise<boolean> {

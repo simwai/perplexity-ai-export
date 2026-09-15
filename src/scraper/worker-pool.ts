@@ -10,6 +10,7 @@ import { writeFileSync, existsSync, mkdirSync, statSync } from 'node:fs'
 import { sanitizeFilename, sanitizeSpaceName } from '../export/sanitizer.js'
 import { createResult, ok, err, type Result } from 'super-result'
 import { errorMessageOf } from '../utils/extract-error-message.js'
+import { RateLimiter } from './rate-limiter.js'
 
 const MAX_RETRIES = 2
 const POLLING_INTERVAL_MS = 100
@@ -29,6 +30,7 @@ export class WorkerPool {
   private readonly workers: ExtractionWorker[] = []
   private sharedBrowserContext: BrowserContext | null = null
   private isRefreshing = false
+  private readonly rateLimiter: RateLimiter
 
   private readonly resultFactory = createResult<Error>((error: unknown) =>
     error instanceof Error ? error : new Error(String(error))
@@ -38,7 +40,9 @@ export class WorkerPool {
     private readonly config: Config,
     private readonly checkpointManager: CheckpointManager,
     private readonly browser: Browser
-  ) {}
+  ) {
+    this.rateLimiter = new RateLimiter(this.config.extractionConcurrency)
+  }
 
   async initialize(): Promise<Result<void, Error>> {
     return this.resultFactory.from(async () => await this.createWorkers())
@@ -95,6 +99,8 @@ export class WorkerPool {
       await this.sharedBrowserContext?.close()
     } catch (closeError) {
       logger.debug('close: sharedBrowserContext.close failed', errorMessageOf(closeError))
+    } finally {
+      this.sharedBrowserContext = null
     }
   }
 
@@ -216,13 +222,14 @@ export class WorkerPool {
       item.attempts++
       logger.warn(`Retrying ${item.meta.url} (attempt ${item.attempts}/${MAX_RETRIES})...`)
       queue.push(item)
-    } else {
-      errorBus.emitError(`Failed to process ${item.meta.url} after ${MAX_RETRIES} retries`, error, {
-        url: item.meta.url,
-        attempts: item.attempts,
-        conversationId: item.meta.id,
-      })
+      return
     }
+
+    errorBus.emitError(`Failed to process ${item.meta.url} after ${MAX_RETRIES} retries`, error, {
+      url: item.meta.url,
+      attempts: item.attempts,
+      conversationId: item.meta.id,
+    })
   }
 
   private async refreshContext(): Promise<void> {
@@ -241,6 +248,8 @@ export class WorkerPool {
       await this.sharedBrowserContext?.close()
     } catch (closeError) {
       logger.debug('refreshContext: sharedBrowserContext.close failed', errorMessageOf(closeError))
+    } finally {
+      // New context assignment is intentional after this block; nothing to cleanup here
     }
     this.sharedBrowserContext = await this.browser.newContext({
       storageState: this.config.authStoragePath,

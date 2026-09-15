@@ -50,16 +50,6 @@ export class CommandHandler {
     return false
   }
 
-  async handleStartLibraryExport(): Promise<void> {
-    const result = await this.executeFullScrapingFlow()
-    if (!result.ok) {
-      errorBus.emitError('Scraper failed', result.error)
-      logger.info(
-        '\nNote: Check "debug/api-diagnostics.jsonl" for details if the failure is related to API response changes.'
-      )
-    }
-  }
-
   async handleScraperWizard(): Promise<void> {
     const progress = this.checkpointManager.getProcessingProgress()
     const hasExistingProgress = progress.total > 0
@@ -73,7 +63,7 @@ export class CommandHandler {
 
   async handleSearchWizard(): Promise<void> {
     const query = await this.promptForSearchQuery()
-    let mode = (await this.promptForSearchMode()) as 'auto' | 'vector' | 'rg' | 'rag'
+    const mode = await this.promptForSearchMode()
 
     const ripgrepOptions = {
       pattern: query,
@@ -136,7 +126,7 @@ export class CommandHandler {
     }
 
     this.wipeStorageDirectory()
-    logger.success('✅ Storage folder deleted. All progress has been reset.')
+    logger.info('✅ Storage folder deleted. All progress has been reset.')
   }
 
   handleShowHelp(): void {
@@ -161,14 +151,14 @@ export class CommandHandler {
     const hasPendingConversations = pendingConversations.length > 0
 
     if (!hasPendingConversations) {
-      logger.success('All conversations already processed!')
+      logger.info('All conversations already processed!')
       await browserManager.close()
       return ok(undefined)
     }
 
     await this.runExtractionPhase(browserManager, pendingConversations)
 
-    logger.success('\n✨ Export complete!')
+    logger.info('\n✨ Export complete!')
     logger.info(
       '\nNote: If some conversations were missed or the format looks wrong, please check "debug/api-diagnostics.jsonl" and consider opening a GitHub issue with that file attached.'
     )
@@ -253,7 +243,7 @@ export class CommandHandler {
     })
   }
 
-  private async promptForSearchMode(): Promise<string> {
+  private async promptForSearchMode(): Promise<'auto' | 'vector' | 'rg' | 'rag'> {
     return select({
       message: 'Search mode:',
       choices: [

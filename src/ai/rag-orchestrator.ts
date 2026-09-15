@@ -474,9 +474,7 @@ Return JSON array: [{"fact": "...", "node_id": N}]
       }
       const match = response.value.match(/\[[\s\S]*\]/)
       if (!match) {
-        const parseErrorResult = await this.resultFactory.from(() => {
-          throw new OrchestratorError('No JSON array found in response')
-        })
+        const parseErrorResult = err(new OrchestratorError('No JSON array found in response'))
         if (!parseErrorResult.ok) {
           logger.warn(
             `Fact extraction batch ${batchNumber}/${totalBatches} failed for question "${question}": ${errorMessageOf(parseErrorResult.error)}`
@@ -493,9 +491,7 @@ Return JSON array: [{"fact": "...", "node_id": N}]
       }
       const jsonText = (match as RegExpMatchArray)[0]
       if (!jsonText) {
-        const parseErrorResult = await this.resultFactory.from(() => {
-          throw new OrchestratorError('No JSON array found in response')
-        })
+        const parseErrorResult = err(new OrchestratorError('No JSON array found in response'))
         if (!parseErrorResult.ok) {
           logger.warn(
             `Fact extraction batch ${batchNumber}/${totalBatches} failed for question "${question}": ${errorMessageOf(parseErrorResult.error)}`
@@ -525,11 +521,9 @@ Return JSON array: [{"fact": "...", "node_id": N}]
         continue
       }
       const parsedJson = parseResult.value
-      const arrayCheckResult = await this.resultFactory.from(() => {
-        if (!Array.isArray(parsedJson)) {
-          throw new OrchestratorError('Response is not a JSON array')
-        }
-      })
+      const arrayCheckResult = !Array.isArray(parsedJson)
+        ? err(new OrchestratorError('Response is not a JSON array'))
+        : ok(undefined)
       if (!arrayCheckResult.ok) {
         logger.warn(
           `Fact extraction batch ${batchNumber}/${totalBatches} failed for question "${question}": ${errorMessageOf(arrayCheckResult.error)}`

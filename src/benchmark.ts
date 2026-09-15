@@ -1,7 +1,7 @@
 import { performance } from 'node:perf_hooks'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
-import { config } from './utils/config.js'
+import { createConfig, initializeConfigDirs } from './utils/config.js'
 import { errorBus } from './utils/error-bus.js'
 import { logger } from './utils/logger.js'
 import { VectorStore } from './search/vector-store.js'
@@ -17,7 +17,14 @@ const BENCHMARK_QUERIES = [
 ]
 
 async function runBenchmark(): Promise<Result<void, Error>> {
-  const indexJsonPath = join(config.vectorIndexPath, 'index.json')
+  const configResult = createConfig()
+  if (!configResult.ok) {
+    return err(new Error('Configuration is invalid'))
+  }
+  initializeConfigDirs(configResult.value)
+  const cfg = configResult.value
+
+  const indexJsonPath = join(cfg.vectorIndexPath, 'index.json')
   const isIndexPresent = existsSync(indexJsonPath)
   if (!isIndexPresent) {
     return err(new Error('No vector index found. Build the index first via the main menu.'))
@@ -25,10 +32,10 @@ async function runBenchmark(): Promise<Result<void, Error>> {
 
   logger.info(`Starting benchmark with ${BENCHMARK_QUERIES.length} queries...`)
 
-  const benchmarkVectorStore = new VectorStore(config)
+  const benchmarkVectorStore = new VectorStore(cfg)
   await benchmarkVectorStore.validate()
 
-  const ragOrchestrator = new RagOrchestrator(config)
+  const ragOrchestrator = new RagOrchestrator(cfg)
   const benchmarkResults: { query: string; durationMs: number; isFailure: boolean }[] = []
 
   for (const [queryIndex, currentQuery] of BENCHMARK_QUERIES.entries()) {
@@ -49,7 +56,7 @@ async function runBenchmark(): Promise<Result<void, Error>> {
     if (isFailure) {
       logger.warn(`Query failed after ${durationMs}ms`)
     } else {
-      logger.success(`Done in ${durationMs}ms`)
+      logger.info(`Done in ${durationMs}ms`)
     }
   }
 
@@ -85,5 +92,4 @@ async function runBenchmark(): Promise<Result<void, Error>> {
 const result = await from(async () => runBenchmark())
 if (!result.ok) {
   errorBus.emitError('Benchmark execution failed', result.error)
-  throw result.error
 }

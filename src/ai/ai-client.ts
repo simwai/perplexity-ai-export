@@ -256,11 +256,8 @@ export class AiClient {
         let rawErrorBody = ''
         try {
           rawErrorBody = await httpResponse.text()
-        } catch (_ignored) {
-          // Fallback to empty string if body reading fails
-        }
+        } catch (_ignored) {}
 
-        // Sanitize context before emitting to errorBus
         const safeContext = {
           url: fullRequestUrl,
           // Do not include raw requestBody or errorBody in context; errorBus.redactSensitiveData handles it

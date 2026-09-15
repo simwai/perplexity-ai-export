@@ -1,6 +1,6 @@
 import { errorBus } from './utils/error-bus.js'
 import { Repl } from './repl/index.js'
-import { config } from './utils/config.js'
+import { createConfig, initializeConfigDirs } from './utils/config.js'
 import { from } from 'super-result'
 
 /**
@@ -17,7 +17,12 @@ async function bootstrapApplication(): Promise<void> {
 }
 
 async function runInteractiveRepl(): Promise<void> {
-  const interactiveRepl = new Repl(config)
+  const configResult = createConfig()
+  if (!configResult.ok) {
+    throw configResult.error
+  }
+  initializeConfigDirs(configResult.value)
+  const interactiveRepl = new Repl(configResult.value)
   await interactiveRepl.start()
 }
 

@@ -191,10 +191,13 @@ export class RipgrepSearch {
   }
 }
 
-function ensureExportDirExists(exportDir: string): void {
+function ensureExportDirExists(exportDir: string): Result<void, Error> {
   if (!existsSync(exportDir)) {
-    throw new RipgrepSearch.RipgrepSearchError(
-      'No exports directory found. Please run the "start" command first to export your history.'
+    return err(
+      new RipgrepSearch.RipgrepSearchError(
+        'No exports directory found. Please run the "start" command first to export your history.'
+      )
     )
   }
+  return ok(undefined)
 }

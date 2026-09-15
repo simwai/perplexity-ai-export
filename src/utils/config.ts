@@ -3,14 +3,14 @@ import { existsSync, mkdirSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { z } from 'zod'
 import { logger } from './logger.js'
-
-loadEnv()
+import { err, ok, type Result } from 'super-result'
 
 const configSchema = z.object({
   authStoragePath: z.string().min(1),
   waitMode: z.enum(['dynamic', 'static']),
   rateLimitMs: z.number().int().positive(),
   parallelWorkers: z.number().int().min(1).max(20),
+  extractionConcurrency: z.number().int().min(1).max(20),
   checkpointSaveInterval: z.number().int().positive(),
   exportDir: z.string().min(1),
   checkpointPath: z.string().min(1),
@@ -45,13 +45,50 @@ const configSchema = z.object({
 export type Config = z.infer<typeof configSchema>
 export type WaitMode = Config['waitMode']
 
-function parseEnvConfig(): Config {
+export interface EnvOverrides {
+  HEADLESS?: string
+  WAIT_MODE?: string
+  RATE_LIMIT_MS?: string
+  PARALLEL_WORKERS?: string
+  EXTRACTION_CONCURRENCY?: string
+  CHECKPOINT_SAVE_INTERVAL?: string
+  EXPORT_DIR?: string
+  CHECKPOINT_PATH?: string
+  VECTOR_INDEX_PATH?: string
+  OLLAMA_URL?: string
+  OLLAMA_MODEL?: string
+  OLLAMA_EMBED_MODEL?: string
+  AI_PROVIDER?: string
+  AI_EMBED_PROVIDER?: string
+  AI_BASE_URL?: string
+  AI_API_KEY?: string
+  AI_MODEL?: string
+  AI_EMBED_MODEL?: string
+  ENABLE_VECTOR_SEARCH?: string
+  DEBUG?: string
+  HYDE_MODE?: string
+  HYDE_THRESHOLD_SCORE?: string
+  HYDE_THRESHOLD_COUNT?: string
+  EXPORT_STRATEGIES?: string
+  AUTH_STORAGE_PATH?: string
+}
+
+/**
+ * Creates a validated Config from environment variables.
+ * Pass `envOverrides` to inject test values instead of reading process.env.
+ */
+export function createConfig(envOverrides?: EnvOverrides): Result<Config, Error> {
+  loadEnv()
+
+  const env = envOverrides ?? process.env
+
   const DEFAULT_OLLAMA_URL = 'http://localhost:11434'
   const DEFAULT_RATE_LIMIT_MS = '500'
   const DEFAULT_PARALLEL_WORKERS = '5'
+  const DEFAULT_EXTRACTION_CONCURRENCY = '2'
   const DEFAULT_CHECKPOINT_INTERVAL = '10'
 
-  const rawHeadlessValue = process.env['HEADLESS'] ?? 'false'
+  const rawHeadlessValue = env['HEADLESS'] ?? 'false'
   let headless: boolean | 'new' = false
   if (rawHeadlessValue === 'true') {
     headless = true
@@ -60,33 +97,37 @@ function parseEnvConfig(): Config {
   }
 
   const rawConfig = {
-    authStoragePath: process.env['AUTH_STORAGE_PATH'] ?? join('.storage', 'auth.json'),
-    waitMode: process.env['WAIT_MODE'] ?? 'dynamic',
-    rateLimitMs: parseInt(process.env['RATE_LIMIT_MS'] ?? DEFAULT_RATE_LIMIT_MS, 10),
-    parallelWorkers: parseInt(process.env['PARALLEL_WORKERS'] ?? DEFAULT_PARALLEL_WORKERS, 10),
-    checkpointSaveInterval: parseInt(
-      process.env['CHECKPOINT_SAVE_INTERVAL'] ?? DEFAULT_CHECKPOINT_INTERVAL,
+    authStoragePath: env['AUTH_STORAGE_PATH'] ?? join('.storage', 'auth.json'),
+    waitMode: env['WAIT_MODE'] ?? 'dynamic',
+    rateLimitMs: parseInt(env['RATE_LIMIT_MS'] ?? DEFAULT_RATE_LIMIT_MS, 10),
+    parallelWorkers: parseInt(env['PARALLEL_WORKERS'] ?? DEFAULT_PARALLEL_WORKERS, 10),
+    extractionConcurrency: parseInt(
+      env['EXTRACTION_CONCURRENCY'] ?? DEFAULT_EXTRACTION_CONCURRENCY,
       10
     ),
-    exportDir: process.env['EXPORT_DIR'] ?? 'exports',
-    checkpointPath: process.env['CHECKPOINT_PATH'] ?? join('.storage', 'checkpoint.json'),
-    vectorIndexPath: process.env['VECTOR_INDEX_PATH'] ?? join('.storage', 'vector-index'),
-    ollamaUrl: process.env['OLLAMA_URL'] ?? DEFAULT_OLLAMA_URL,
-    ollamaModel: process.env['OLLAMA_MODEL'] ?? 'llama3.1',
-    ollamaEmbedModel: process.env['OLLAMA_EMBED_MODEL'] ?? 'nomic-embed-text',
-    aiProvider: process.env['AI_PROVIDER'] ?? 'ollama',
-    aiEmbedProvider: process.env['AI_EMBED_PROVIDER'] ?? process.env['AI_PROVIDER'] ?? 'ollama',
-    aiBaseUrl: process.env['AI_BASE_URL'],
-    aiApiKey: process.env['AI_API_KEY'],
-    aiModel: process.env['AI_MODEL'] ?? 'llama3.1',
-    aiEmbedModel: process.env['AI_EMBED_MODEL'] ?? 'nomic-embed-text',
-    enableVectorSearch: process.env['ENABLE_VECTOR_SEARCH'],
+    checkpointSaveInterval: parseInt(
+      env['CHECKPOINT_SAVE_INTERVAL'] ?? DEFAULT_CHECKPOINT_INTERVAL,
+      10
+    ),
+    exportDir: env['EXPORT_DIR'] ?? 'exports',
+    checkpointPath: env['CHECKPOINT_PATH'] ?? join('.storage', 'checkpoint.json'),
+    vectorIndexPath: env['VECTOR_INDEX_PATH'] ?? join('.storage', 'vector-index'),
+    ollamaUrl: env['OLLAMA_URL'] ?? DEFAULT_OLLAMA_URL,
+    ollamaModel: env['OLLAMA_MODEL'] ?? 'llama3.1',
+    ollamaEmbedModel: env['OLLAMA_EMBED_MODEL'] ?? 'nomic-embed-text',
+    aiProvider: env['AI_PROVIDER'] ?? 'ollama',
+    aiEmbedProvider: env['AI_EMBED_PROVIDER'] ?? env['AI_PROVIDER'] ?? 'ollama',
+    aiBaseUrl: env['AI_BASE_URL'],
+    aiApiKey: env['AI_API_KEY'],
+    aiModel: env['AI_MODEL'] ?? 'llama3.1',
+    aiEmbedModel: env['AI_EMBED_MODEL'] ?? 'nomic-embed-text',
+    enableVectorSearch: env['ENABLE_VECTOR_SEARCH'],
     headless: headless,
-    debug: process.env['DEBUG'] === 'true',
-    hydeMode: process.env['HYDE_MODE'],
-    hydeThresholdScore: parseFloat(process.env['HYDE_THRESHOLD_SCORE'] || '0.7'),
-    hydeThresholdCount: parseInt(process.env['HYDE_THRESHOLD_COUNT'] || '5', 10),
-    exportStrategies: process.env['EXPORT_STRATEGIES'],
+    debug: env['DEBUG'] === 'true',
+    hydeMode: env['HYDE_MODE'],
+    hydeThresholdScore: parseFloat(env['HYDE_THRESHOLD_SCORE'] || '0.7'),
+    hydeThresholdCount: parseInt(env['HYDE_THRESHOLD_COUNT'] || '5', 10),
+    exportStrategies: env['EXPORT_STRATEGIES'],
   }
 
   const result = configSchema.safeParse(rawConfig)
@@ -103,10 +144,10 @@ function parseEnvConfig(): Config {
       logger.error(`  ${envVarName}: ${issue.message}`)
     }
     logger.error('\nPlease check your .env file and fix the above errors.')
-    throw validationError
+    return err(validationError)
   }
 
-  return result.data
+  return ok(result.data)
 }
 
 function camelToSnakeCase(camelStr: string): string {
@@ -120,12 +161,39 @@ function ensureDirectoryExistsForFile(filePath: string): void {
   }
 }
 
-export const config: Config = parseEnvConfig()
+/**
+ * Initializes directories for the given config.
+ * Call this after createConfig().ok to ensure storage dirs exist.
+ */
+export function initializeConfigDirs(cfg: Config): void {
+  ensureDirectoryExistsForFile(cfg.authStoragePath)
+  ensureDirectoryExistsForFile(cfg.checkpointPath)
+  ensureDirectoryExistsForFile(cfg.vectorIndexPath)
+  if (!existsSync(cfg.exportDir)) {
+    mkdirSync(cfg.exportDir, { recursive: true })
+  }
+}
 
-ensureDirectoryExistsForFile(config.authStoragePath)
-ensureDirectoryExistsForFile(config.checkpointPath)
-ensureDirectoryExistsForFile(config.vectorIndexPath)
+/**
+ * Lazy config getter for backward compatibility.
+ * Reads process.env on first call and caches the result.
+ * Prefer createConfig() with explicit env for new code / tests.
+ */
+let _cachedConfig: Result<Config, Error> | null = null
 
-if (!existsSync(config.exportDir)) {
-  mkdirSync(config.exportDir, { recursive: true })
+export function getConfig(): Result<Config, Error> {
+  if (!_cachedConfig) {
+    _cachedConfig = createConfig()
+    if (_cachedConfig.ok) {
+      initializeConfigDirs(_cachedConfig.value)
+    }
+  }
+  return _cachedConfig
+}
+
+/**
+ * Reset cached config (for testing).
+ */
+export function resetConfig(): void {
+  _cachedConfig = null
 }

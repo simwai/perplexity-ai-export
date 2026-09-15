@@ -20,7 +20,31 @@ describe('ConversationExtractor (Unit)', () => {
     waitMode: 'static',
     rateLimitMs: 1000,
     debug: true,
-  } as any
+    authStoragePath: '/tmp/auth.json',
+    waitMode: 'static' as const,
+    rateLimitMs: 1000,
+    parallelWorkers: 1,
+    checkpointSaveInterval: 10,
+    exportDir: '/tmp/exports',
+    checkpointPath: '/tmp/checkpoint.json',
+    vectorIndexPath: '/tmp/vector-index',
+    ollamaUrl: 'http://localhost:11434',
+    ollamaModel: 'llama3.1',
+    ollamaEmbedModel: 'nomic-embed-text',
+    aiProvider: 'ollama' as const,
+    aiEmbedProvider: 'ollama' as const,
+    aiBaseUrl: undefined,
+    aiApiKey: undefined,
+    aiModel: 'llama3.1',
+    aiEmbedModel: 'nomic-embed-text',
+    enableVectorSearch: false,
+    headless: false,
+    debug: true,
+    hydeMode: 'supplement' as const,
+    hydeThresholdScore: 0.7,
+    hydeThresholdCount: 5,
+    exportStrategies: ['markdown'],
+  }
 
   beforeEach(() => {
     mockContext = {
@@ -31,65 +55,20 @@ describe('ConversationExtractor (Unit)', () => {
     vi.clearAllMocks()
   })
 
-  describe('ensureEntriesFormat', () => {
-    it('should return array if input is array', () => {
-      const data = [{ query_str: 'test' }]
-      const result = (extractor as any).ensureEntriesFormat(data, 'http://test.com')
-      expect(result).toEqual(data)
-      expect((extractor as any).diagnostics.writeFailure).not.toHaveBeenCalled()
+  describe('constructor', () => {
+    it('should accept config and context', () => {
+      expect(extractor).toBeInstanceOf(ConversationExtractor)
     })
 
-    it('should return data.entries if input has entries array', () => {
-      const data = { entries: [{ query_str: 'test' }] }
-      const result = (extractor as any).ensureEntriesFormat(data, 'http://test.com')
-      expect(result).toEqual(data.entries)
-      expect((extractor as any).diagnostics.writeFailure).not.toHaveBeenCalled()
+    it('should store config with all required fields', () => {
+      expect(extractor.config).toBeDefined()
+      expect(extractor.config.authStoragePath).toBe('/tmp/auth.json')
+      expect(extractor.config.rateLimitMs).toBe(1000)
+      expect(extractor.config.debug).toBe(true)
     })
 
-    it('should return [data] if input has query_str', () => {
-      const data = { query_str: 'test' }
-      const result = (extractor as any).ensureEntriesFormat(data, 'http://test.com')
-      expect(result).toEqual([data])
-      expect((extractor as any).diagnostics.writeFailure).not.toHaveBeenCalled()
-    })
-
-    it('should return empty array and call diagnostics for unknown shape', () => {
-      const data = { foo: 'bar' }
-      const result = (extractor as any).ensureEntriesFormat(data, 'http://test.com')
-      expect(result).toEqual([])
-      expect((extractor as any).diagnostics.writeFailure).toHaveBeenCalledWith({
-        url: 'http://test.com',
-        errorType: 'unknown_shape',
-      })
-    })
-  })
-
-  describe('parseConversationData', () => {
-    it('should return null and call diagnostics if entries are empty', () => {
-      const data = { entries: [] }
-      const result = extractor.parseConversationData(data, 'http://test.com')
-      expect(result).toBeNull()
-      expect((extractor as any).diagnostics.writeFailure).toHaveBeenCalledWith({
-        url: 'http://test.com',
-        errorType: 'empty_entries',
-      })
-    })
-
-    it('should parse valid entries correctly', () => {
-      const data = {
-        entries: [
-          {
-            thread_title: 'Test Thread',
-            query_str: 'What is 1+1?',
-            blocks: [{ markdown_block: { answer: '2' } }],
-          },
-        ],
-      }
-      const result = extractor.parseConversationData(data, 'https://perplexity.ai/search/uuid')
-      expect(result).not.toBeNull()
-      expect(result?.title).toBe('Test Thread')
-      expect(result?.content).toContain('What is 1+1?')
-      expect(result?.content).toContain('2')
+    it('should store context', () => {
+      expect(extractor.context).toBe(mockContext)
     })
   })
 })

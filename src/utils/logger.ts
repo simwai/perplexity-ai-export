@@ -1,7 +1,7 @@
 import { createColorino } from 'colorino'
 import { join } from 'node:path'
 
-const IS_DEBUG_MODE = process.env['DEBUG'] === 'true' || process.env['DEBUG'] === '"true"'
+const IS_DEBUG_MODE = !!process.env['DEBUG']
 const LOGS_DIRECTORY = 'logs'
 const LOG_FILE_TIMESTAMP = new Date().toISOString().replace(/[:.]/g, '-')
 const MAIN_LOG_FILENAME = `main-log-${LOG_FILE_TIMESTAMP}.txt`
@@ -72,7 +72,7 @@ export const logger = {
   },
 
   debug(...args: unknown[]): void {
-    const isVerboseDebug = process.env['DEBUG'] === 'true'
+    const isVerboseDebug = !!process.env['DEBUG']
     if (!isVerboseDebug) return
     logWithRedaction('debug', '›', args)
   },
