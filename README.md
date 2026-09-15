@@ -24,7 +24,6 @@
   * [Key Environment Variables](#key-environment-variables)
 - [Usage Guide](#usage-guide)
   * [Operational Directives](#operational-directives)
-  * [Knowledge Map](#knowledge-map)
 - [RAG Capabilities](#rag-capabilities)
 - [Architecture & Deep Dive](#architecture--deep-dive)
   * [Project Structure](#project-structure)
@@ -149,23 +148,6 @@ pnpm run dev
 - **Chat with history**: Engage in a continuous, multi-turn dialogue with your knowledge base. The assistant maintains context and cites sources from your history.
 - **Build vector index**: Processes Markdown exports into a local vector store.
 - **Reset all data**: Purges checkpoints, authentication data, and the vector index.
-
-### Knowledge Map
-
-Visualize exports as an interactive topic graph (Cytoscape):
-
-```powershell
-# Build the graph from exports/
-pnpm run build:graph
-
-# Serve the map with the regenerate API on http://localhost:9876
-pnpm run serve:map
-```
-
-The map offers Graph and Mindmap views. Mindmap depth (1-5) is adjustable
-in the sidebar and persisted per browser. Topic parents derive from the
-`exports/` directory nesting; wrong parents can be remapped in
-`taxonomy-overrides.yaml` (`child: parent` entries under `parents:`).
 
 ## RAG Capabilities
 

@@ -54,8 +54,8 @@ importers:
         specifier: ^1.6.3
         version: 1.6.4
       super-result:
-        specifier: ^1.4.0
-        version: 1.4.0
+        specifier: ^1.4.3
+        version: 1.4.3
       vectra:
         specifier: ^0.12.3
         version: 0.12.3(ws@8.21.3)(zod@4.4.3)
@@ -5085,8 +5085,8 @@ packages:
   suffix-thumb@5.0.2:
     resolution: {integrity: sha512-I5PWXAFKx3FYnI9a+dQMWNqTxoRt6vdBdb0O+BJ1sxXCWtSoQCusc13E58f+9p4MYx/qCnEMkD5jac6K2j3dgA==}
 
-  super-result@1.4.0:
-    resolution: {integrity: sha512-4MhyGCaPzARsHSyL/i+nmjdCUWZR/AHxa6XZNoEDof29xHWmpe9WgWV7TD1Jn33GkItLJGdhZZIbSKC08Dli0w==}
+  super-result@1.4.3:
+    resolution: {integrity: sha512-YniGPPAe0FUyUaPUKAZs/WBJIhZRKpQkuJZAI6BG7vxTJQaFijEYUBjisqWZZlwN/MBExouX8JIF1b327BVsGw==}
     engines: {node: '>=20'}
 
   supports-color@10.2.2:
@@ -10747,9 +10747,7 @@ snapshots:
 
   suffix-thumb@5.0.2: {}
 
-  super-result@1.4.0:
-    dependencies:
-      super-result: 'link:'
+  super-result@1.4.3: {}
 
   supports-color@10.2.2: {}
 
