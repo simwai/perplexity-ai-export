@@ -9,6 +9,7 @@ import { ok, err, createResult, type Result } from 'super-result'
 import { logHttpRequest, logHttpResponse } from '../utils/http-logger.js'
 import { createWaitStrategy } from '../utils/wait-strategy.js'
 import { z } from 'zod'
+import { ApiDiagnosticsWriter } from '../utils/api-diagnostics.js'
 
 const SETTINGS_URL = 'https://www.perplexity.ai/settings'
 const NAVIGATION_TIMEOUT_MS = 15_000
@@ -51,13 +52,17 @@ export class BrowserManager {
     error instanceof Error ? error : new Error(String(error))
   )
 
+  private readonly config: Config
   private browserInstance: Browser | null = null
   private activeContext: BrowserContext | null = null
   private activePage: Page | null = null
   private readonly waitStrategy: ReturnType<typeof createWaitStrategy>
+  private readonly diagnosticsWriter: ApiDiagnosticsWriter
 
-  constructor(private readonly config: Config) {
+  constructor(config: Config) {
+    this.config = config
     this.waitStrategy = createWaitStrategy(config)
+    this.diagnosticsWriter = new ApiDiagnosticsWriter(config)
   }
 
   async launch(): Promise<Result<Page, Error>> {
@@ -181,6 +186,12 @@ export class BrowserManager {
             storageState: validated.data,
           })
         } else {
+          const paths = validated.error.issues.map((issue) => issue.path.join('.'))
+          this.diagnosticsWriter.writeFailure({
+            url: this.config.authStoragePath,
+            errorType: 'zod_error',
+            zodErrorPaths: paths,
+          })
           logger.warn(`Failed to validate saved auth state, starting fresh: ${validated.error}`)
           this.activeContext = await this.browserInstance.newContext()
         }
@@ -366,6 +377,12 @@ export class BrowserManager {
     try {
       const parsed = AuthSessionSchema.safeParse(JSON.parse(trimmed))
       if (!parsed.success) {
+        const paths = parsed.error.issues.map((issue) => issue.path.join('.'))
+        this.diagnosticsWriter.writeFailure({
+          url: '/api/auth/session',
+          errorType: 'zod_error',
+          zodErrorPaths: paths,
+        })
         return false
       }
       const hasUser = Boolean(parsed.data.user)

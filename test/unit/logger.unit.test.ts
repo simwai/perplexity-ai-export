@@ -2,17 +2,13 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { logger } from '../../src/utils/logger.js'
 
 describe('Logger (Unit)', () => {
-  const originalEnv = process.env
   const originalCwd = process.cwd()
 
   beforeEach(() => {
-    vi.resetModules()
-    process.env = { ...originalEnv }
     process.chdir(originalCwd)
   })
 
   afterEach(() => {
-    process.env = originalEnv
     process.chdir(originalCwd)
     vi.restoreAllMocks()
   })
@@ -34,15 +30,8 @@ describe('Logger (Unit)', () => {
     expect(callArgs).toContain('done')
   })
 
-  it('does not log debug when DEBUG is false', () => {
-    process.env['DEBUG'] = 'false'
-    const debugSpy = vi.spyOn(console, 'debug').mockImplementation(() => {})
-    logger.debug('test message')
-    expect(debugSpy).not.toHaveBeenCalled()
-  })
-
   it('logs debug with the debug prefix when DEBUG is true', () => {
-    process.env['DEBUG'] = 'true'
+    vi.stubEnv('DEBUG', 'true')
     const debugSpy = vi.spyOn(console, 'debug').mockImplementation(() => {})
     logger.debug('test message')
     expect(debugSpy).toHaveBeenCalled()

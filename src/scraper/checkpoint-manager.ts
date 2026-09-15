@@ -3,6 +3,7 @@ import { type Config } from '../utils/config.js'
 import { createResult, ok, type Result } from 'super-result'
 import { logger } from '../utils/logger.js'
 import { z } from 'zod'
+import { ApiDiagnosticsWriter } from '../utils/api-diagnostics.js'
 
 export interface ConversationMeta {
   id: string
@@ -31,6 +32,7 @@ type CheckpointData = z.infer<typeof CheckpointDataSchema>
 
 export class CheckpointManager {
   private readonly checkpointFilePath: string
+  private readonly diagnosticsWriter: ApiDiagnosticsWriter
   private currentState: CheckpointData
 
   private readonly resultFactory = createResult<Error>((error: unknown) =>
@@ -39,6 +41,7 @@ export class CheckpointManager {
 
   constructor(config: Config) {
     this.checkpointFilePath = config.checkpointPath
+    this.diagnosticsWriter = new ApiDiagnosticsWriter(config)
     const loadResult = this.loadCheckpoint()
     this.currentState = loadResult.ok
       ? loadResult.value
@@ -152,6 +155,12 @@ export class CheckpointManager {
 
     const validateResult = CheckpointDataSchema.safeParse(parsedResult.value)
     if (!validateResult.success) {
+      const paths = validateResult.error.issues.map((issue) => issue.path.join('.'))
+      this.diagnosticsWriter.writeFailure({
+        url: this.checkpointFilePath,
+        errorType: 'zod_error',
+        zodErrorPaths: paths,
+      })
       logger.warn(
         `Corrupt checkpoint file at ${this.checkpointFilePath}, resetting to defaults: ${validateResult.error}`
       )

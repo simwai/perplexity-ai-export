@@ -8,6 +8,7 @@ import { z } from 'zod'
 import { errorMessageOf } from '../utils/extract-error-message.js'
 import { getCrossEncoder } from './cross-encoder.js'
 import { createResult, ok, err, from, type Result } from 'super-result'
+import { ApiDiagnosticsWriter, zodErrorPaths } from '../utils/api-diagnostics.js'
 
 const VECTOR_SEARCH_LIMIT = 40
 const ANALYSIS_BATCH_SIZE = 10
@@ -32,21 +33,6 @@ const verificationResultSchema = z.object({
   status: z.enum(['ok', 'missed-info']),
   suggestion: z.string().optional(),
 })
-
-function parseJsonWithSchema<T>(response: string, schema: z.ZodType<T>, defaultValue: T): T {
-  const match = response.match(/(\{[\s\S]*\}|\[[\s\S]*\])/)
-  if (!match?.[0]) return defaultValue
-  const parseResult = from(() => JSON.parse(match[0]!))
-  if (!parseResult.ok) {
-    logger.debug(`JSON parse failed`)
-    return defaultValue
-  }
-  const result = schema.safeParse(parseResult.value)
-  if (!result.success) {
-    logger.debug(`Schema validation failed: ${result.error.message}`)
-  }
-  return result.success ? result.data : defaultValue
-}
 
 interface ResearchPlan {
   originalQuestion: string
@@ -75,18 +61,50 @@ export class OrchestratorError extends Error {
 export class RagOrchestrator {
   static readonly OrchestratorError = OrchestratorError
 
+  private readonly config: Config
   private readonly aiClient: AiClient
   private readonly vectorStore: VectorStore
   private readonly ripgrep: RipgrepSearch
+  private readonly diagnosticsWriter: ApiDiagnosticsWriter
 
   private readonly resultFactory = createResult<OrchestratorError>((error: unknown) =>
     error instanceof OrchestratorError ? error : new OrchestratorError(String(error))
   )
 
-  constructor(private readonly config: Config) {
+  constructor(config: Config) {
+    this.config = config
     this.aiClient = new AiClient(config)
     this.vectorStore = new VectorStore(config)
     this.ripgrep = new RipgrepSearch(config)
+    this.diagnosticsWriter = new ApiDiagnosticsWriter(config)
+  }
+
+  private parseJsonWithSchema<T>(
+    response: string,
+    schema: z.ZodType<T>,
+    defaultValue: T,
+    context: string
+  ): T {
+    const match = response.match(/(\{[\s\S]*\}|\[[\s\S]*\])/)
+    if (!match?.[0]) return defaultValue
+    const parseResult = from(() => JSON.parse(match[0]!))
+    if (!parseResult.ok) {
+      logger.debug(`JSON parse failed`)
+      return defaultValue
+    }
+    const result = schema.safeParse(parseResult.value)
+    if (!result.success) {
+      logger.debug(`Schema validation failed: ${result.error.message}`)
+      const paths = zodErrorPaths(result)
+      this.diagnosticsWriter
+        .writeFailure({
+          url: `rag://${context}`,
+          errorType: 'zod_error',
+          zodErrorPaths: paths,
+        })
+        .catch(() => {})
+    }
+    return result.success ? result.data : defaultValue
   }
 
   async answerQuestion(question: string): Promise<Result<void, OrchestratorError>> {
@@ -237,7 +255,12 @@ Return JSON: ${jsonTemplate}
       }
     }
 
-    const planJson = parseJsonWithSchema(generateResult.value, researchPlanJsonSchema, {})
+    const planJson = this.parseJsonWithSchema(
+      generateResult.value,
+      researchPlanJsonSchema,
+      {},
+      'research-plan'
+    )
 
     return {
       originalQuestion,
@@ -542,6 +565,14 @@ Return JSON array: [{"fact": "...", "node_id": N}]
         const validated = extractedFactSchema.safeParse(factEntry)
         if (!validated.success) {
           logger.debug(`Skipping invalid fact entry: ${validated.error.message}`)
+          const paths = zodErrorPaths(validated)
+          this.diagnosticsWriter
+            .writeFailure({
+              url: 'rag://extract-facts',
+              errorType: 'zod_error',
+              zodErrorPaths: paths,
+            })
+            .catch(() => {})
           continue
         }
         const f = validated.data
@@ -680,10 +711,11 @@ Did I miss anything important?
 Return JSON: {"status": "ok" | "missed-info", "suggestion": "..."}
 `
     const verifyResponse = await this.aiClient.generate(verificationPrompt)
-    return parseJsonWithSchema(
+    return this.parseJsonWithSchema(
       verifyResponse.ok ? verifyResponse.value : '',
       verificationResultSchema,
-      { status: 'ok' }
+      { status: 'ok' },
+      'verification'
     )
   }
 }

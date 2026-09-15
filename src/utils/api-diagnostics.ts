@@ -1,3 +1,4 @@
+import { type ZodError } from 'zod'
 import fs from 'node:fs/promises'
 import { join } from 'node:path'
 import { logger } from './logger.js'
@@ -12,14 +13,17 @@ export interface ApiDiagnosticEntry {
   zodErrorPaths?: string[]
 }
 
-export class ApiDiagnosticsWriter {
-  private readonly DEBUG_DIRECTORY = 'debug'
-  private readonly DIAGNOSTICS_FILENAME = 'api-diagnostics.jsonl'
+type DiagnosticsInput = Config | { readonly debug: boolean }
 
-  constructor(private readonly config: Config) {}
+export class ApiDiagnosticsWriter {
+  private readonly debug: boolean
+
+  constructor(input: DiagnosticsInput) {
+    this.debug = input.debug
+  }
 
   async writeFailure(entry: Omit<ApiDiagnosticEntry, 'timestamp'>): Promise<void> {
-    if (!this.config.debug) return
+    if (!this.debug) return
 
     const result = await from(async () => await this.appendDiagnosticEntry(entry))
 
@@ -34,10 +38,29 @@ export class ApiDiagnosticsWriter {
       ...entry,
     }
 
-    await fs.mkdir(this.DEBUG_DIRECTORY, { recursive: true })
-    const diagnosticLogPath = join(this.DEBUG_DIRECTORY, this.DIAGNOSTICS_FILENAME)
+    const diagnosticLogPath = join('debug', 'api-diagnostics.jsonl')
+    await fs.mkdir('debug', { recursive: true })
 
     const entryAsJsonLine = JSON.stringify(diagnosticEntry) + '\n'
     await fs.appendFile(diagnosticLogPath, entryAsJsonLine, 'utf8')
   }
+}
+
+export function zodErrorPaths(result: unknown): string[] | undefined {
+  if (result instanceof Error && 'issues' in result) {
+    return (result as ZodError).issues.map((issue) => issue.path.join('.'))
+  }
+
+  if (
+    typeof result === 'object' &&
+    result !== null &&
+    'success' in result &&
+    'error' in result &&
+    !(result as { success: boolean }).success
+  ) {
+    const error = (result as { error: ZodError }).error
+    return error.issues.map((issue) => issue.path.join('.'))
+  }
+
+  return undefined
 }

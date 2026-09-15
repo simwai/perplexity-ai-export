@@ -7,6 +7,7 @@ import { rgPath } from '@vscode/ripgrep'
 import { createNamedError } from '../utils/errors.js'
 import { z } from 'zod'
 import { createResult, ok, err, type Result } from 'super-result'
+import { ApiDiagnosticsWriter } from '../utils/api-diagnostics.js'
 
 // why: ripgrep emits this exact substring on stderr when the binary is missing or unreadable
 const RIPGREP_ENOENT_MESSAGE = 'No such file or directory'
@@ -40,8 +41,13 @@ export class RipgrepSearch {
   private readonly resultFactory = createResult<Error>((error: unknown) =>
     error instanceof Error ? error : new Error(String(error))
   )
+  private readonly config: Config
+  private readonly diagnosticsWriter: ApiDiagnosticsWriter
 
-  constructor(private readonly config: Config) {}
+  constructor(config: Config) {
+    this.config = config
+    this.diagnosticsWriter = new ApiDiagnosticsWriter(config)
+  }
 
   async search(options: RipgrepSearchOptions): Promise<Result<void, Error>> {
     const validationResult = this.validateSearchOptions(options)
@@ -108,6 +114,14 @@ export class RipgrepSearch {
               text: parsed.data.data.lines.text,
             })
           } else {
+            const paths = parsed.success
+              ? undefined
+              : parsed.error.issues.map((issue) => issue.path.join('.'))
+            this.diagnosticsWriter.writeFailure({
+              url: 'rg://search-line',
+              errorType: 'zod_error',
+              zodErrorPaths: paths,
+            })
             logger.debug(`Failed to parse ripgrep JSON line`)
           }
         })

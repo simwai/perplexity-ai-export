@@ -246,9 +246,9 @@ async function fetchThreadBatch(
     )
   }
 
-  const validated = ThreadBatchResponseSchema.safeParse(parseResult.value)
-  if (!validated.success) {
-    const zodErrorPaths = validated.error.issues.map((issue) => issue.path.join('.'))
+  const arrayValidated = z.array(RawThreadSchema).safeParse(parseResult.value)
+  if (!arrayValidated.success) {
+    const zodErrorPaths = arrayValidated.error.issues.map((issue) => issue.path.join('.'))
     diagnosticsWriter.writeFailure({
       url: `${BASE_URL}/rest/thread/list_ask_threads?version=${version}&source=default`,
       errorType: 'zod_error',
@@ -261,7 +261,7 @@ async function fetchThreadBatch(
     )
   }
 
-  const threads = validated.data.threads
+  const threads = arrayValidated.data
 
   return ok({
     threads,

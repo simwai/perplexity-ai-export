@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import type { Request, Response } from '@playwright/test'
 import { from } from 'super-result'
 import { z } from 'zod'
+import { ApiDiagnosticsWriter } from './api-diagnostics.js'
 
 const SENSITIVE_KEY_PATTERN =
   /token|secret|authorization|cookie|password|api[_-]?key|access[_-]?token|bearer/i
@@ -44,7 +45,7 @@ function isPlainObject(value: unknown): boolean {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
-function isPromptRequest(url: string, postData: string | null): boolean {
+function isPromptRequest(url: string, postData: string | null, debug = false): boolean {
   const isPerplexityAiApi = url.includes('/backend-api/chat') || url.includes('/api/v1/chat')
   if (isPerplexityAiApi) return true
 
@@ -60,6 +61,16 @@ function isPromptRequest(url: string, postData: string | null): boolean {
         if (hasPromptFields) {
           return true
         }
+      } else {
+        const writer = new ApiDiagnosticsWriter({ debug })
+        const paths = validated.error.issues.map((issue) => issue.path.join('.'))
+        writer
+          .writeFailure({
+            url,
+            errorType: 'zod_error',
+            zodErrorPaths: paths,
+          })
+          .catch(() => {})
       }
     }
 
@@ -104,7 +115,9 @@ export async function logHttpRequest(request: Request, debug: boolean): Promise<
     : {}
   const rawPostData = request.postData()
 
-  const requestBody = isPromptRequest(requestUrl, rawPostData) ? '[PROMPT REDACTED]' : rawPostData
+  const requestBody = isPromptRequest(requestUrl, rawPostData, debug)
+    ? '[PROMPT REDACTED]'
+    : rawPostData
 
   const logTimestamp = new Date().toISOString()
   const logEntry = [
@@ -132,7 +145,7 @@ export async function logHttpResponse(response: Response, debug: boolean): Promi
 
   const contentType = sanitizedResponseHeaders['content-type'] ?? ''
   const isJsonContent = contentType.includes('application/json')
-  const isPrompt = isPromptRequest(responseUrl, originalRequest.postData())
+  const isPrompt = isPromptRequest(responseUrl, originalRequest.postData(), debug)
 
   if (isJsonContent && !isPrompt) {
     const jsonResult = await from(async () => await response.json())

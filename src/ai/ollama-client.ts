@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { type Config } from '../utils/config.js'
 import { logger } from '../utils/logger.js'
 import { createResult, ok, err, from, type Result } from 'super-result'
+import { ApiDiagnosticsWriter, zodErrorPaths } from '../utils/api-diagnostics.js'
 
 const OLLAMA_REQUEST_TIMEOUT_MS = 120_000
 
@@ -47,11 +48,16 @@ export class OllamaError extends Error {
 }
 
 export class OllamaClient {
+  private readonly config: Config
   private readonly resultFactory = createResult<OllamaError>((error: unknown) =>
     error instanceof OllamaError ? error : new OllamaError(String(error))
   )
+  private readonly diagnosticsWriter: ApiDiagnosticsWriter
 
-  constructor(private readonly config: Config) {}
+  constructor(config: Config) {
+    this.config = config
+    this.diagnosticsWriter = new ApiDiagnosticsWriter(config)
+  }
 
   async embed(inputTexts: string[]): Promise<Result<number[][], OllamaError>> {
     if (inputTexts.length === 0) return ok([])
@@ -80,7 +86,15 @@ export class OllamaClient {
     const parseResult = this.resultFactory.from(() =>
       generationResponseSchema.parse(httpResult.value)
     )
-    if (!parseResult.ok) return parseResult
+    if (!parseResult.ok) {
+      const paths = zodErrorPaths(parseResult.error)
+      this.diagnosticsWriter.writeFailure({
+        url: `${this.config.ollamaUrl}/api/generate`,
+        errorType: 'zod_error',
+        zodErrorPaths: paths,
+      })
+      return parseResult
+    }
 
     return ok(parseResult.value.response || '')
   }
@@ -101,7 +115,15 @@ export class OllamaClient {
     const parseResult = this.resultFactory.from(() =>
       generationResponseSchema.parse(httpResult.value)
     )
-    if (!parseResult.ok) return parseResult
+    if (!parseResult.ok) {
+      const paths = zodErrorPaths(parseResult.error)
+      this.diagnosticsWriter.writeFailure({
+        url: `${this.config.ollamaUrl}/api/generate`,
+        errorType: 'zod_error',
+        zodErrorPaths: paths,
+      })
+      return parseResult
+    }
 
     const data = parseResult.value
     return ok({
@@ -130,7 +152,15 @@ export class OllamaClient {
     const parseResult = this.resultFactory.from(() =>
       generationResponseSchema.parse(httpResult.value)
     )
-    if (!parseResult.ok) return parseResult
+    if (!parseResult.ok) {
+      const paths = zodErrorPaths(parseResult.error)
+      this.diagnosticsWriter.writeFailure({
+        url: `${this.config.ollamaUrl}/api/chat`,
+        errorType: 'zod_error',
+        zodErrorPaths: paths,
+      })
+      return parseResult
+    }
 
     const data = parseResult.value
     return ok({
@@ -197,6 +227,13 @@ export class OllamaClient {
     if (legacyParseResult.success) {
       return ok([legacyParseResult.data.embedding])
     }
+
+    const paths = zodErrorPaths(openAiParseResult)
+    this.diagnosticsWriter.writeFailure({
+      url: `${this.config.ollamaUrl}/v1/embeddings`,
+      errorType: 'zod_error',
+      zodErrorPaths: paths,
+    })
 
     return err(new OllamaError('Unexpected response format from Ollama embeddings endpoint'))
   }
