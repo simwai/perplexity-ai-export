@@ -5,9 +5,9 @@ import { logger } from '../utils/logger.js'
 import { ok, err, from, type Result } from 'super-result'
 import { ApiDiagnosticsWriter, zodErrorPaths } from '../utils/api-diagnostics.js'
 
-const embeddingItemSchema = z.object({ embedding: z.array(z.number()) })
-const openAiEmbedFormatSchema = z.object({ data: z.array(embeddingItemSchema) })
-const legacyEmbedFormatSchema = z.object({ embedding: z.array(z.number()) })
+const embeddingItemSchema = z.object({ embedding: z.array(z.number()) }).passthrough()
+const openAiEmbedFormatSchema = z.object({ data: z.array(embeddingItemSchema) }).passthrough()
+const legacyEmbedFormatSchema = z.object({ embedding: z.array(z.number()) }).passthrough()
 
 const generationResponseSchema = z.object({
   model: z.string().optional(),
@@ -338,7 +338,6 @@ export class AiClient {
 
         const safeContext = {
           url: fullRequestUrl,
-          // Do not include raw requestBody or errorBody in context; errorBus.redactSensitiveData handles it
           errorBody: rawErrorBody.slice(0, 500),
         }
         errorBus.emitError(`AI HTTP ${httpResponse.status}`, undefined, safeContext)
@@ -349,7 +348,7 @@ export class AiClient {
         )
       }
 
-      return ok(await httpResponse.json())
+      return await httpResponse.json()
     })
   }
 

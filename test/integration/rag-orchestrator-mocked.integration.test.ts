@@ -1,10 +1,9 @@
-import { describe, it, expect, beforeAll, afterEach, afterAll, vi } from 'vitest'
-import { setupServer } from 'msw/node'
-import { http, HttpResponse } from 'msw'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { RagOrchestrator } from '../../src/ai/rag-orchestrator.js'
 import { VectorStore } from '../../src/search/vector-store.js'
 import { RipgrepSearch } from '../../src/search/rg-search.js'
 import { logger } from '../../src/utils/logger.js'
+import { AiClient } from '../../src/ai/ai-client.js'
 import { ok } from 'super-result'
 
 const mockConfig = {
@@ -28,49 +27,33 @@ const mockSearchOutcome = [
   },
 ]
 
-const mswServer = setupServer(
-  http.post(`${mockConfig.ollamaUrl}/api/generate`, async ({ request }) => {
-    const body = (await request.json()) as { prompt: string }
+describe('RagOrchestrator (Mocked AiClient)', () => {
+  const mockGenerate = vi.fn()
 
-    let responseText = ''
-    if (body.prompt.includes('Analyze:')) {
-      responseText =
-        '{"strategy": "precise", "queries": ["What is in my history?"], "hardKeywords": ["mocked"], "filters": {}}'
-    } else if (body.prompt.includes('You are the Researcher.')) {
-      responseText =
-        '[{"fact": "Based on your history, there is a Mocked Title.", "node_id": 0, "thread": "Mocked Title"}]'
-    } else if (body.prompt.includes('You are the Narrator.')) {
-      responseText = 'Based on your history, there is a Mocked Title.'
-    } else if (body.prompt.includes('Verify the answer.')) {
-      responseText = '{"status": "ok"}'
-    } else {
-      responseText = '{"status": "ok"}'
-    }
+  beforeEach(() => {
+    vi.restoreAllMocks()
+    mockGenerate.mockReset()
 
-    return HttpResponse.json({
-      model: mockConfig.ollamaModel,
-      created_at: new Date().toISOString(),
-      response: responseText,
-      done: true,
-    })
-  })
-)
-
-beforeAll(() => mswServer.listen())
-afterEach(() => {
-  mswServer.resetHandlers()
-  vi.restoreAllMocks()
-})
-afterAll(() => mswServer.close())
-
-describe('RagOrchestrator (MSW Mocked)', () => {
-  it('should orchestrate the RAG flow successfully', async () => {
-    // Mock VectorStore.search to return Result with mock data
+    vi.spyOn(AiClient.prototype, 'generate').mockImplementation(mockGenerate)
     vi.spyOn(VectorStore.prototype, 'search').mockResolvedValue(ok(mockSearchOutcome))
-    vi.spyOn(VectorStore.prototype, 'validate').mockResolvedValue(undefined)
-    vi.spyOn(RipgrepSearch.prototype, 'captureSearchMatches').mockResolvedValue([])
+    vi.spyOn(VectorStore.prototype, 'validate').mockResolvedValue(ok(undefined))
+    vi.spyOn(RipgrepSearch.prototype, 'captureSearchMatches').mockResolvedValue(ok([]))
+  })
 
-    // Spy on logger.info since that's where the final answer is written (with ℹ prefix)
+  it('should orchestrate the RAG flow successfully', async () => {
+    mockGenerate
+      .mockResolvedValueOnce(
+        ok(
+          '{"strategy": "precise", "queries": ["What is in my history?"], "hardKeywords": ["mocked"]}'
+        )
+      )
+      .mockResolvedValueOnce(
+        ok('[{"fact": "Based on your history, there is a Mocked Title.", "node_id": 0}]')
+      )
+      .mockResolvedValueOnce(ok('[{"index": 0, "relevant": true}]'))
+      .mockResolvedValueOnce(ok('Based on your history, there is a Mocked Title.'))
+      .mockResolvedValueOnce(ok('{"status": "ok"}'))
+
     const infoSpy = vi.spyOn(logger, 'info').mockImplementation(() => {})
 
     const ragOrchestratorInstance = new RagOrchestrator(mockConfig)
@@ -78,7 +61,6 @@ describe('RagOrchestrator (MSW Mocked)', () => {
     try {
       await ragOrchestratorInstance.answerQuestion('What is in my history?')
 
-      // Check that logger.info was called with the expected content
       const infoCalls = infoSpy.mock.calls.flat().join(' ')
       expect(infoCalls).toContain('Based on your history')
       expect(infoCalls).toContain('Mocked Title')

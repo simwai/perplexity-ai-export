@@ -7,9 +7,9 @@ import { ApiDiagnosticsWriter, zodErrorPaths } from '../utils/api-diagnostics.js
 
 const OLLAMA_REQUEST_TIMEOUT_MS = 120_000
 
-const embeddingItemSchema = z.object({ embedding: z.array(z.number()) })
-const openAiFormatSchema = z.object({ data: z.array(embeddingItemSchema) })
-const legacyFormatSchema = z.object({ embedding: z.array(z.number()) })
+const embeddingItemSchema = z.object({ embedding: z.array(z.number()) }).passthrough()
+const openAiFormatSchema = z.object({ data: z.array(embeddingItemSchema) }).passthrough()
+const legacyFormatSchema = z.object({ embedding: z.array(z.number()) }).passthrough()
 
 const generationResponseSchema = z.object({
   model: z.string(),

@@ -1,9 +1,8 @@
-import { describe, it, expect, beforeAll, afterEach, afterAll, vi } from 'vitest'
-import { setupServer } from 'msw/node'
-import { http, HttpResponse } from 'msw'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { RagOrchestrator } from '../../src/ai/rag-orchestrator.js'
 import { VectorStore } from '../../src/search/vector-store.js'
 import { RipgrepSearch } from '../../src/search/rg-search.js'
+import { AiClient } from '../../src/ai/ai-client.js'
 import { ok } from 'super-result'
 
 const mockConfig = {
@@ -27,58 +26,50 @@ const mockSearchOutcome = [
   },
 ]
 
-const mswServer = setupServer(
-  http.post(`${mockConfig.ollamaUrl}/api/generate`, async ({ request }) => {
-    const body = (await request.json()) as { prompt: string }
+describe('RagOrchestrator Chat (Mocked AiClient)', () => {
+  const mockGenerate = vi.fn()
+  const mockChat = vi.fn()
 
-    let responseText = ''
-    if (body.prompt.includes('Standalone Question:')) {
-      responseText = 'What is in my history?'
-    } else if (body.prompt.includes('Analyze:')) {
-      responseText =
-        '{"strategy": "precise", "queries": ["What is in my history?"], "hardKeywords": ["mocked"], "filters": {}}'
-    } else if (body.prompt.includes('You are the Researcher.')) {
-      responseText =
-        '[{"fact": "Based on your history, there is a Mocked Title.", "node_id": 0, "thread": "Mocked Title"}]'
-    } else if (body.prompt.includes('You are the Narrator.')) {
-      responseText = 'Based on your history, there is a Mocked Title.'
-    } else if (body.prompt.includes('Verify the answer.')) {
-      responseText = '{"status": "ok"}'
-    } else {
-      responseText = 'ok'
-    }
+  const originalGenerate = AiClient.prototype.generate
+  const originalChat = AiClient.prototype.chat
 
-    return HttpResponse.json({
-      model: mockConfig.ollamaModel,
-      created_at: new Date().toISOString(),
-      response: responseText,
-      done: true,
-    })
-  }),
-  http.post(`${mockConfig.ollamaUrl}/api/chat`, async () => {
-    return HttpResponse.json({
-      model: mockConfig.ollamaModel,
-      created_at: new Date().toISOString(),
-      message: { role: 'assistant', content: 'History-based chat response' },
-      done: true,
-      prompt_eval_count: 100,
-      eval_count: 50,
-    })
-  })
-)
-
-beforeAll(() => mswServer.listen())
-afterEach(() => {
-  mswServer.resetHandlers()
-  vi.restoreAllMocks()
-})
-afterAll(() => mswServer.close())
-
-describe('RagOrchestrator Chat (MSW Mocked)', () => {
-  it('should process a chat turn successfully', async () => {
+  beforeEach(() => {
+    vi.restoreAllMocks()
+    mockGenerate.mockReset()
+    mockChat.mockReset()
+    AiClient.prototype.generate = mockGenerate
+    AiClient.prototype.chat = mockChat
     vi.spyOn(VectorStore.prototype, 'search').mockResolvedValue(ok(mockSearchOutcome))
     vi.spyOn(VectorStore.prototype, 'validate').mockResolvedValue(ok(undefined))
     vi.spyOn(RipgrepSearch.prototype, 'captureSearchMatches').mockResolvedValue(ok([]))
+  })
+
+  afterEach(() => {
+    AiClient.prototype.generate = originalGenerate
+    AiClient.prototype.chat = originalChat
+  })
+
+  it('should process a chat turn successfully', async () => {
+    mockGenerate
+      .mockResolvedValueOnce(ok('What is in my history?'))
+      .mockResolvedValueOnce(
+        ok(
+          '{"strategy": "precise", "queries": ["What is in my history?"], "hardKeywords": ["mocked"]}'
+        )
+      )
+      .mockResolvedValueOnce(
+        ok('[{"fact": "Based on your history, there is a Mocked Title.", "node_id": 0}]')
+      )
+      .mockResolvedValueOnce(ok('[{"index": 0, "relevant": true}]'))
+      .mockResolvedValueOnce(ok('Based on your history, there is a Mocked Title.'))
+      .mockResolvedValueOnce(ok('{"status": "ok"}'))
+
+    mockChat.mockResolvedValueOnce(
+      ok({
+        content: 'History-based chat response',
+        usage: { promptTokens: 100, completionTokens: 50, totalTokens: 150 },
+      })
+    )
 
     const ragOrchestratorInstance = new RagOrchestrator(mockConfig)
     const response = await ragOrchestratorInstance.chat('Tell me more', [
