@@ -59,16 +59,14 @@ export class ConversationExtractor {
   }
 
   hashEntries(entries: unknown[]): string {
-    const sorted = entries.map((e) => {
-      const str = JSON.stringify(e)
-      try {
-        const obj = JSON.parse(str)
-        return JSON.stringify(this.sortKeys(obj))
-      } catch {
-        return str
-      }
-    })
+    const sorted = entries.map((e) => this.sortEntryForHash(e))
     return crypto.createHash('sha256').update(sorted.join('|')).digest('hex')
+  }
+
+  private sortEntryForHash(entry: unknown): string {
+    const str = JSON.stringify(entry)
+    const result = from(() => JSON.stringify(this.sortKeys(JSON.parse(str))))
+    return result.ok ? result.value : str
   }
 
   private sortKeys(obj: unknown): unknown {

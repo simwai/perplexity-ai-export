@@ -368,18 +368,15 @@ export class BrowserManager {
 
     const result = await from(async () => {
       const body = await page.evaluate(async () => {
-        try {
-          const bodyText = document.body.innerText
-          return (
-            bodyText.includes('Checking your browser') ||
-            bodyText.includes('Verifying your identity') ||
-            bodyText.includes('One moment') ||
-            bodyText.includes('cf-turnstile') ||
-            bodyText.includes('cloudflare')
-          )
-        } catch {
-          return false
-        }
+        if (!document.body) return false
+        const bodyText = document.body.innerText
+        return (
+          bodyText.includes('Checking your browser') ||
+          bodyText.includes('Verifying your identity') ||
+          bodyText.includes('One moment') ||
+          bodyText.includes('cf-turnstile') ||
+          bodyText.includes('cloudflare')
+        )
       })
       return body === true
     })
@@ -416,16 +413,12 @@ export class BrowserManager {
       await page.waitForLoadState('domcontentloaded')
 
       const pageResult = await page.evaluate(async () => {
-        try {
-          const res = await fetch('/api/auth/session', {
-            method: 'GET',
-            credentials: 'include',
-          })
-          const text = await res.text()
-          return { body: text }
-        } catch {
-          return { body: '' }
-        }
+        const res = await fetch('/api/auth/session', {
+          method: 'GET',
+          credentials: 'include',
+        })
+        const text = await res.text()
+        return { body: text }
       })
 
       const trimmed = pageResult.body.trim()
@@ -433,14 +426,12 @@ export class BrowserManager {
         return false
       }
 
-      let parsed
-      try {
-        parsed = JSON.parse(trimmed)
-      } catch {
+      const parsedResult = from(() => JSON.parse(trimmed))
+      if (!parsedResult.ok) {
         return false
       }
 
-      const sessionParsed = AuthSessionSchema.safeParse(parsed)
+      const sessionParsed = AuthSessionSchema.safeParse(parsedResult.value)
       if (!sessionParsed.success) {
         const paths = sessionParsed.error.issues.map((issue) => issue.path.join('.'))
         this.diagnosticsWriter.writeFailure({
