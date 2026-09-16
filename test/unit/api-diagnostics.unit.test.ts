@@ -2,20 +2,17 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { ApiDiagnosticsWriter } from '../../src/utils/api-diagnostics.js'
 import fs from 'node:fs/promises'
 import { join } from 'node:path'
+import { createMockFs } from '../helpers/mock-factories.js'
 
 vi.mock('node:fs/promises')
 
 describe('ApiDiagnosticsWriter (Unit)', () => {
-  const mockConfig = { debug: true } as any
-  let writer: ApiDiagnosticsWriter
-
   beforeEach(() => {
     vi.clearAllMocks()
-    writer = new ApiDiagnosticsWriter(mockConfig)
   })
 
   it('should write diagnostic entry to jsonl file when debug is true', async () => {
-    mockConfig.debug = true
+    const writer = new ApiDiagnosticsWriter({ debug: true })
     const entry = {
       url: 'http://test.com',
       errorType: 'unknown_shape' as const,
@@ -32,7 +29,7 @@ describe('ApiDiagnosticsWriter (Unit)', () => {
   })
 
   it('should include zodErrorPaths when provided', async () => {
-    mockConfig.debug = true
+    const writer = new ApiDiagnosticsWriter({ debug: true })
     const entry = {
       url: 'http://test.com',
       errorType: 'zod_error' as const,
@@ -49,7 +46,7 @@ describe('ApiDiagnosticsWriter (Unit)', () => {
   })
 
   it('should NOT write diagnostic entry when debug is false', async () => {
-    mockConfig.debug = false
+    const writer = new ApiDiagnosticsWriter({ debug: false })
     const entry = {
       url: 'http://test.com',
       errorType: 'unknown_shape' as const,

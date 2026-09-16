@@ -64,13 +64,11 @@ function isPromptRequest(url: string, postData: string | null, debug = false): b
       } else {
         const writer = new ApiDiagnosticsWriter({ debug })
         const paths = validated.error.issues.map((issue) => issue.path.join('.'))
-        writer
-          .writeFailure({
-            url,
-            errorType: 'zod_error',
-            zodErrorPaths: paths,
-          })
-          .catch(() => {})
+        writer.writeFailure({
+          url,
+          errorType: 'zod_error',
+          zodErrorPaths: paths,
+        })
       }
     }
 

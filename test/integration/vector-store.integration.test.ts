@@ -1,4 +1,3 @@
-import { config } from '../../src/utils/config.js'
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest'
 import { rmSync, existsSync, mkdirSync, writeFileSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -10,27 +9,42 @@ const TEST_INDEX = join(process.cwd(), 'test-fixtures', 'vector-index')
 // Import and patch config before loading VectorStore
 let VectorStore: any
 
+const mockConfig = {
+  ollamaUrl: 'http://localhost:11434',
+  ollamaModel: 'llama3.1',
+  ollamaEmbedModel: 'nomic-embed-text',
+  aiProvider: 'ollama' as const,
+  aiEmbedProvider: 'ollama' as const,
+  exportDir: TEST_EXPORTS,
+  vectorIndexPath: TEST_INDEX,
+  debug: false,
+  authStoragePath: join(process.cwd(), '.storage', 'auth.json'),
+  checkpointPath: join(process.cwd(), '.storage', 'checkpoint.json'),
+  waitMode: 'dynamic',
+  rateLimitMs: 500,
+  parallelWorkers: 5,
+  extractionConcurrency: 2,
+  checkpointSaveInterval: 10,
+  aiProvider: 'ollama' as const,
+  aiEmbedProvider: 'ollama' as const,
+  aiBaseUrl: undefined,
+  aiApiKey: undefined,
+  aiModel: undefined,
+  aiEmbedModel: undefined,
+  enableVectorSearch: undefined,
+  headless: false,
+  hydeMode: 'supplement' as const,
+  hydeThresholdScore: 0.7,
+  hydeThresholdCount: 5,
+  exportStrategies: ['markdown'],
+}
+
 describe.runIf(await isOllamaAvailable())('VectorStore Integration', () => {
   beforeAll(async () => {
     // Setup test directories
     ;[TEST_EXPORTS, TEST_INDEX].forEach((dir) => {
       if (existsSync(dir)) rmSync(dir, { recursive: true })
       mkdirSync(dir, { recursive: true })
-    })
-
-    // Dynamically import and patch
-    process.env.EXPORT_DIR = TEST_EXPORTS
-    process.env.VECTOR_INDEX_PATH = TEST_INDEX
-
-    const configModule = await import('../../src/utils/config.js')
-    // Override config properties
-    Object.defineProperty(configModule.config, 'exportDir', {
-      get: () => TEST_EXPORTS,
-      configurable: true,
-    })
-    Object.defineProperty(configModule.config, 'vectorIndexPath', {
-      get: () => TEST_INDEX,
-      configurable: true,
     })
 
     const vectorStoreModule = await import('../../src/search/vector-store.js')
@@ -58,7 +72,7 @@ describe.runIf(await isOllamaAvailable())('VectorStore Integration', () => {
   })
 
   it('should build index from markdown files with real Ollama embeddings', async () => {
-    const store = new VectorStore(config)
+    const store = new VectorStore(mockConfig)
 
     writeFileSync(
       join(TEST_EXPORTS, 'test-conv.md'),
@@ -75,7 +89,7 @@ describe.runIf(await isOllamaAvailable())('VectorStore Integration', () => {
   }, 30000)
 
   it('should chunk large files automatically during indexing', async () => {
-    const store = new VectorStore(config)
+    const store = new VectorStore(mockConfig)
 
     const largeContent = `# Large File\n\n**Space:** Test\n**ID:** large-1\n\n${'Lorem ipsum dolor sit amet consectetur adipiscing elit. '.repeat(100)}`
     writeFileSync(join(TEST_EXPORTS, 'large.md'), largeContent)
@@ -86,7 +100,7 @@ describe.runIf(await isOllamaAvailable())('VectorStore Integration', () => {
   }, 30000)
 
   it('should search and return relevant results with scores', async () => {
-    const store = new VectorStore(config)
+    const store = new VectorStore(mockConfig)
 
     writeFileSync(
       join(TEST_EXPORTS, 'typescript.md'),
@@ -106,7 +120,7 @@ describe.runIf(await isOllamaAvailable())('VectorStore Integration', () => {
   }, 30000)
 
   it('should handle empty exports directory gracefully', async () => {
-    const store = new VectorStore(config)
+    const store = new VectorStore(mockConfig)
     await expect(store.rebuildFromExports()).resolves.not.toThrow()
   })
 })

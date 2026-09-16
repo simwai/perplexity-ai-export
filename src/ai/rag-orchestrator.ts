@@ -96,13 +96,11 @@ export class RagOrchestrator {
     if (!result.success) {
       logger.debug(`Schema validation failed: ${result.error.message}`)
       const paths = zodErrorPaths(result)
-      this.diagnosticsWriter
-        .writeFailure({
-          url: `rag://${context}`,
-          errorType: 'zod_error',
-          zodErrorPaths: paths,
-        })
-        .catch(() => {})
+      this.diagnosticsWriter.writeFailure({
+        url: `rag://${context}`,
+        errorType: 'zod_error',
+        zodErrorPaths: paths,
+      })
     }
     return result.success ? result.data : defaultValue
   }
@@ -566,13 +564,11 @@ Return JSON array: [{"fact": "...", "node_id": N}]
         if (!validated.success) {
           logger.debug(`Skipping invalid fact entry: ${validated.error.message}`)
           const paths = zodErrorPaths(validated)
-          this.diagnosticsWriter
-            .writeFailure({
-              url: 'rag://extract-facts',
-              errorType: 'zod_error',
-              zodErrorPaths: paths,
-            })
-            .catch(() => {})
+          this.diagnosticsWriter.writeFailure({
+            url: 'rag://extract-facts',
+            errorType: 'zod_error',
+            zodErrorPaths: paths,
+          })
           continue
         }
         const f = validated.data

@@ -2,17 +2,25 @@ import { describe, it, expect, beforeAll, afterEach, afterAll, vi } from 'vitest
 import { setupServer } from 'msw/node'
 import { http, HttpResponse } from 'msw'
 import { OllamaClient } from '../../src/ai/ollama-client.js'
-import { config } from '../../src/utils/config.js'
+
+const mockConfig = {
+  ollamaUrl: 'http://localhost:11434',
+  ollamaModel: 'llama3.1',
+  ollamaEmbedModel: 'nomic-embed-text',
+  aiProvider: 'ollama' as const,
+  aiEmbedProvider: 'ollama' as const,
+  debug: false,
+}
 
 const mswServer = setupServer(
-  http.post(`${config.ollamaUrl}/v1/embeddings`, async ({ request }) => {
+  http.post(`${mockConfig.ollamaUrl}/v1/embeddings`, async ({ request }) => {
     const body = (await request.json()) as { input: string[] }
     const embeddings = body.input.map(() => ({ embedding: [0.1, 0.2, 0.3] }))
     return HttpResponse.json({ data: embeddings })
   }),
-  http.post(`${config.ollamaUrl}/api/generate`, () => {
+  http.post(`${mockConfig.ollamaUrl}/api/generate`, () => {
     return HttpResponse.json({
-      model: config.ollamaModel,
+      model: mockConfig.ollamaModel,
       created_at: new Date().toISOString(),
       response: 'Generated text',
       done: true,
@@ -20,9 +28,9 @@ const mswServer = setupServer(
       eval_count: 20,
     })
   }),
-  http.post(`${config.ollamaUrl}/api/chat`, () => {
+  http.post(`${mockConfig.ollamaUrl}/api/chat`, () => {
     return HttpResponse.json({
-      model: config.ollamaModel,
+      model: mockConfig.ollamaModel,
       created_at: new Date().toISOString(),
       message: { role: 'assistant', content: 'Chat response' },
       done: true,
@@ -41,7 +49,7 @@ afterAll(() => mswServer.close())
 
 describe('OllamaClient (MSW Mocked)', () => {
   it('should generate text with usage successfully', async () => {
-    const client = new OllamaClient(config)
+    const client = new OllamaClient(mockConfig)
     const response = await client.generateWithUsage('Hello')
 
     expect(response.ok).toBe(true)
@@ -52,7 +60,7 @@ describe('OllamaClient (MSW Mocked)', () => {
   })
 
   it('should chat successfully', async () => {
-    const client = new OllamaClient(config)
+    const client = new OllamaClient(mockConfig)
     const response = await client.chat([{ role: 'user', content: 'Hello' }])
 
     expect(response.ok).toBe(true)
@@ -63,7 +71,7 @@ describe('OllamaClient (MSW Mocked)', () => {
   })
 
   it('should embed single text and return correct shape', async () => {
-    const client = new OllamaClient(config)
+    const client = new OllamaClient(mockConfig)
     const response = await client.embed(['hello'])
 
     expect(response.ok).toBe(true)
@@ -73,7 +81,7 @@ describe('OllamaClient (MSW Mocked)', () => {
   })
 
   it('should embed batch of texts in parallel', async () => {
-    const client = new OllamaClient(config)
+    const client = new OllamaClient(mockConfig)
     const texts = ['hello', 'world', 'test']
     const response = await client.embed(texts)
 
@@ -83,7 +91,7 @@ describe('OllamaClient (MSW Mocked)', () => {
   })
 
   it('should handle empty array gracefully', async () => {
-    const client = new OllamaClient(config)
+    const client = new OllamaClient(mockConfig)
     const response = await client.embed([])
 
     expect(response.ok).toBe(true)

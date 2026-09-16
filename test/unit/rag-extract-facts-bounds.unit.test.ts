@@ -42,8 +42,39 @@ vi.mock('../../src/ai/ollama-client.js', () => {
 import { RagOrchestrator } from '../../src/ai/rag-orchestrator.js'
 import { OllamaClient } from '../../src/ai/ollama-client.js'
 import { VectorStore } from '../../src/search/vector-store.js'
-import { config } from '../../src/utils/config.js'
 import { ok, err } from 'super-result'
+
+const mockConfig = {
+  hydeMode: 'supplement' as const,
+  hydeThresholdScore: 0.7,
+  hydeThresholdCount: 5,
+  ollamaModel: 'test-model',
+  exportDir: 'exports',
+  debug: false,
+  ollamaUrl: 'http://localhost:11434',
+  ollamaEmbedModel: 'nomic-embed-text',
+  aiProvider: 'ollama' as const,
+  aiEmbedProvider: 'ollama' as const,
+  aiBaseUrl: undefined,
+  aiApiKey: undefined,
+  aiModel: undefined,
+  aiEmbedModel: undefined,
+  enableVectorSearch: undefined,
+  headless: false,
+  hydeMode: 'supplement' as const,
+  hydeThresholdScore: 0.7,
+  hydeThresholdCount: 5,
+  exportStrategies: ['markdown'],
+  authStoragePath: '/tmp/auth.json',
+  checkpointPath: '/tmp/checkpoint.json',
+  waitMode: 'dynamic',
+  rateLimitMs: 500,
+  parallelWorkers: 5,
+  extractionConcurrency: 2,
+  checkpointSaveInterval: 10,
+  exportDir: 'exports',
+  vectorIndexPath: '/tmp/vector-index',
+}
 
 interface MockedOrchestrator {
   rag: RagOrchestrator
@@ -52,10 +83,10 @@ interface MockedOrchestrator {
 }
 
 function setup(): MockedOrchestrator {
-  const rag = new RagOrchestrator(config)
-  const ollamaGenerate = vi.mocked(new OllamaClient(config).generate)
+  const rag = new RagOrchestrator(mockConfig)
+  const ollamaGenerate = vi.mocked(new OllamaClient(mockConfig).generate)
   ollamaGenerate.mockReset()
-  const vectorSearch = vi.mocked(new VectorStore(config).search)
+  const vectorSearch = vi.mocked(new VectorStore(mockConfig).search)
   vectorSearch.mockReset()
   ;(rag as unknown as { ollamaClient: OllamaClient }).ollamaClient = {
     generate: ollamaGenerate,

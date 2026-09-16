@@ -2,11 +2,19 @@ import { describe, it, expect, beforeAll, afterEach, afterAll, vi } from 'vitest
 import { setupServer } from 'msw/node'
 import { http, HttpResponse } from 'msw'
 import { RagOrchestrator } from '../../src/ai/rag-orchestrator.js'
-import { config } from '../../src/utils/config.js'
 import { VectorStore } from '../../src/search/vector-store.js'
 import { RipgrepSearch } from '../../src/search/rg-search.js'
 import { logger } from '../../src/utils/logger.js'
 import { ok } from 'super-result'
+
+const mockConfig = {
+  ollamaUrl: 'http://localhost:11434',
+  ollamaModel: 'llama3.1',
+  ollamaEmbedModel: 'nomic-embed-text',
+  aiProvider: 'ollama' as const,
+  aiEmbedProvider: 'ollama' as const,
+  debug: false,
+}
 
 const mockSearchOutcome = [
   {
@@ -21,7 +29,7 @@ const mockSearchOutcome = [
 ]
 
 const mswServer = setupServer(
-  http.post(`${config.ollamaUrl}/api/generate`, async ({ request }) => {
+  http.post(`${mockConfig.ollamaUrl}/api/generate`, async ({ request }) => {
     const body = (await request.json()) as { prompt: string }
 
     let responseText = ''
@@ -40,7 +48,7 @@ const mswServer = setupServer(
     }
 
     return HttpResponse.json({
-      model: config.ollamaModel,
+      model: mockConfig.ollamaModel,
       created_at: new Date().toISOString(),
       response: responseText,
       done: true,
@@ -65,7 +73,7 @@ describe('RagOrchestrator (MSW Mocked)', () => {
     // Spy on logger.info since that's where the final answer is written (with ℹ prefix)
     const infoSpy = vi.spyOn(logger, 'info').mockImplementation(() => {})
 
-    const ragOrchestratorInstance = new RagOrchestrator(config)
+    const ragOrchestratorInstance = new RagOrchestrator(mockConfig)
 
     try {
       await ragOrchestratorInstance.answerQuestion('What is in my history?')

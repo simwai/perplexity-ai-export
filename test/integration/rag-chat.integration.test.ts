@@ -2,9 +2,17 @@ import { describe, it, expect, beforeAll, afterEach, afterAll, vi } from 'vitest
 import { setupServer } from 'msw/node'
 import { http, HttpResponse } from 'msw'
 import { RagOrchestrator } from '../../src/ai/rag-orchestrator.js'
-import { config } from '../../src/utils/config.js'
 import { VectorStore } from '../../src/search/vector-store.js'
 import { RipgrepSearch } from '../../src/search/rg-search.js'
+
+const mockConfig = {
+  ollamaUrl: 'http://localhost:11434',
+  ollamaModel: 'llama3.1',
+  ollamaEmbedModel: 'nomic-embed-text',
+  aiProvider: 'ollama' as const,
+  aiEmbedProvider: 'ollama' as const,
+  debug: false,
+}
 
 const mockSearchOutcome = [
   {
@@ -19,7 +27,7 @@ const mockSearchOutcome = [
 ]
 
 const mswServer = setupServer(
-  http.post(`${config.ollamaUrl}/api/generate`, async ({ request }) => {
+  http.post(`${mockConfig.ollamaUrl}/api/generate`, async ({ request }) => {
     const body = (await request.json()) as { prompt: string }
 
     let responseText = ''
@@ -36,15 +44,15 @@ const mswServer = setupServer(
     }
 
     return HttpResponse.json({
-      model: config.ollamaModel,
+      model: mockConfig.ollamaModel,
       created_at: new Date().toISOString(),
       response: responseText,
       done: true,
     })
   }),
-  http.post(`${config.ollamaUrl}/api/chat`, async () => {
+  http.post(`${mockConfig.ollamaUrl}/api/chat`, async () => {
     return HttpResponse.json({
-      model: config.ollamaModel,
+      model: mockConfig.ollamaModel,
       created_at: new Date().toISOString(),
       message: { role: 'assistant', content: 'History-based chat response' },
       done: true,
@@ -67,7 +75,7 @@ describe('RagOrchestrator Chat (MSW Mocked)', () => {
     vi.spyOn(VectorStore.prototype, 'validate').mockResolvedValue(undefined)
     vi.spyOn(RipgrepSearch.prototype, 'captureSearchMatches').mockResolvedValue([])
 
-    const ragOrchestratorInstance = new RagOrchestrator(config)
+    const ragOrchestratorInstance = new RagOrchestrator(mockConfig)
     const response = await ragOrchestratorInstance.chat('Tell me more', [
       { role: 'user', content: 'What is this?' },
     ])

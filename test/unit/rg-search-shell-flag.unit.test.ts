@@ -35,7 +35,11 @@ vi.mock('../../src/utils/logger.js', () => ({
 }))
 
 import { RipgrepSearch } from '../../src/search/rg-search.js'
-import { config } from '../../src/utils/config.js'
+
+const mockConfig = {
+  exportDir: '/tmp/exports',
+  debug: false,
+}
 
 describe('RipgrepSearch spawn options (Unit)', () => {
   beforeEach(() => {
@@ -59,7 +63,7 @@ describe('RipgrepSearch spawn options (Unit)', () => {
   })
 
   it('spawns ripgrep with shell disabled (chat-flow H2 fix)', async () => {
-    const rg = new RipgrepSearch(config)
+    const rg = new RipgrepSearch(mockConfig)
     await rg.captureSearchMatches({ pattern: 'some keyword' })
 
     expect(spawnMock).toHaveBeenCalledTimes(1)
@@ -70,7 +74,7 @@ describe('RipgrepSearch spawn options (Unit)', () => {
   })
 
   it('never passes shell:true regardless of pattern content', async () => {
-    const rg = new RipgrepSearch(config)
+    const rg = new RipgrepSearch(mockConfig)
     const patterns = [
       'simple',
       'with space',
