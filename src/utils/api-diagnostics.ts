@@ -3,7 +3,7 @@ import fs from 'node:fs/promises'
 import { join } from 'node:path'
 import { logger } from './logger.js'
 import { errorMessageOf } from './extract-error-message.js'
-import { ok, err, type Result } from 'super-result'
+import { ok, from, type Result } from 'super-result'
 import { createNamedError } from './errors.js'
 import type { Config } from './config.js'
 
@@ -45,7 +45,7 @@ export class ApiDiagnosticsWriter {
   private async appendDiagnosticEntry(
     entry: Omit<ApiDiagnosticEntry, 'timestamp'>
   ): Promise<Result<void, DiagnosticsWriteErrorInstance>> {
-    try {
+    return from(async () => {
       const diagnosticEntry: ApiDiagnosticEntry = {
         timestamp: new Date().toISOString(),
         ...entry,
@@ -56,10 +56,7 @@ export class ApiDiagnosticsWriter {
 
       const entryAsJsonLine = JSON.stringify(diagnosticEntry) + '\n'
       await fs.appendFile(diagnosticLogPath, entryAsJsonLine, 'utf8')
-      return ok(undefined)
-    } catch (error) {
-      return err(new DiagnosticsWriteError(error instanceof Error ? error.message : String(error)))
-    }
+    })
   }
 }
 

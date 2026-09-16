@@ -1,7 +1,7 @@
 import type { Page } from '@playwright/test'
 import { type Config } from './config.js'
 import { logger } from './logger.js'
-import { ok, err, type Result } from 'super-result'
+import { from, type Result } from 'super-result'
 import { createNamedError } from './errors.js'
 
 export const SelectorWaitError = createNamedError('SelectorWaitError')
@@ -18,12 +18,13 @@ class DynamicWaitStrategy implements WaitStrategy {
   private static readonly SELECTOR_TIMEOUT_MS = 5000
 
   async afterClick(page: Page): Promise<void> {
-    try {
+    const result = await from(async () => {
       await page.waitForLoadState('networkidle', {
         timeout: DynamicWaitStrategy.NETWORK_IDLE_TIMEOUT_MS,
       })
-    } catch (error) {
-      logger.debug('afterClick: networkidle wait timed out; continuing', error)
+    })
+    if (!result.ok) {
+      logger.debug('afterClick: networkidle wait timed out; continuing', result.error)
     }
   }
 
@@ -35,15 +36,12 @@ class DynamicWaitStrategy implements WaitStrategy {
     page: Page,
     selector: string
   ): Promise<Result<void, SelectorWaitErrorInstance>> {
-    try {
+    return from(async () => {
       await page.waitForSelector(selector, {
         state: 'visible',
         timeout: DynamicWaitStrategy.SELECTOR_TIMEOUT_MS,
       })
-      return ok(undefined)
-    } catch (error) {
-      return err(new SelectorWaitError(error instanceof Error ? error.message : String(error)))
-    }
+    })
   }
 }
 
@@ -72,12 +70,9 @@ class StaticWaitStrategy implements WaitStrategy {
     page: Page,
     _selector: string
   ): Promise<Result<void, SelectorWaitErrorInstance>> {
-    try {
+    return from(async () => {
       await this.randomPause(page)
-      return ok(undefined)
-    } catch (error) {
-      return err(new SelectorWaitError(error instanceof Error ? error.message : String(error)))
-    }
+    })
   }
 }
 

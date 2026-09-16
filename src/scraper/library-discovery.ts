@@ -172,7 +172,7 @@ async function detectApiVersion(page: Page): Promise<Result<string, DiscoveryErr
 async function detectVersionFromResponse(
   page: Page
 ): Promise<Result<string, DiscoveryErrorInstance>> {
-  try {
+  return from(async () => {
     const response = await page.waitForResponse(
       (res) => VERSIONED_URL_PATTERNS.some((p) => res.url().includes(p)) && res.status() === 200,
       { timeout: 15_000 }
@@ -180,10 +180,8 @@ async function detectVersionFromResponse(
     const version = extractVersionFromUrl(response.url()) ?? DEFAULT_API_VERSION
     const pathname = new URL(response.url()).pathname
     logger.debug(`Detected API version: ${version} (from ${pathname})`)
-    return ok(version)
-  } catch (error) {
-    return err(new DiscoveryError(error instanceof Error ? error.message : String(error)))
-  }
+    return version
+  })
 }
 
 // #endregion Version Detection
@@ -244,14 +242,12 @@ async function fetchThreadBatch(
 ): Promise<Result<ThreadBatchResponse, DiscoveryErrorInstance | ApiErrorInstance>> {
   const url = `${BASE_URL}/rest/thread/list_ask_threads?version=${version}&source=default`
 
-  let rawResult: { status: number; body: string }
-  try {
-    rawResult = await evaluateThreadBatchInPage(page, url, offset)
-  } catch (error) {
-    return err(new DiscoveryError(error instanceof Error ? error.message : String(error)))
+  const rawResult = await from(async () => await evaluateThreadBatchInPage(page, url, offset))
+  if (!rawResult.ok) {
+    return err(rawResult.error)
   }
 
-  const raw = rawResult
+  const raw = rawResult.value
 
   logger.debug(`list_ask_threads offset=${offset}: status=${raw.status}`)
   logger.debug(`list_ask_threads offset=${offset}: body=${raw.body.slice(0, 500)}`)
@@ -260,14 +256,12 @@ async function fetchThreadBatch(
     return err(new ApiError(`list_ask_threads returned HTTP ${raw.status}`))
   }
 
-  let parseResult: unknown
-  try {
-    parseResult = JSON.parse(raw.body)
-  } catch (error) {
+  const parseResult = await from(() => JSON.parse(raw.body))
+  if (!parseResult.ok) {
     return err(new ApiError(`list_ask_threads: invalid JSON — body: ${raw.body.slice(0, 200)}`))
   }
 
-  const arrayValidated = z.array(RawThreadSchema).safeParse(parseResult)
+  const arrayValidated = z.array(RawThreadSchema).safeParse(parseResult.value)
   if (!arrayValidated.success) {
     const zodErrorPaths = arrayValidated.error.issues.map((issue) => issue.path.join('.'))
     diagnosticsWriter.writeFailure({
@@ -296,14 +290,12 @@ async function fetchPinnedThreads(
 ): Promise<Result<RawThread[], DiscoveryErrorInstance | ApiErrorInstance>> {
   const url = `${BASE_URL}/rest/thread/list_pinned_ask_threads?version=${version}&source=default`
 
-  let rawResult: { status: number; body: string }
-  try {
-    rawResult = await evaluatePinnedThreadsInPage(page, url)
-  } catch (error) {
-    return err(new DiscoveryError(error instanceof Error ? error.message : String(error)))
+  const rawResult = await from(async () => await evaluatePinnedThreadsInPage(page, url))
+  if (!rawResult.ok) {
+    return err(rawResult.error)
   }
 
-  const raw = rawResult
+  const raw = rawResult.value
 
   logger.debug(`list_pinned_ask_threads: status=${raw.status}`)
 
@@ -312,15 +304,13 @@ async function fetchPinnedThreads(
     return ok([])
   }
 
-  let parseResult: unknown
-  try {
-    parseResult = JSON.parse(raw.body)
-  } catch {
+  const parseResult = await from(() => JSON.parse(raw.body))
+  if (!parseResult.ok) {
     logger.debug('list_pinned_ask_threads: invalid JSON — skipping pinned')
     return ok([])
   }
 
-  const validated = z.array(RawThreadSchema).safeParse(parseResult)
+  const validated = z.array(RawThreadSchema).safeParse(parseResult.value)
   if (!validated.success) {
     const zodErrorPaths = validated.error.issues.map((issue) => issue.path.join('.'))
     diagnosticsWriter.writeFailure({

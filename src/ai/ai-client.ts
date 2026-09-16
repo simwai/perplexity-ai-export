@@ -333,9 +333,8 @@ export class AiClient {
 
       if (!httpResponse.ok) {
         let rawErrorBody = ''
-        try {
-          rawErrorBody = await httpResponse.text()
-        } catch (_ignored) {}
+        const textResult = await from(() => httpResponse.text())
+        rawErrorBody = textResult.ok ? textResult.value : ''
 
         const safeContext = {
           url: fullRequestUrl,

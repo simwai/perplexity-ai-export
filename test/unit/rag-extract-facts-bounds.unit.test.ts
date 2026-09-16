@@ -99,6 +99,11 @@ function setup(): MockedOrchestrator {
   ;(rag as unknown as { ripgrep: unknown }).ripgrep = {
     captureSearchMatches: vi.fn().mockResolvedValue([]),
   }
+  // RagOrchestrator uses this.aiClient (AiClient), not this.ollamaClient
+  ;(rag as unknown as { aiClient: any }).aiClient = {
+    generate: ollamaGenerate,
+    chat: vi.fn(),
+  }
   return { rag, ollamaGenerate, vectorSearch }
 }
 
@@ -127,8 +132,8 @@ describe('RagOrchestrator.extractFactsWithGranularMapReduce bounds (Unit)', () =
       }
     ).extractFactsWithGranularMapReduce.bind(setupData.rag)
 
-    // Return Result objects with ok()
-    setupData.ollamaGenerate.mockResolvedValueOnce(
+    // Return Result objects with ok() for both calls (extract + filter)
+    setupData.ollamaGenerate.mockResolvedValue(
       ok(
         JSON.stringify([
           { fact: 'good from A', node_id: 0, thread: 'Thread A' },

@@ -4,6 +4,7 @@ import { http, HttpResponse } from 'msw'
 import { RagOrchestrator } from '../../src/ai/rag-orchestrator.js'
 import { VectorStore } from '../../src/search/vector-store.js'
 import { RipgrepSearch } from '../../src/search/rg-search.js'
+import { ok } from 'super-result'
 
 const mockConfig = {
   ollamaUrl: 'http://localhost:11434',
@@ -39,6 +40,10 @@ const mswServer = setupServer(
     } else if (body.prompt.includes('You are the Researcher.')) {
       responseText =
         '[{"fact": "Based on your history, there is a Mocked Title.", "node_id": 0, "thread": "Mocked Title"}]'
+    } else if (body.prompt.includes('You are the Narrator.')) {
+      responseText = 'Based on your history, there is a Mocked Title.'
+    } else if (body.prompt.includes('Verify the answer.')) {
+      responseText = '{"status": "ok"}'
     } else {
       responseText = 'ok'
     }
@@ -71,9 +76,9 @@ afterAll(() => mswServer.close())
 
 describe('RagOrchestrator Chat (MSW Mocked)', () => {
   it('should process a chat turn successfully', async () => {
-    vi.spyOn(VectorStore.prototype, 'search').mockResolvedValue(mockSearchOutcome)
-    vi.spyOn(VectorStore.prototype, 'validate').mockResolvedValue(undefined)
-    vi.spyOn(RipgrepSearch.prototype, 'captureSearchMatches').mockResolvedValue([])
+    vi.spyOn(VectorStore.prototype, 'search').mockResolvedValue(ok(mockSearchOutcome))
+    vi.spyOn(VectorStore.prototype, 'validate').mockResolvedValue(ok(undefined))
+    vi.spyOn(RipgrepSearch.prototype, 'captureSearchMatches').mockResolvedValue(ok([]))
 
     const ragOrchestratorInstance = new RagOrchestrator(mockConfig)
     const response = await ragOrchestratorInstance.chat('Tell me more', [

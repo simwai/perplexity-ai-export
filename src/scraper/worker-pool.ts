@@ -8,7 +8,7 @@ import { isTypedError, createNamedError } from '../utils/errors.js'
 import { join } from 'node:path'
 import { writeFileSync, existsSync, mkdirSync, statSync } from 'node:fs'
 import { sanitizeFilename, sanitizeSpaceName } from '../export/sanitizer.js'
-import { ok, err, type Result } from 'super-result'
+import { ok, err, from, createResult, type Result } from 'super-result'
 import { errorMessageOf } from '../utils/extract-error-message.js'
 import { RateLimiter } from './rate-limiter.js'
 
@@ -34,6 +34,9 @@ export class WorkerPool {
   private sharedBrowserContext: BrowserContext | null = null
   private isRefreshing = false
   private readonly rateLimiter: RateLimiter
+  private readonly resultFactory = createResult<Error>((error: unknown) =>
+    error instanceof Error ? error : new Error(String(error))
+  )
 
   constructor(
     private readonly config: Config,
@@ -44,12 +47,7 @@ export class WorkerPool {
   }
 
   async initialize(): Promise<Result<void, ContextRefreshErrorInstance>> {
-    try {
-      await this.createWorkers()
-      return ok(undefined)
-    } catch (error) {
-      return err(new ContextRefreshError(error instanceof Error ? error.message : String(error)))
-    }
+    return this.resultFactory.from(async () => await this.createWorkers())
   }
 
   private async createWorkers(): Promise<void> {
@@ -102,13 +100,13 @@ export class WorkerPool {
 
   async close(): Promise<void> {
     // best-effort teardown; if the context is already gone, Playwright throws and we ignore.
-    try {
+    const closeResult = await from(async () => {
       await this.sharedBrowserContext?.close()
-    } catch (closeError) {
-      logger.debug('close: sharedBrowserContext.close failed', errorMessageOf(closeError))
-    } finally {
-      this.sharedBrowserContext = null
+    })
+    if (!closeResult.ok) {
+      logger.debug('close: sharedBrowserContext.close failed', errorMessageOf(closeResult.error))
     }
+    this.sharedBrowserContext = null
   }
 
   private async runExtraction(
@@ -177,50 +175,32 @@ export class WorkerPool {
     const safeSpaceName = sanitizeSpaceName(data.spaceName)
     const spaceSpecificDirectory = join(outputDir, safeSpaceName)
 
-    if (!existsSync(spaceSpecificDirectory)) {
-      try {
+    return from(async () => {
+      if (!existsSync(spaceSpecificDirectory)) {
         mkdirSync(spaceSpecificDirectory, { recursive: true })
-      } catch (error) {
-        return err(new ContextRefreshError(error instanceof Error ? error.message : String(error)))
       }
-    }
 
-    const safeFileTitle = sanitizeFilename(data.title)
-    const fileName = `${safeFileTitle} (${data.id}).md`
-    const destinationFilePath = join(spaceSpecificDirectory, fileName)
+      const safeFileTitle = sanitizeFilename(data.title)
+      const fileName = `${safeFileTitle} (${data.id}).md`
+      const destinationFilePath = join(spaceSpecificDirectory, fileName)
 
-    const headerTitle = `# ${data.title}\n\n`
-    const metadataBlock =
-      `**Space:** ${data.spaceName}  \n` +
-      `**ID:** ${data.id}  \n` +
-      `**Date:** ${data.timestamp.toISOString()}  \n\n`
-    const content = headerTitle + metadataBlock + data.content
+      const headerTitle = `# ${data.title}\n\n`
+      const metadataBlock =
+        `**Space:** ${data.spaceName}  \n` +
+        `**ID:** ${data.id}  \n` +
+        `**Date:** ${data.timestamp.toISOString()}  \n\n`
+      const content = headerTitle + metadataBlock + data.content
 
-    const tmpPath = `${destinationFilePath}.tmp`
-    try {
+      const tmpPath = `${destinationFilePath}.tmp`
       writeFileSync(tmpPath, content, 'utf-8')
-    } catch (error) {
-      return err(new ContextRefreshError(error instanceof Error ? error.message : String(error)))
-    }
 
-    const fs = await import('node:fs')
-    try {
+      const fs = await import('node:fs')
       fs.renameSync(tmpPath, destinationFilePath)
-    } catch (error) {
-      return err(new ContextRefreshError(error instanceof Error ? error.message : String(error)))
-    }
 
-    try {
       if (!existsSync(destinationFilePath) || statSync(destinationFilePath).size === 0) {
-        return err(
-          new ContextRefreshError(`Exported file is missing or empty: ${destinationFilePath}`)
-        )
+        throw new ContextRefreshError(`Exported file is missing or empty: ${destinationFilePath}`)
       }
-    } catch (error) {
-      return err(new ContextRefreshError(error instanceof Error ? error.message : String(error)))
-    }
-
-    return ok(undefined)
+    })
   }
 
   private async handleFailure(
@@ -265,17 +245,16 @@ export class WorkerPool {
   }
 
   private async replaceBrowserContext(): Promise<Result<void, ContextRefreshErrorInstance>> {
-    try {
+    return this.resultFactory.from(async () => {
       // best-effort close before re-creating; a stale context is what we are refreshing away.
-      try {
+      const closeResult = await from(async () => {
         await this.sharedBrowserContext?.close()
-      } catch (closeError) {
+      })
+      if (!closeResult.ok) {
         logger.debug(
           'refreshContext: sharedBrowserContext.close failed',
-          errorMessageOf(closeError)
+          errorMessageOf(closeResult.error)
         )
-      } finally {
-        // New context assignment is intentional after this block; nothing to cleanup here
       }
       this.sharedBrowserContext = await this.browser.newContext({
         storageState: this.config.authStoragePath,
@@ -283,9 +262,6 @@ export class WorkerPool {
       for (const worker of this.workers) {
         worker.extractor = new ConversationExtractor(this.config, this.sharedBrowserContext)
       }
-      return ok(undefined)
-    } catch (error) {
-      return err(new ContextRefreshError(error instanceof Error ? error.message : String(error)))
-    }
+    })
   }
 }

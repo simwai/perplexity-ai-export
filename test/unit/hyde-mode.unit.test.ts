@@ -43,8 +43,15 @@ describe('RagOrchestrator HyDE Modes', () => {
 
     orchestrator = new RagOrchestrator(config)
     orchestrator.vectorStore = mockVectorStore
-    orchestrator.ollamaClient = mockOllamaClient
     orchestrator.ripgrep = new RipgrepSearch(config)
+
+    // RagOrchestrator uses this.aiClient (AiClient), not this.ollamaClient
+    ;(orchestrator as unknown as { aiClient: any }).aiClient = {
+      generate: mockOllamaClient.generate,
+      chat: mockOllamaClient.chat,
+      embed: mockOllamaClient.embed,
+      validate: mockOllamaClient.validate,
+    }
 
     mockOllamaClient.generate.mockResolvedValue({
       ok: true,
@@ -55,7 +62,7 @@ describe('RagOrchestrator HyDE Modes', () => {
         hydePassage: 'hypothetical passage',
       }),
     })
-    mockVectorStore.search.mockResolvedValue({ ok: true, value: [] })
+    mockVectorStore.search.mockResolvedValue(ok([]))
   })
 
   it('should NOT trigger HyDE when mode is "off"', async () => {

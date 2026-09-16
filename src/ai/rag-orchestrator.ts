@@ -606,9 +606,9 @@ For each fact, is it related to the question? Mark relevant=true if the fact con
 Return JSON array: [{"index": 0, "relevant": true}, {"index": 1, "relevant": false}, ...]
 `
     const filterResponse = await this.aiClient.generate(filterPrompt)
-    if (!filterResponse.ok) {
+    if (!filterResponse || !filterResponse.ok) {
       logger.warn(
-        `Relevance filter failed for question "${question}": ${errorMessageOf(filterResponse.error)}`
+        `Relevance filter failed for question "${question}": ${filterResponse ? errorMessageOf(filterResponse.error) : 'no response'}`
       )
       return facts
     }
