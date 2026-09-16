@@ -5,7 +5,7 @@ import { createWaitStrategy } from '../utils/wait-strategy.js'
 import { type Config } from '../utils/config.js'
 import { errorMessageOf } from '../utils/extract-error-message.js'
 import { createNamedError } from '../utils/errors.js'
-import { ok, err, type Result } from 'super-result'
+import { ok, err, type Result, from } from 'super-result'
 
 export interface ConversationMessage {
   role: 'user' | 'assistant'
@@ -105,12 +105,9 @@ export class ConversationExtractor {
     if (!ensureResult.ok) return err(ensureResult.error as ExtractionErrorInstance)
 
     let conversationPage: Page | null = null
-    try {
-      conversationPage = await this.context.newPage()
-    } catch (error) {
-      return err(new ConversationExtractor.ExtractionError('Failed to create new page'))
-    }
-
+    const newPageResult = await from(async () => await this.context.newPage())
+    if (newPageResult.ok) conversationPage = newPageResult.value
+    else return err(new ConversationExtractor.ExtractionError('Failed to create new page'))
     if (!conversationPage) {
       return err(new ConversationExtractor.ExtractionError('Failed to create new page'))
     }
@@ -119,24 +116,25 @@ export class ConversationExtractor {
     if (!navigationResult.ok) return err(navigationResult.error as NavigationErrorInstance)
     await createWaitStrategy(this.config).afterScroll(conversationPage)
 
-    try {
+    const closeResult = await from(async () => {
       await conversationPage.close()
-    } catch (error) {
-      logger.warn(`Failed to close page: ${errorMessageOf(error)}`)
+    })
+    if (!closeResult.ok) {
+      logger.warn(`Failed to close page: ${errorMessageOf(closeResult.error)}`)
     }
 
     return err(new ConversationExtractor.NoDataError('Conversation extraction not yet implemented'))
   }
 
   private async ensureContextIsAlive(): Promise<Result<void, AuthErrorInstance>> {
-    try {
-      await this.context.pages()
-      return ok(undefined)
-    } catch (error) {
+    const result = from(() => this.context.pages)
+    if (!result.ok) {
+      const error = result.error
       return err(
         new ConversationExtractor.AuthError(error instanceof Error ? error.message : String(error))
       )
     }
+    return ok(undefined)
   }
 
   private async navigateToConversationUrl(

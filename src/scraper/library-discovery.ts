@@ -3,7 +3,7 @@ import { logger } from '../utils/logger.js'
 import { DEFAULT_API_VERSION } from './api-version.js'
 import { errorMessageOf } from '../utils/extract-error-message.js'
 import { createNamedError } from '../utils/errors.js'
-import { ok, err, type Result } from 'super-result'
+import { ok, err, type Result, from } from 'super-result'
 import { z } from 'zod'
 import { ApiDiagnosticsWriter } from '../utils/api-diagnostics.js'
 
@@ -212,16 +212,24 @@ async function waitForUserInfoResponse(
   page: Page,
   timeout: number
 ): Promise<Result<void, DiscoveryErrorInstance>> {
-  try {
-    await page.waitForResponse(
-      (res) => res.url().includes('/rest/userinfo') && res.status() === 200,
-      { timeout }
+  const result = await from(
+    async () =>
+      await page.waitForResponse(
+        (res) => res.url().includes('/rest/userinfo') && res.status() === 200,
+        { timeout }
+      )
+  )
+
+  if (!result.ok) {
+    return err(
+      new DiscoveryError(
+        result.error instanceof Error ? result.error.message : String(result.error)
+      )
     )
-    logger.debug('Library page ready (userinfo confirmed)')
-    return ok(undefined)
-  } catch (error) {
-    return err(new DiscoveryError(error instanceof Error ? error.message : String(error)))
   }
+
+  logger.debug('Library page ready (userinfo confirmed)')
+  return ok(undefined)
 }
 
 // #endregion Page Readiness
