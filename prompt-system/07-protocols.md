@@ -66,6 +66,141 @@ The house preference is LF line endings for every repository, including on Windo
 
 Spawn rule: when a plan or patch sets up a new repo or touches repo hygiene, spawn `.gitattributes` with `* text=auto eol=lf` when the repo lacks one. Extend the existing file in the same patch that normalizes line endings.
 
+## Discovery Protocol
+
+Trigger: CHECKLIST init for any non-greenfield target.
+
+Search budget: max 15 `rg`/`glob` invocations, max 100 hits.
+
+### Mandatory searches
+
+1. **Pattern search** - dominant idioms in target file:
+   - Error types: `rg "(Error|Exception|ValidationError)" <target_file>`
+   - Validation calls: `rg "(validate|check|verify|guard)" <target_file>`
+   - Helper imports: `rg "import.*from.*(utils|helpers|services)" <target_file>`
+   - DI patterns: `rg "(new |@Inject|@Injectable|container\.resolve)" <target_file>`
+
+2. **Ownership trace** - who owns the concern:
+   - Forward imports: `rg "import.*<target_module>" src/ --max-count 50`
+   - Reverse imports: `rg "<target_module>" src/ --max-count 50`
+   - Method calls: `rg "<concern_method>" src/ --max-count 50`
+
+3. **Library scan** - available dependencies:
+   - Read manifest: `package.json`, `pyproject.toml`, `Cargo.toml`, `go.mod`
+   - Extract dependency names and versions
+
+4. **Helper search** - existing utilities:
+   - `rg "export.*<concern_type>" src/ --max-count 50`
+   - `rg "function <concern_name>" src/ --max-count 50`
+
+5-15. **Pattern-specific searches** based on discovered idioms (e.g., if validation pattern found, search for all validation utilities).
+
+### Ownership resolution
+
+- Count direct imports + method calls per module
+- Owner = module with highest reference count
+- Tie-breaker: module with oldest git touch (most established)
+- Owner confidence: high (margin >2x), medium (margin 1.5x-2x), low (margin <1.5x)
+
+### Rule detection
+
+For each rule in `rules.md` H13-H39:
+1. Check if rule applies to target file's context
+2. If yes: add to `system_evidence.rule_triggers` with evidence
+3. If rule has auto-exception: evaluate exception conditions
+4. If exception triggered: mark rule as `auto_excepted` with reason
+5. If exception not triggered: mark rule as `active` (must be enforced)
+
+### Architecture doc scanning
+
+Scan for project architecture/style docs:
+- `ARCHITECTURE.md`
+- `ADR/` directory
+- `docs/architecture/`
+- `STYLE_POLICY.md`
+- Module-level `README.md` files
+
+Extract declared rules using pattern matching:
+- "All validation MUST go through X" → `must_use: X`
+- "Controllers must not contain business logic" → `layer_constraint: controller`
+- "Use dependency injection" → `di_required: true`
+
+### Output format
+
+Write to session state as `system_evidence`:
+
+```yaml
+system_evidence:
+  discovered_at: <ISO-8601 UTC>
+  target_file: <path>
+  
+  pattern_owner: <module>
+  pattern_owner_location: <file:line>
+  owner_confidence: high|medium|low
+  
+  must_use:
+    - <module.method> (<file:line>) [rule: H15]
+  
+  must_not_duplicate:
+    - <file:lines> -- <pattern> [rule: H13]
+  
+  must_use_library:
+    - <name> (<version>) [rule: H14]
+  
+  must_route_through:
+    - <layer> [rule: H16]
+  
+  dominant_idiom:
+    type: <error|validation|di|logging>
+    location: <file:line>
+    frequency: <N>
+    confidence: high|medium|low
+  
+  rule_triggers:
+    - rule: H13
+      active: true|false
+      auto_excepted: true|false
+      reason: <if auto-excepted>
+    
+  available_libraries:
+    - <name> (<version>) from <manifest>
+  
+  existing_utilities:
+    - file: <path>
+      lines: <range>
+      pattern: <type>
+  
+  architecture_flags:
+    high_coupling:
+      - module: <path>
+        fan_in: <N>
+        fan_out: <N>
+    circular_dependency:
+      - cycle: [<module_list>]
+    pattern_concentration:
+      - pattern: <description>
+        occurrences: <N>
+        files: [<paths>]
+```
+
+### Exception handling
+
+System reads `STYLE_POLICY.md` for project-level rule exceptions:
+- `rule_exceptions.H13: disabled|advisory|mandatory`
+- `rule_exceptions.H14: disabled|advisory|mandatory`
+- etc.
+
+Project-level exceptions override system defaults. If a rule is disabled for the project, it does not fire. If set to advisory, it flags but doesn't block. If mandatory (default), it blocks on violation.
+
+### Greenfield handling
+
+For greenfield targets (no existing source files):
+- Discovery runs on the project's `05-impl-style.md` defaults and stack conventions
+- `system_evidence` records declared conventions as constraints
+- No ownership resolution (no existing code to own the concern)
+- No duplication detection (no existing utilities)
+- Library scan still runs (from manifest)
+
 ## Pre-commit behavior
 
 Pre-commit hooks (`.pre-commit-config.yaml`, `lefthook.yml`, `husky`) run the order below, and the PATCH per-edit lint gate must mirror it. This section is for PATCH and REVIEW when the touched code includes scripts, package config, CI/CD config, or tooling setup.

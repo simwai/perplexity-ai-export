@@ -14,6 +14,11 @@ Rewrite contract fields (all required):
 - Must preserve: list of constraints
 - Must eliminate: list of confirmed violations
 - Forbidden in patch: tokens, patterns, or constructs that must not appear
+- Must use: [from System constraints - system populated]
+- Must route through: [from System constraints - system populated]
+- Must not duplicate: [from System constraints - system populated]
+- Must use available library: [from System constraints - system populated]
+- Must follow layer: [from System constraints - system populated]
 
 Patch rules:
 
@@ -52,6 +57,54 @@ A green pre-existing suite is never proof that a confirmed bug is covered. A ful
 ### Compliance audit
 
 After every patch, emit a compliance audit section. For each must-preserve item: PASS or FAIL. For each must-eliminate item: PASS or FAIL. For each forbidden token: PASS or FAIL. If any audit item is FAIL, do not emit the patch. Return to PLAN phase.
+
+### Constraint verification
+
+After the compliance audit, verify all system-derived constraints mechanically. This is a non-negotiable gate; a single FAIL returns to PLAN.
+
+For each item in `Must use`:
+- verify: `rg "<module.method>" <target_file>`
+- expect: `pass` (exit 0, match found)
+- Record: PASS or FAIL with sanitized rg output
+
+For each item in `Must route through`:
+- verify: `rg "<owner_module>" <target_file>`
+- expect: `pass` (exit 0, match found)
+- Record: PASS or FAIL with sanitized rg output
+
+For each item in `Must not duplicate`:
+- verify: `rg "<pattern>" <target_file>`
+- expect: `silent` (exit 0, no matches)
+- Record: PASS or FAIL with sanitized rg output
+
+For each item in `Must use available library`:
+- verify: `rg "<library_usage>" <target_file>`
+- expect: `pass` (exit 0, match found)
+- Record: PASS or FAIL with sanitized rg output
+
+For each item in `Must follow layer`:
+- verify: `rg "<forbidden_pattern>" <target_file>`
+- expect: `silent` (exit 0, no matches)
+- Record: PASS or FAIL with sanitized rg output
+
+Gate result: ALL PASS required. Any FAIL -> return to PLAN with specific constraint violation.
+
+### Self-review verification
+
+After the constraint verification, verify the agent's self-review claims from the PATCH template. This is a non-negotiable gate; a single FALSE claim returns to PLAN.
+
+For each item in `## Self-Review`:
+- Agent claimed: [PASS|FAIL]
+- System verification: [PASS|FAIL]
+- Evidence: [rg command output or "n/a"]
+- Result: [TRUE|FALSE]
+
+Gate result: ALL TRUE required. Any FALSE -> return to PLAN with specific self-review violation.
+
+</HIGH_PRIO>
+
+<HIGH_PRIO>
+### Verification gate
 </HIGH_PRIO>
 
 <HIGH_PRIO>

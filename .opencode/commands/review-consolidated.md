@@ -2,7 +2,7 @@
 description: Switch REVIEW cadence to consolidated mode for auto-aggregated findings.
 ---
 
-Set `review_mode` to `consolidated` in the session state file before REVIEW runs.
+Set `review_mode` to `consolidated` in the session state file, then enter REVIEW phase.
 
 In `consolidated` mode, the agent reviews all files and batches internally,
 then emits one final REVIEW response with `Batch: AGGREGATE -- all files
@@ -11,3 +11,6 @@ confirmation is requested; all mitigations remain provisional until the user
 answers the aggregate decision section.
 
 To switch back to per-batch confirmation, use `/review-interactive`.
+
+After setting the flag, enter REVIEW by declaring `[PHASE: REVIEW]` and
+emitting the REVIEW template from `prompt-system/03-output-and-state.md`.

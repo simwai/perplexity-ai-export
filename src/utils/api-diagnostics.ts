@@ -3,8 +3,12 @@ import fs from 'node:fs/promises'
 import { join } from 'node:path'
 import { logger } from './logger.js'
 import { errorMessageOf } from './extract-error-message.js'
-import { from } from 'super-result'
+import { ok, err, type Result } from 'super-result'
+import { createNamedError } from './errors.js'
 import type { Config } from './config.js'
+
+export const DiagnosticsWriteError = createNamedError('DiagnosticsWriteError')
+type DiagnosticsWriteErrorInstance = InstanceType<typeof DiagnosticsWriteError>
 
 export interface ApiDiagnosticEntry {
   timestamp: string
@@ -22,27 +26,40 @@ export class ApiDiagnosticsWriter {
     this.debug = input.debug
   }
 
-  async writeFailure(entry: Omit<ApiDiagnosticEntry, 'timestamp'>): Promise<void> {
-    if (!this.debug) return
+  async writeFailure(
+    entry: Omit<ApiDiagnosticEntry, 'timestamp'>
+  ): Promise<Result<void, DiagnosticsWriteErrorInstance>> {
+    if (!this.debug) {
+      return ok(undefined)
+    }
 
-    const result = await from(async () => await this.appendDiagnosticEntry(entry))
+    const result = await this.appendDiagnosticEntry(entry)
 
     if (!result.ok) {
       logger.warn(`Failed to write API diagnostic: ${errorMessageOf(result.error)}`)
     }
+
+    return result
   }
 
-  private async appendDiagnosticEntry(entry: Omit<ApiDiagnosticEntry, 'timestamp'>): Promise<void> {
-    const diagnosticEntry: ApiDiagnosticEntry = {
-      timestamp: new Date().toISOString(),
-      ...entry,
+  private async appendDiagnosticEntry(
+    entry: Omit<ApiDiagnosticEntry, 'timestamp'>
+  ): Promise<Result<void, DiagnosticsWriteErrorInstance>> {
+    try {
+      const diagnosticEntry: ApiDiagnosticEntry = {
+        timestamp: new Date().toISOString(),
+        ...entry,
+      }
+
+      const diagnosticLogPath = join('debug', 'api-diagnostics.jsonl')
+      await fs.mkdir('debug', { recursive: true })
+
+      const entryAsJsonLine = JSON.stringify(diagnosticEntry) + '\n'
+      await fs.appendFile(diagnosticLogPath, entryAsJsonLine, 'utf8')
+      return ok(undefined)
+    } catch (error) {
+      return err(new DiagnosticsWriteError(error instanceof Error ? error.message : String(error)))
     }
-
-    const diagnosticLogPath = join('debug', 'api-diagnostics.jsonl')
-    await fs.mkdir('debug', { recursive: true })
-
-    const entryAsJsonLine = JSON.stringify(diagnosticEntry) + '\n'
-    await fs.appendFile(diagnosticLogPath, entryAsJsonLine, 'utf8')
   }
 }
 

@@ -1,7 +1,7 @@
 {
-  // opencode-native config for the Baba prompt system.
-  // Inert for other agents (Claude Code, Cursor, Codex) — AGENTS.md + prompt-system/
-  // remain the portable copy-paste unit. This file only affects opencode.
+// opencode-native config for the Baba prompt system.
+// Inert for other agents (Claude Code, Cursor, Codex) — AGENTS.md + prompt-system/
+// remain the portable copy-paste unit. This file only affects opencode.
   "$schema": "https://opencode.ai/config.json",
 
   // Guarantees the system core is in every opencode session without relying
@@ -20,7 +20,7 @@
     "prompt-system/05-impl-style.md",
     "prompt-system/06-misc.md",
     "prompt-system/07-protocols.md",
-    "prompt-system/08-plan-actual-gate.md",
+    "prompt-system/08-plan-actual-gate.md"
   ],
 
   // Prefer the read-only BabaSensei planning path by default. The native Build
@@ -33,14 +33,14 @@
   // instead of auto-approving under permissive setups. Guards credit burn on
   // loop-prone models (Grok-class). See prompt-system/00-system.md ## Loop protection.
   "permission": {
-    "doom_loop": "deny",
+    "doom_loop": "deny"
   },
 
   // Truncate oversized tool output early so one oversized read does not burn
   // the whole turn budget. Increased to 5000 to accommodate full system file reads.
   "tool_output": {
     "max_lines": 5000,
-    "max_bytes": 32768,
+    "max_bytes": 32768
   },
 
   // opencode plugins. @latest is fine for personal/dev use; pin a version
@@ -52,7 +52,7 @@
     "opencode-adaptive-thinking@latest",
     "opencode-pty",
     "opencode-scheduler",
-    ".opencode/plugins/startup-gate.ts",
+    ".opencode/plugins/startup-gate.ts"
   ],
 
   // MCP servers mirror the fallback tiers in AGENTS.md, adapted to opencode's
@@ -62,22 +62,22 @@
     // Tier 1 — no keys required
     "context7": {
       "type": "remote",
-      "url": "https://mcp.context7.com/mcp",
+      "url": "https://mcp.context7.com/mcp"
     },
     "playwright": {
       "type": "local",
       "command": ["npx", "-y", "@playwright/mcp@0.0.80"],
-      "timeout": 30000,
+      "timeout": 30000
     },
     "playwright-headless": {
       "type": "local",
-      "command": ["npx", "-y", "@playwright/mcp@0.0.80", "--headless"],
+      "command": ["npx", "-y", "@playwright/mcp@0.0.80", "--headless"]
     },
     // Remote OAuth — no key, one-time browser consent via `opencode mcp auth trello`
     "trello": {
       "type": "remote",
       "url": "https://mcp.trello.com/v1",
-      "oauth": {},
-    },
-  },
+      "oauth": {}
+    }
+  }
 }

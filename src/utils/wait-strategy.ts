@@ -1,11 +1,16 @@
 import type { Page } from '@playwright/test'
 import { type Config } from './config.js'
 import { logger } from './logger.js'
+import { ok, err, type Result } from 'super-result'
+import { createNamedError } from './errors.js'
+
+export const SelectorWaitError = createNamedError('SelectorWaitError')
+type SelectorWaitErrorInstance = InstanceType<typeof SelectorWaitError>
 
 export interface WaitStrategy {
   afterClick(page: Page): Promise<void>
   afterScroll(page: Page): Promise<void>
-  forSelector(page: Page, selector: string): Promise<void>
+  forSelector(page: Page, selector: string): Promise<Result<void, SelectorWaitErrorInstance>>
 }
 
 class DynamicWaitStrategy implements WaitStrategy {
@@ -26,11 +31,19 @@ class DynamicWaitStrategy implements WaitStrategy {
     await page.waitForLoadState('domcontentloaded')
   }
 
-  async forSelector(page: Page, selector: string): Promise<void> {
-    await page.waitForSelector(selector, {
-      state: 'visible',
-      timeout: DynamicWaitStrategy.SELECTOR_TIMEOUT_MS,
-    })
+  async forSelector(
+    page: Page,
+    selector: string
+  ): Promise<Result<void, SelectorWaitErrorInstance>> {
+    try {
+      await page.waitForSelector(selector, {
+        state: 'visible',
+        timeout: DynamicWaitStrategy.SELECTOR_TIMEOUT_MS,
+      })
+      return ok(undefined)
+    } catch (error) {
+      return err(new SelectorWaitError(error instanceof Error ? error.message : String(error)))
+    }
   }
 }
 
@@ -55,8 +68,16 @@ class StaticWaitStrategy implements WaitStrategy {
     await this.randomPause(page)
   }
 
-  async forSelector(page: Page, _selector: string): Promise<void> {
-    await this.randomPause(page)
+  async forSelector(
+    page: Page,
+    _selector: string
+  ): Promise<Result<void, SelectorWaitErrorInstance>> {
+    try {
+      await this.randomPause(page)
+      return ok(undefined)
+    } catch (error) {
+      return err(new SelectorWaitError(error instanceof Error ? error.message : String(error)))
+    }
   }
 }
 

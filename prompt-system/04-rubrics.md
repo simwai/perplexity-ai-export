@@ -28,6 +28,60 @@ Hard-tier (H1-H12) and soft-tier (S1-S20) review rubrics. Hard-tier items block 
 
 **H12 -- Idiom consistency: a change introduces an error-handling or style idiom that conflicts with the dominating pattern of the file or codebase** (e.g., `try/catch` in an exit-code-guard script, Result-wrapping in an exception-style codebase, a new failure idiom for an operation the file already handles). Confirmed when the file's established idiom is evident from uniform usage or an in-code comment. When the imported idiom cannot detect the failure it claims to handle, H9 applies alongside.
 
+**H13 -- No Duplication: fix introduces logic duplicated from an existing utility/helper/validator.** See `rules.md` H13 for detection, auto-exception, and scope. System-triggered: fires when `system_evidence.existing_utilities` contains a utility matching the new code pattern.
+
+**H14 -- Library-First: fix hand-rolls logic that a maintained library already solves.** See `rules.md` H14 for detection, auto-exception, and scope. System-triggered: fires when `system_evidence.available_libraries` contains a library for the problem domain and the hand-rolled code exceeds the threshold.
+
+**H15 -- Ownership Routing: fix bypasses the architectural owner of the concern.** See `rules.md` H15 for detection, auto-exception, and scope. System-triggered: fires when the patch does not call the module identified as `pattern_owner` in `system_evidence`.
+
+**H16 -- Layer Discipline: fix violates architectural layer boundaries.** See `rules.md` H16 for detection, auto-exception, and scope. System-triggered: fires when the target file's layer classification identifies a forbidden pattern in the new code.
+
+**H17 -- No Single-Use Abstraction: fix creates a new function/class/module with <=1 caller.** See `rules.md` H17 for detection, auto-exception, and scope. System-triggered: fires when a new symbol added by the fix has <=1 caller outside its defining file.
+
+**H18 -- Dominant Idiom Enforcement: fix introduces a new pattern when a dominant pattern exists with high confidence.** See `rules.md` H18 for detection, auto-exception, and scope. System-triggered: fires when `system_evidence.dominant_idiom` exists with high confidence and the fix's idiom differs.
+
+**H19 -- No Over-Engineering: fix creates unnecessary abstraction layers.** See `rules.md` H19 for detection, auto-exception, and scope. System-triggered: fires when abstraction layers added > 1 AND callers < 3.
+
+**H20 -- Composition Over Inheritance: fix uses class inheritance when composition is dominant in the layer.** See `rules.md` H20 for detection, auto-exception, and scope. System-triggered: fires when composition usage > 60% in the layer AND fix uses `extends`.
+
+**H21 -- Dependency Injection: fix uses `new` or direct instantiation outside the composition root.** See `rules.md` H21 for detection, auto-exception, and scope. System-triggered: fires when target is not the composition root AND contains `new`.
+
+**H22 -- Single Source of Truth: fix duplicates config/data that exists in a single source.** See `rules.md` H22 for detection, auto-exception, and scope. System-triggered: fires when new code contains literals matching existing config/constant entries.
+
+**H23 -- Early Returns: fix introduces deep nesting (>3 levels) without early returns.** See `rules.md` H23 for detection, auto-exception, and scope. System-triggered: fires when nesting depth > 3 AND no early return exists in the function.
+
+**H24 -- No Unnecessary Abstraction: fix creates a wrapper/adapter/delegator with <=1 caller.** See `rules.md` H24 for detection, auto-exception, and scope. System-triggered: fires when a new wrapper/adapter has <=1 caller.
+
+**H25 -- No Speculative Code: fix includes code for concerns not present in the task scope.** See `rules.md` H25 for detection, auto-exception, and scope. System-triggered: fires when new code contains TODOs without owner, unused parameters, or unreachable branches.
+
+**H26 -- No Manual-Sync Registries: fix creates a registry/mapping that requires manual sync.** See `rules.md` H26 for detection, auto-exception, and scope. System-triggered: fires when registry entries do not match discovered items.
+
+**H27 -- No Over-Engineered Discovery: fix uses dynamic discovery when explicit list is simpler.** See `rules.md` H27 for detection, auto-exception, and scope. System-triggered: fires when explicit list has <10 items AND discovery mechanism is >3 lines.
+
+**H28 -- Code-Decision Ladder Compliance: fix adds new code when existing utility/library/standard lib already solves it.** See `rules.md` H28 for detection, auto-exception, and scope. System-triggered: fires when existing solution with >80% similarity is found.
+
+**H29 -- Stepdown Rule: fix mixes high-level orchestration with low-level operations without named intermediate.** See `rules.md` H29 for detection, auto-exception, and scope. Advisory only.
+
+**H30 -- Newspaper Order: fix places public function below private helper it calls.** See `rules.md` H30 for detection, auto-exception, and scope. Advisory only.
+
+**H31 -- No Flag/Output Arguments: fix introduces boolean flag arguments or mutates output arguments.** See `rules.md` H31 for detection, auto-exception, and scope. System-triggered: fires when new function signature contains boolean flag or output argument pattern.
+
+**H32 -- Law of Demeter: fix introduces train-wreck chains (a.b.c.d) longer than 1 dot.** See `rules.md` H32 for detection, auto-exception, and scope. Advisory only.
+
+**H33 -- No Dead Code: fix adds unreachable code or unused exports.** See `rules.md` H33 for detection, auto-exception, and scope. System-triggered: fires when new code contains unreachable paths or unused exports.
+
+**H34 -- No Magic Values: fix introduces unexplained literals that should be named constants.** See `rules.md` H34 for detection, auto-exception, and scope. Advisory only.
+
+**H35 -- Error Handling Quality: fix swallows exceptions or loses error context.** See `rules.md` H35 for detection, auto-exception, and scope. System-triggered: fires when catch block is empty or lacks context.
+
+**H36 -- Logging Quality: fix adds debug prints or exposes sensitive data in logs.** See `rules.md` H36 for detection, auto-exception, and scope. System-triggered: fires when debug prints or sensitive data patterns are found in new code.
+
+**H37 -- Type Safety (Non-Python): fix uses unsafe casts, `any` type, or `as` without type guard.** See `rules.md` H37 for detection, auto-exception, and scope. System-triggered: fires when `any` or unsafe cast patterns are found in new code.
+
+**H38 -- No Obvious Performance Issues: fix introduces O(n2) scans, nested loops over same data, or synchronous blocking in async context.** See `rules.md` H38 for detection, auto-exception, and scope. Advisory only.
+
+**H39 -- No Multi-Concept Files: fix combines multiple classes, errors, types, interfaces, or schemas into a single file.** See `rules.md` H39 for detection, auto-exception, and scope. System-triggered: fires when a file contains multiple distinct concept types.
+
 ## Soft tier (S1-S20)
 
 **S1 -- Naming: unclear, misleading, or inconsistent identifiers.**

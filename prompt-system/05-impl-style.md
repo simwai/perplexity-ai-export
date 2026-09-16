@@ -25,7 +25,14 @@ When the target is a new project from scratch, or new files being added to a rep
 - region tags for new projects
 - the code-decision ladder, comment policy, and logging palette
 
-This is the one case where "defaults" are binding rather than advisory: a greenfield scaffold has no existing conventions to preserve, so the module defaults fill that role. A deviation from a greenfield default requires explicit user approval recorded in the INTAKE `Stack/Style:` field or the PLAN `Conventions:` field; an agent must never silently substitute its own generic conventions. The "strong defaults, not absolute laws" framing above continues to apply to existing codebases, where the local-convention policy governs.
+This is the one case where "defaults" are binding rather than advisory: a
+greenfield scaffold has no existing conventions to preserve, so the module
+defaults fill that role. A deviation from a greenfield default requires
+explicit user approval recorded in the INTAKE `Stack/Style:` field or the
+PLAN `Conventions:` field; an agent must never silently substitute its own
+generic conventions. The "strong defaults, not absolute laws" framing above
+continues to apply to existing codebases, where the local-convention policy
+governs.
 
 ## Local-convention policy
 
@@ -35,7 +42,12 @@ The decision between *preserve local convention* and *upgrade to house style* is
 - If the artifact is missing or malformed in a target project, the bot runs the auto-trigger ask from `00-system.md` (which recommends `preserve-local` as option A) and proceeds with the result.
 - If the user declines the ask or the ask cannot run, the bot defaults to `preserve-local` and emits a one-line note in the plan that the field is unset or invalid, so a human can correct it.
 - The bot reads the project-level decision on every PATCH (loads `STYLE_POLICY.md`; the field is a single line in frontmatter). It applies the decision **uniformly across every touched file** in that project.
-- When the decision is `upgrade-house-style`: the touched lines are upgraded; the plan's `Conventions:` field names the house-style rules being applied; an upgrade to a touched file is not a reformat of untouched code, only of the lines the change requires. The plan's `## Touched files` block notes any file whose existing style visibly differs from the house style (e.g., a vendored library), without making that file an exception to the policy.
+- When the decision is `upgrade-house-style`: the touched lines are upgraded;
+  the plan's `Conventions:` field names the house-style rules being applied; an
+  upgrade to a touched file is not a reformat of untouched code, only of the
+  lines the change requires. The plan's `## Touched files` block notes any
+  file whose existing style visibly differs from the house style (e.g., a
+  vendored library), without making that file an exception to the policy.
 - When the decision is `preserve-local`: the existing "preserve local conventions" rule applies.
 - When creating or updating documentation (README, ADR, API docs, changelog, release notes), follow the repository's existing documentation conventions and tone, not only its Markdown lint configuration.
 - Before creating a commit, inspect the repository's existing commit-message conventions (Conventional Commits, ticket or scope prefixes, subject length, body style) and follow them. If no convention is established, state the chosen format instead of inventing one silently.
@@ -77,19 +89,46 @@ The ladder runs after full comprehension, never instead of it: read the task and
 
 ## Stepdown rule (S14)
 
-Functions read top-to-bottom. Each function calls functions one level of abstraction below it. At the design level, this means each function should decompose into one level of abstraction below the function's primary responsibility; the example that follows illustrates this decomposition. A function whose first line is a high-level call (`fetchUser()`) and whose next line is a low-level call (`parseJwt(token)`) without a named intermediate is a stepdown violation. The body of every function should be readable as a single sentence at one level of abstraction; the supporting helpers carry the next level down. (Martin, *Clean Code* ch. 3 "One Level of Abstraction per Function" / ch. 11 "The Stepdown Rule".)
+Functions read top-to-bottom. Each function calls functions one level of
+abstraction below it. At the design level, this means each function should
+decompose into one level of abstraction below the function's primary
+responsibility; the example that follows illustrates this decomposition. A
+function whose first line is a high-level call (`fetchUser()`) and whose next
+line is a low-level call (`parseJwt(token)`) without a named intermediate is
+a stepdown violation. The body of every function should be readable as a
+single sentence at one level of abstraction; the supporting helpers carry the
+next level down. (Martin, *Clean Code* ch. 3 "One Level of Abstraction per
+Function" / ch. 11 "The Stepdown Rule".)
 
 ## Newspaper order (S15)
 
-A file reads like a newspaper article: headline first, then increasingly fine-grained detail as you scroll. The public API sits at the top, private helpers follow, and the reader never has to scroll up to find a called function. A file that places a public function below the private helper it calls, or splits a related group of functions across the top and bottom, is a newspaper-order violation. (Martin, *Clean Code* ch. 5 "The Purpose of Formatting" / ch. 11 "The Newspaper Metaphor".)
+A file reads like a newspaper article: headline first, then increasingly
+fine-grained detail as you scroll. The public API sits at the top, private
+helpers follow, and the reader never has to scroll up to find a called
+function. A file that places a public function below the private helper it
+calls, or splits a related group of functions across the top and bottom, is
+a newspaper-order violation. (Martin, *Clean Code* ch. 5 "The Purpose of
+Formatting" / ch. 11 "The Newspaper Metaphor".)
 
 ## Flag arguments and output arguments (S16)
 
-A boolean flag argument almost always means the function does two things; split it. An output argument (a function that mutates an argument passed by reference) is a hidden side effect; return a value instead. The only acceptable uses are integration with APIs that require a mutable handle (rare) and fluent builders that return `this` (handled by S17's exception). (Martin, *Clean Code* ch. 3 / ch. 8 "Function Arguments" - Flag Arguments and Output Arguments.)
+A boolean flag argument almost always means the function does two things;
+split it. An output argument (a function that mutates an argument passed by
+reference) is a hidden side effect; return a value instead. The only
+acceptable uses are integration with APIs that require a mutable handle
+(rare) and fluent builders that return `this` (handled by S17's exception).
+(Martin, *Clean Code* ch. 3 / ch. 8 "Function Arguments" - Flag Arguments
+and Output Arguments.)
 
 ## Tell, don't ask - Law of Demeter (S17)
 
-A method should not reach through another object to access its parts. `customer.wallet.balance.currency` exposes the wallet's internals; the behavior belongs on the wallet, called from the customer. Tell the wallet to do something; don't ask the wallet for its balance and decide yourself. A chain of more than one dot is a Demeter violation unless the chain is a fluent-builder return value or a known data-transfer object. (Martin, *Clean Code* ch. 6 / ch. 12 "Objects and Data Structures".)
+A method should not reach through another object to access its parts.
+`customer.wallet.balance.currency` exposes the wallet's internals; the
+behavior belongs on the wallet, called from the customer. Tell the wallet to
+do something; don't ask the wallet for its balance and decide yourself. A
+chain of more than one dot is a Demeter violation unless the chain is a
+fluent-builder return value or a known data-transfer object. (Martin,
+*Clean Code* ch. 6 / ch. 12 "Objects and Data Structures".)
 
 ## Minimal verification floor
 
@@ -111,7 +150,11 @@ A method should not reach through another object to access its parts. `customer.
 
 *Reference: Robert C. Martin, Clean Code -- chapter 4 (1st ed., 2008) / chapter 5 (2nd ed., 2025). The categories below are Martin's, with stack-specific markers added on top.*
 
-**Content over prefix.** The rule is what the comment says, not what character starts it. Prefix follows the language (`//` in TS/JS/Java/Pine, `#` in Python/PowerShell/Bash, `--` in SQL/Lua/Haskell -- automatic, not policed here). Stack sections do not re-state the prefix; this is the only place the prefix is mentioned.
+**Content over prefix.** The rule is what the comment says, not what character
+starts it. Prefix follows the language (`//` in TS/JS/Java/Pine, `#` in
+Python/PowerShell/Bash, `--` in SQL/Lua/Haskell -- automatic, not policed
+here). Stack sections do not re-state the prefix; this is the only place the
+prefix is mentioned.
 
 **Why, not what.** Never restate the next line of code. Never write `// increment counter` above `i++`. Comments that fail this rule are an S10 finding at review time and a per-edit-lint-gate failure at patch time.
 
@@ -130,11 +173,21 @@ A method should not reach through another object to access its parts. `customer.
 
 - **Redundant or duplicative** -- restates the next line of code in prose, or says exactly what the code already expresses (e.g., `// set user to null` above `user = null`). The code is the source of truth. Always delete.
 - **Misleading or wrong** -- says one thing while the code does another. Worse than no comment. Delete and fix the code or the comment.
-- **Noise or formatting abuse** -- restates the obvious in a noisy way, uses loud markers (`////////////////////////////////////////////`), ASCII art separators, `// ==== Section ====`, `// ----- HEYO -----`, or `// some random label` headers. Use `// #region LABEL` / `// #endregion` instead. Region tags are the only sanctioned way to mark a section.
-- **Process artifacts** -- change logs at file top ("added by X on Y"), attributions (`// Added by Simon`), mandated comments required by process not code ("this function exists"), journal comments. Use git, not comments.
+- **Noise or formatting abuse** -- restates the obvious in a noisy way, uses
+  loud markers (`////////////////////////////////////////////`), ASCII art separators,
+  `// ==== Section ====`, `// ----- HEYO -----`, or `// some random label`
+  headers. Use `// #region LABEL` / `// #endregion` instead. Region tags are
+  the only sanctioned way to mark a section.
+- **Process artifacts** -- change logs at file top ("added by X on Y"),
+  attributions (`// Added by Simon`), mandated comments required by process not
+  code ("this function exists"), journal comments. Use git, not comments.
 - **Dead or commented-out code** -- dead code left as a comment, commented-out code blocks. Delete; git has the history.
 - **Structural violations** -- function headers (block comment at top of every function), docstrings on private/internal code, closing-brace comments (`// } end of while`), position markers (`// ACTIONS` at arbitrary columns). Use section breaks, extract-method, or region tags.
-- **Nonlocal or excessive context** -- references system-wide context without a link ("corresponds to issue #1234"), multi-paragraph essays, HTML/markup in comments (`// <b>important</b>`, Markdown/reST markup). Plain prose only; cite URLs inline. Exception: documentation generation libraries explicitly configured in the project.
+- **Nonlocal or excessive context** -- references system-wide context without a
+  link ("corresponds to issue #1234"), multi-paragraph essays, HTML/markup in
+  comments (`// <b>important</b>`, Markdown/reST markup). Plain prose only;
+  cite URLs inline. Exception: documentation generation libraries explicitly
+  configured in the project.
 - **TODO without owner** -- `// TODO: fix this` with no owner and no target. Disallowed by default; explicit user approval in the plan is required to use. Format: `// TODO(<owner>): <what> -- <why deferred>`.
 
 Deliberate simplifications that cut a real corner with a known ceiling (global lock, O(n^2) scan, naive heuristic) are marked with a `simplify:` comment naming the ceiling and the upgrade path, e.g. `# simplify: global lock -- per-account locks if throughput matters`.
@@ -153,18 +206,41 @@ Deliberate simplifications that cut a real corner with a known ceiling (global l
 
 ## Naming
 
-Names must reveal intent, usage, and role. Reference: Robert C. Martin, *Clean Code* chapter 2 (1st ed., 2008) / chapter 4 (2nd ed., 2025) -- "Meaningful Names." Apply the rules there as the house style. The project-specific markers that follow are how this system names the same ideas: classes are nouns (`UserService`); functions are verbs (`calculateTotal`); booleans read like facts (`isAdmin`, `hasPermission`, `canRetry`); in TypeScript class code, prefer underscore-prefixed private fields as a default house style.
+Names must reveal intent, usage, and role. Reference: Robert C. Martin,
+*Clean Code* chapter 2 (1st ed., 2008) / chapter 4 (2nd ed., 2025) --
+"Meaningful Names." Apply the rules there as the house style. The
+project-specific markers that follow are how this system names the same
+ideas: classes are nouns (`UserService`); functions are verbs
+(`calculateTotal`); booleans read like facts (`isAdmin`, `hasPermission`,
+`canRetry`); in TypeScript class code, prefer underscore-prefixed private
+fields as a default house style.
 
 ## File naming
 
 - Name every file after its primary concept or export; a file exporting several unrelated helpers should split.
 - Default to kebab-case filenames unless the stack section says otherwise: `user-service.ts`, `pre-commit-config.yaml`, `architecture.md`. This matches this repository's own system and doc naming.
-- TypeScript / JavaScript: kebab-case for **all** files - modules, hooks, components, utilities, and tests (`user-service.ts`, `use-user-profile.ts`, `user-profile.tsx`, `user-repository.ts`, `user-service.test.ts`). PascalCase governs identifiers inside a file (the exported component/class name), not the filename.
+- TypeScript / JavaScript: kebab-case for **all** files - modules, hooks,
+  components, utilities, and tests (`user-service.ts`, `use-user-profile.ts`,
+  `user-profile.tsx`, `user-repository.ts`, `user-service.test.ts`).
+  PascalCase governs identifiers inside a file (the exported component/class
+  name), not the filename.
 - Python: snake_case modules per PEP 8 (`user_service.py`); tests use the `test_` prefix (`test_user_service.py`).
 - Java: PascalCase class files matching the public class name per Google Java Style (`UserService.java`); tests use `*Test.java` / `*IT.java`.
 - Frontend: kebab-case filenames for components and everything else (Vue SFCs `user-profile.vue`, React `user-profile.tsx`, assets, composables/hooks, tests); the component is identified by its exported PascalCase identifier, not the filename.
 - Avoid file names that differ only by case (`user-service.ts` vs `UserService.ts`); they collide on case-insensitive filesystems and break cross-platform checkouts.
 - Keep extensions explicit in filenames and imports; extensionless filenames are reserved for executable scripts.
+
+## File Separation
+
+Each distinct concept gets its own file. Do not combine multiple concepts into a single file.
+
+- One class per file. A file must contain at most one class definition.
+- Errors are their own files. Each error type or error category gets its own file.
+- Types and interfaces are their own files. Each type or interface gets its own file.
+- Schemas are their own files. Each schema definition gets its own file.
+- A file exporting several unrelated helpers should split (per `## File naming`).
+
+These rules apply across all stacks. A file that mixes classes, types, or interfaces violates this rule even if the combined file is shorter or more convenient.
 
 ## Security defaults
 
@@ -248,6 +324,19 @@ The defaults above are a floor, not a ceiling. They never replace the per-edit l
   - When the logic needs more than one statement, extract a named function or method and pass that as the single call: `from(async () => await fetchJson<RpcResponse>(url, body))`.
   - Do not use `.map()`, `.andThen()`, `.match()`, `.unwrapOr()` or other chaining methods on results.
 - If `neverthrow` is already established in the codebase, continue using it; do not mix both.
+- **Playwright async helpers**: wrap `waitForResponse` and similar async predicates with `from()` internally so callers receive `Result` directly. Example:
+
+  ```ts
+  async function waitForUserInfoResponse(page: Page, timeout: number): Promise<Result<void, Error>> {
+    return from(async () => {
+      await page.waitForResponse(
+        (res) => res.url().includes('/rest/userinfo') && res.status() === 200,
+        { timeout }
+      )
+      logger.debug('Library page ready (userinfo confirmed)')
+    })
+  }
+  ```
 
 ## Stack: Python
 
@@ -275,13 +364,32 @@ The defaults above are a floor, not a ceiling. They never replace the per-edit l
   - `typecheck` - `pyrefly check`  (only if pyrefly is a declared dependency in `pyproject.toml`)
   - `test` - `pytest`
   - `dev` - `python -m src.index`
-- Checks run through the detected runner regardless of tool: `lint` (`ruff check src`), `format` (`ruff format src`), `typecheck` (`pyrefly check` — **only if pyrefly is a declared dependency** in `pyproject.toml` under `[project].dependencies` or `[project].optional-dependencies`), `test` (`pytest`) - e.g., `pdm run test`, `poetry run pytest`, `uv run pytest`, or `<venv>\Scripts\python.exe -m pytest` for a bare venv.
+- Checks run through the detected runner regardless of tool: `lint` (`ruff check
+  src`), `format` (`ruff format src`), `typecheck` (`pyrefly check` — **only if
+  pyrefly is a declared dependency** in `pyproject.toml` under
+  `[project].dependencies` or `[project].optional-dependencies`), `test`
+  (`pytest`) - e.g., `pdm run test`, `poetry run pytest`, `uv run pytest`, or
+  `<venv>\Scripts\python.exe -m pytest` for a bare venv.
 - Tool role split (Pylance / Pyrefly / Ruff) so the three tools do not duplicate work or fight each other in the editor or CI:
   - **Pylance** is the language server / IntelliSense. Configure in the target repo's `.vscode/settings.json`: `python.languageServer: "Pylance"`, `python.analysis.typeCheckingMode: "strict"`. Do not enable Pylance's own type checker when Pyrefly is in use; Pyrefly is the single source of type errors.
-  - **Pyrefly** is the type checker. Configure in `pyproject.toml [tool.pyrefly]`; CLI entry point is `pyrefly check`. **Only runs if pyrefly is a declared dependency** in `pyproject.toml` under `[project].dependencies` or `[project].optional-dependencies`. Run on save in the editor; full check in CI and pre-commit (when present).
-  - **Ruff** is the lint + format + isort tool (single binary replaces flake8, black, and isort). Configure in `pyproject.toml [tool.ruff]` and `[tool.ruff.lint]` with a sensible default like `select = ["E", "F", "I", "W", "B", "UP"]`. Editor: `charliermarsh.ruff` extension, `[python].editor.defaultFormatter = "charliermarsh.ruff"`, `formatOnSave = true`, `editor.codeActionsOnSave.source.organizeImports = "explicit"` so Ruff handles isort without a separate extension.
+  - **Pyrefly** is the type checker. Configure in `pyproject.toml
+  [tool.pyrefly]`; CLI entry point is `pyrefly check`. **Only runs if pyrefly
+  is a declared dependency** in `pyproject.toml` under `[project].dependencies`
+  or `[project].optional-dependencies`. Run on save in the editor; full check
+  in CI and pre-commit (when present).
+  - **Ruff** is the lint + format + isort tool (single binary replaces flake8,
+  black, and isort). Configure in `pyproject.toml [tool.ruff]` and
+  `[tool.ruff.lint]` with a sensible default like `select = ["E", "F", "I",
+  "W", "B", "UP"]`. Editor: `charliermarsh.ruff` extension,
+  `[python].editor.defaultFormatter = "charliermarsh.ruff"`,
+  `formatOnSave = true`, `editor.codeActionsOnSave.source.organizeImports =
+  "explicit"` so Ruff handles isort without a separate extension.
   - **Recommended `.vscode/extensions.json`** `recommendations`: `ms-python.vscode-pylance`, `meta.pyrefly`, `charliermarsh.ruff`. The prompt system does not ship `.vscode/` files; PATCH runs apply this wiring to target repos on demand.
-- Pyrefly is the type checker (not Pyright or mypy). Configured in `[tool.pyrefly]` in `pyproject.toml` with `strict = true`. Override noisy strict rules only with rationale. Per-file opt-out via `# pyrefly: ignore[rule]` with a one-line why comment. **Type-check gate only executes when pyrefly is a declared dependency.**
+- Pyrefly is the type checker (not Pyright or mypy). Configured in
+  `[tool.pyrefly]` in `pyproject.toml` with `strict = true`. Override noisy
+  strict rules only with rationale. Per-file opt-out via
+  `# pyrefly: ignore[rule]` with a one-line why comment. **Type-check gate
+  only executes when pyrefly is a declared dependency.**
 - DI container: **dependency-injector**. Favor constructor injection; wire the composition root at the application entry point. Default to transient lifetime unless a clear singleton or scoped rationale exists.
 - Result pattern library: **rustico** with the `safe()` convention:
   - A project-level `safe()` helper wraps a throwing expression into a `Result`:
@@ -361,7 +469,12 @@ The defaults above are a floor, not a ceiling. They never replace the per-edit l
 - Cmdlet naming: singular noun, not plural; parameter names hyphenated (`-Path`, not `-FilePath`).
 - Error handling: `$ErrorActionPreference = 'Stop'` at the top of scripts; `try/catch/finally`; never silently `continue` on a non-zero exit code.
 - Native commands (git, robocopy, rg) report failure through `$LASTEXITCODE`, not exceptions: by default a non-zero exit code sets `$?` to `$false` but does not generate an error and does not trigger `catch`/`trap`.
-- pwsh 7.3 (experimental) / 7.4 (stable) adds `$PSNativeCommandUseErrorActionPreference`, default `$false`. With `$true` and `$ErrorActionPreference='Stop'`, a non-zero exit code becomes a catchable script-terminating error (`NativeCommandExitException`). Whether `try/catch` fires around a native call is configuration-dependent; check both variables before relying on it; never assume.
+- pwsh 7.3 (experimental) / 7.4 (stable) adds
+  `$PSNativeCommandUseErrorActionPreference`, default `$false`. With `$true`
+  and `$ErrorActionPreference='Stop'`, a non-zero exit code becomes a
+  catchable script-terminating error (`NativeCommandExitException`). Whether
+  `try/catch` fires around a native call is configuration-dependent; check
+  both variables before relying on it; never assume.
 - Prefer guard-and-return: run the command, check `$LASTEXITCODE`, write a warning, return. It is version-proof and setting-proof, and matches the dominating idiom of this repo's scripts (see the comment in `sync.ps1` `Update-GitTarget`).
 - Beware informational exit codes: robocopy uses 1-7 for success outcomes; test `-ge 8` as `sync.ps1` does.
 - Use `try/catch/finally` for cmdlet terminating errors and for cleanup that must run when a terminating error occurs (`finally` always runs). Under guard-and-return, restore env-var guards immediately after the guarded call; no `finally` is needed because nothing throws on that path.

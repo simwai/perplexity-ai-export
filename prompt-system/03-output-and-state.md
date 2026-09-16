@@ -146,6 +146,7 @@ Allowed next move:
 # Task Card
 Task: [id] -- [one-line description]
 Target: [file/module or TBD]
+Type: [bugfix | feature | refactor]
 Scope:
 - In: [in scope]
 - Out: [out of scope]
@@ -171,12 +172,24 @@ Allowed next move:
 # Review Session Checklist
 Target scope: [scope description, e.g. "src/" or "all .ts files"]
 Focus: [what to look for]
+Scope: [bugfix | feature | refactor] -- [one-line description]
 
 File inventory:
 - [ ] [file path] -- [LOC] -- pending -- [discovery: keyword-match(N), entry-dist(N), layer:X, test:Y/N]
 - [ ] [file path] -- [LOC] -- pending (large, will chunk) -- [discovery: ...]
 (status: pending | reviewing | complete)
 Source: [discovery | manual | task-card]
+
+## System Discovery (auto-populated, agent cannot modify)
+
+System evidence: [see session state system_evidence block]
+Pattern owner: [module] (confidence: [high|medium|low]) [file:line]
+Existing utilities: [list or "none"]
+Available libraries: [list or "none"]
+Dominant idiom: [pattern] at [file:line] (frequency: N)
+Rules triggered: [list of H-rules from system_evidence]
+Architecture flags: [list from system_evidence or "none"]
+Status: [complete | blocked]
 
 Pre-review docs log:
 - [ ] Library / version / URL recorded
@@ -197,7 +210,34 @@ Hard tier:
 - [ ] H10
 - [ ] H11
 - [ ] H12
-  - Greenfield skip: mark `[x] H1-H12 -- skipped (greenfield)` when CHECKLIST/REVIEW are skipped per the greenfield branch.
+- [ ] H13
+- [ ] H14
+- [ ] H15
+- [ ] H16
+- [ ] H17
+- [ ] H18
+- [ ] H19
+- [ ] H20
+- [ ] H21
+- [ ] H22
+- [ ] H23
+- [ ] H24
+- [ ] H25
+- [ ] H26
+- [ ] H27
+- [ ] H28
+- [ ] H29
+- [ ] H30
+- [ ] H31
+- [ ] H32
+- [ ] H33
+- [ ] H34
+- [ ] H35
+- [ ] H36
+- [ ] H37
+- [ ] H38
+- [ ] H39
+  - Greenfield skip: mark `[x] H1-H39 -- skipped (greenfield)` when CHECKLIST/REVIEW are skipped per the greenfield branch.
 
 Soft tier:
 - [ ] S1
@@ -457,15 +497,36 @@ decision you must approve]
 # Fix Plan
 Target: [file/module]
 Scope: [full|partial]
+Scope type: [bugfix | feature | refactor]
 Pending review items: [list of finding_ids still under review, or "none"]
 
 Source: [auto-generated from REVIEW findings | manual]
 
+## System Constraints (from Discovery Protocol)
+Must use:
+- <module.method> (<file:line>) [rule: H15]
+
+Must not duplicate:
+- <file:lines> -- <pattern> [rule: H13]
+
+Must route through:
+- <layer> [rule: H16]
+
+Must use available library:
+- <name> (<version>) [rule: H14]
+
+Rule exceptions (auto-granted):
+- H<number>: <reason from system_evidence>
+
+Architecture flags:
+- <flag_type>: <details> [from system_evidence]
+
+Agent writes only:
 Will change:
-- id: [unique id]
-  change: [change]
-  verify: [command -- idempotent read-only check, max 2 KiB]
-  expect: [pass|fail|exit:N|regex:<pat>|contains:<s>|silent]
+- id: <unique id>
+  change: <change description - agent controls this only>
+  verify: <system-generated rg command>
+  expect: <pass|fail|exit:N|regex:<pat>|contains:<s>|silent>
 
 The runner MUST execute each verify command automatically after staging and before the commit/push ask; emitting the command text without running it is a gate FAIL.
 
@@ -543,13 +604,65 @@ Forbidden in patch:
 
 - [token/pattern]
 
+Must use:
+
+- [module.method or library] [from System constraints - system populated]
+
+Must route through:
+
+- [owner module.method] [from System constraints - system populated]
+
+Must not duplicate:
+
+- [existing file:line pattern] [from System constraints - system populated]
+
+Must use available library:
+
+- [library] [from System constraints - system populated]
+
+Must follow layer:
+
+- [layer constraint] [from System constraints - system populated]
+
 # Patch
 [code or patch]
+
+# Self-Review
+- [ ] All `Must use` dependencies are called in the patch
+- [ ] No `Must not duplicate` patterns appear in the patch
+- [ ] All `Must use available library` items are used in the patch
+- [ ] All `Must route through` modules are called in the patch
+- [ ] No `Must follow layer` violations in the patch
+- [ ] Scope type respected: [bugfix/feature/refactor] rules applied
+- [ ] Auto-exceptions from system_evidence were honored
+- [ ] No speculative code added (H25)
+- [ ] No dead code added (H33)
+- [ ] No magic values introduced (H34)
+- [ ] No debug prints or sensitive data in logs (H36)
+- [ ] No unsafe casts or `any` type used (H37)
 
 # Compliance Audit
 - [check]: PASS/FAIL
 - [check]: PASS/FAIL
 - Project style policy: PASS|FAIL -- [one-line evidence; FAIL only on a non-greenfield, non-READ_ONLY repo missing STYLE_POLICY.md artifact]
+
+# Constraint Verification
+For each item in Must use:
+- [module.method]: PASS|FAIL -- rg "<module.method>" <target_file>
+
+For each item in Must route through:
+- [owner_module]: PASS|FAIL -- rg "<owner_module>" <target_file>
+
+For each item in Must not duplicate:
+- [file:lines]: PASS|FAIL -- rg "<pattern>" <target_file>
+
+For each item in Must use available library:
+- [library]: PASS|FAIL -- rg "<library_usage>" <target_file>
+
+For each item in Must follow layer:
+- [layer_constraint]: PASS|FAIL -- rg "<forbidden_pattern>" <target_file>
+
+Gate result: ALL PASS required. Any FAIL -> return to PLAN.
 
 # Verification
 - Diff inspected: yes/no -- [summary]

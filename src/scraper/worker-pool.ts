@@ -4,13 +4,16 @@ import { ConversationExtractor, type ExtractedConversation } from './conversatio
 import { CheckpointManager, type ConversationMeta } from './checkpoint-manager.js'
 import { logger } from '../utils/logger.js'
 import { type Config } from '../utils/config.js'
-import { isTypedError } from '../utils/errors.js'
+import { isTypedError, createNamedError } from '../utils/errors.js'
 import { join } from 'node:path'
 import { writeFileSync, existsSync, mkdirSync, statSync } from 'node:fs'
 import { sanitizeFilename, sanitizeSpaceName } from '../export/sanitizer.js'
-import { createResult, ok, err, type Result } from 'super-result'
+import { ok, err, type Result } from 'super-result'
 import { errorMessageOf } from '../utils/extract-error-message.js'
 import { RateLimiter } from './rate-limiter.js'
+
+export const ContextRefreshError = createNamedError('ContextRefreshError')
+type ContextRefreshErrorInstance = InstanceType<typeof ContextRefreshError>
 
 const MAX_RETRIES = 2
 const POLLING_INTERVAL_MS = 100
@@ -32,10 +35,6 @@ export class WorkerPool {
   private isRefreshing = false
   private readonly rateLimiter: RateLimiter
 
-  private readonly resultFactory = createResult<Error>((error: unknown) =>
-    error instanceof Error ? error : new Error(String(error))
-  )
-
   constructor(
     private readonly config: Config,
     private readonly checkpointManager: CheckpointManager,
@@ -44,8 +43,13 @@ export class WorkerPool {
     this.rateLimiter = new RateLimiter(this.config.extractionConcurrency)
   }
 
-  async initialize(): Promise<Result<void, Error>> {
-    return this.resultFactory.from(async () => await this.createWorkers())
+  async initialize(): Promise<Result<void, ContextRefreshErrorInstance>> {
+    try {
+      await this.createWorkers()
+      return ok(undefined)
+    } catch (error) {
+      return err(new ContextRefreshError(error instanceof Error ? error.message : String(error)))
+    }
   }
 
   private async createWorkers(): Promise<void> {
@@ -63,9 +67,9 @@ export class WorkerPool {
 
   async processConversations(
     conversationsToProcess: ConversationMeta[]
-  ): Promise<Result<void, Error>> {
+  ): Promise<Result<void, ContextRefreshErrorInstance>> {
     const queue: QueueItem[] = conversationsToProcess.map((meta) => ({ meta, attempts: 0 }))
-    const activeTasks: Promise<void>[] = []
+    const activeTasks: Promise<Result<void, ContextRefreshErrorInstance>>[] = []
 
     while (queue.length > 0 || activeTasks.length > 0) {
       const worker = this.workers.find((w) => !w.isBusy)
@@ -111,25 +115,25 @@ export class WorkerPool {
     worker: ExtractionWorker,
     item: QueueItem,
     queue: QueueItem[]
-  ): Promise<void> {
+  ): Promise<Result<void, ContextRefreshErrorInstance>> {
     await this.rateLimiter.acquire()
-
     try {
       const extractResult = await worker.extractor.extract(item.meta.url, item.meta.id)
       if (!extractResult.ok) {
         await this.handleFailure(worker, item, queue, extractResult.error)
-        return
+        return err(new ContextRefreshError('Extraction failed'))
       }
       await this.handleSuccess(worker, item.meta, extractResult)
     } finally {
       this.rateLimiter.release()
     }
+    return ok(undefined)
   }
 
   private async handleSuccess(
     worker: ExtractionWorker,
     meta: ConversationMeta,
-    result: Result<ExtractedConversation, Error>
+    result: Result<ExtractedConversation, unknown>
   ): Promise<void> {
     const existingHash = this.checkpointManager.getContentHash(meta.id)
     const { processed, total } = this.checkpointManager.getProcessingProgress()
@@ -164,21 +168,21 @@ export class WorkerPool {
   }
 
   private async writeConversationAsMarkdown(
-    conversation: Result<ExtractedConversation, Error>
-  ): Promise<Result<void, Error>> {
-    if (!conversation.ok) return err(new Error('Missing conversation'))
+    conversation: Result<ExtractedConversation, unknown>
+  ): Promise<Result<void, ContextRefreshErrorInstance>> {
+    if (!conversation.ok) return err(new ContextRefreshError('Missing conversation'))
 
-    const data = conversation.value
+    const data = conversation.value as ExtractedConversation
     const outputDir = this.config.exportDir
     const safeSpaceName = sanitizeSpaceName(data.spaceName)
     const spaceSpecificDirectory = join(outputDir, safeSpaceName)
 
     if (!existsSync(spaceSpecificDirectory)) {
-      const mkdirResult = this.resultFactory.from(() =>
+      try {
         mkdirSync(spaceSpecificDirectory, { recursive: true })
-      )
-      if (!mkdirResult.ok)
-        return err(new Error(`Failed to create directory: ${errorMessageOf(mkdirResult.error)}`))
+      } catch (error) {
+        return err(new ContextRefreshError(error instanceof Error ? error.message : String(error)))
+      }
     }
 
     const safeFileTitle = sanitizeFilename(data.title)
@@ -193,20 +197,28 @@ export class WorkerPool {
     const content = headerTitle + metadataBlock + data.content
 
     const tmpPath = `${destinationFilePath}.tmp`
-    const writeResult = this.resultFactory.from(() => writeFileSync(tmpPath, content, 'utf-8'))
-    if (!writeResult.ok) return writeResult
+    try {
+      writeFileSync(tmpPath, content, 'utf-8')
+    } catch (error) {
+      return err(new ContextRefreshError(error instanceof Error ? error.message : String(error)))
+    }
 
     const fs = await import('node:fs')
-    const renameResult = this.resultFactory.from(() => fs.renameSync(tmpPath, destinationFilePath))
-    if (!renameResult.ok) return renameResult
+    try {
+      fs.renameSync(tmpPath, destinationFilePath)
+    } catch (error) {
+      return err(new ContextRefreshError(error instanceof Error ? error.message : String(error)))
+    }
 
-    const verifyResult = this.resultFactory.from(() => {
+    try {
       if (!existsSync(destinationFilePath) || statSync(destinationFilePath).size === 0) {
-        return err(new Error(`Exported file is missing or empty: ${destinationFilePath}`))
+        return err(
+          new ContextRefreshError(`Exported file is missing or empty: ${destinationFilePath}`)
+        )
       }
-      return ok(undefined)
-    })
-    if (!verifyResult.ok) return verifyResult
+    } catch (error) {
+      return err(new ContextRefreshError(error instanceof Error ? error.message : String(error)))
+    }
 
     return ok(undefined)
   }
@@ -245,27 +257,35 @@ export class WorkerPool {
   private async refreshContext(): Promise<void> {
     if (this.isRefreshing) return
     this.isRefreshing = true
-    const result = await this.resultFactory.from(async () => await this.replaceBrowserContext())
+    const result = await this.replaceBrowserContext()
     if (!result.ok) {
       errorBus.emitError('Failed to refresh worker context', result.error)
     }
     this.isRefreshing = false
   }
 
-  private async replaceBrowserContext(): Promise<void> {
-    // best-effort close before re-creating; a stale context is what we are refreshing away.
+  private async replaceBrowserContext(): Promise<Result<void, ContextRefreshErrorInstance>> {
     try {
-      await this.sharedBrowserContext?.close()
-    } catch (closeError) {
-      logger.debug('refreshContext: sharedBrowserContext.close failed', errorMessageOf(closeError))
-    } finally {
-      // New context assignment is intentional after this block; nothing to cleanup here
-    }
-    this.sharedBrowserContext = await this.browser.newContext({
-      storageState: this.config.authStoragePath,
-    })
-    for (const worker of this.workers) {
-      worker.extractor = new ConversationExtractor(this.config, this.sharedBrowserContext)
+      // best-effort close before re-creating; a stale context is what we are refreshing away.
+      try {
+        await this.sharedBrowserContext?.close()
+      } catch (closeError) {
+        logger.debug(
+          'refreshContext: sharedBrowserContext.close failed',
+          errorMessageOf(closeError)
+        )
+      } finally {
+        // New context assignment is intentional after this block; nothing to cleanup here
+      }
+      this.sharedBrowserContext = await this.browser.newContext({
+        storageState: this.config.authStoragePath,
+      })
+      for (const worker of this.workers) {
+        worker.extractor = new ConversationExtractor(this.config, this.sharedBrowserContext)
+      }
+      return ok(undefined)
+    } catch (error) {
+      return err(new ContextRefreshError(error instanceof Error ? error.message : String(error)))
     }
   }
 }

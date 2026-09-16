@@ -1,10 +1,11 @@
 import { type Page, type BrowserContext, type Response } from '@playwright/test'
 import { logger } from '../utils/logger.js'
+import crypto from 'node:crypto'
 import { createWaitStrategy } from '../utils/wait-strategy.js'
 import { type Config } from '../utils/config.js'
 import { errorMessageOf } from '../utils/extract-error-message.js'
 import { createNamedError } from '../utils/errors.js'
-import { ok, err, createResult, type Result } from 'super-result'
+import { ok, err, type Result } from 'super-result'
 
 export interface ConversationMessage {
   role: 'user' | 'assistant'
@@ -57,43 +58,91 @@ export class ConversationExtractor {
     )
   }
 
-  private readonly resultFactory = createResult<Error>((error: unknown) =>
-    error instanceof Error ? error : new Error(String(error))
-  )
+  hashEntries(entries: unknown[]): string {
+    const sorted = entries.map((e) => {
+      const str = JSON.stringify(e)
+      try {
+        const obj = JSON.parse(str)
+        return JSON.stringify(this.sortKeys(obj))
+      } catch {
+        return str
+      }
+    })
+    return crypto.createHash('sha256').update(sorted.join('|')).digest('hex')
+  }
+
+  private sortKeys(obj: unknown): unknown {
+    if (Array.isArray(obj)) return obj.map((item) => this.sortKeys(item))
+    if (obj !== null && typeof obj === 'object') {
+      return Object.keys(obj as object)
+        .sort()
+        .reduce(
+          (acc, key) => {
+            acc[key] = this.sortKeys((obj as Record<string, unknown>)[key])
+            return acc
+          },
+          {} as Record<string, unknown>
+        )
+    }
+    return obj
+  }
 
   async extract(
     conversationUrl: string,
     _expectedId?: string
-  ): Promise<Result<ExtractedConversation, Error>> {
+  ): Promise<
+    Result<
+      ExtractedConversation,
+      | ExtractionErrorInstance
+      | NavigationErrorInstance
+      | NotFoundErrorInstance
+      | AuthErrorInstance
+      | ServerErrorInstance
+      | NoDataErrorInstance
+    >
+  > {
     const ensureResult = await this.ensureContextIsAlive()
-    if (!ensureResult.ok) return err(ensureResult.error)
+    if (!ensureResult.ok) return err(ensureResult.error as ExtractionErrorInstance)
 
-    const createPageResult = await this.resultFactory.from(() => this.context.newPage())
-    const conversationPage = createPageResult.ok ? createPageResult.value : null
+    let conversationPage: Page | null = null
+    try {
+      conversationPage = await this.context.newPage()
+    } catch (error) {
+      return err(new ConversationExtractor.ExtractionError('Failed to create new page'))
+    }
 
     if (!conversationPage) {
       return err(new ConversationExtractor.ExtractionError('Failed to create new page'))
     }
 
     const navigationResult = await this.navigateToConversationUrl(conversationPage, conversationUrl)
-    if (!navigationResult.ok) return err(navigationResult.error)
+    if (!navigationResult.ok) return err(navigationResult.error as NavigationErrorInstance)
     await createWaitStrategy(this.config).afterScroll(conversationPage)
 
     try {
       await conversationPage.close()
-    } catch (closeError) {
-      logger.warn(`Failed to close page: ${errorMessageOf(closeError)}`)
+    } catch (error) {
+      logger.warn(`Failed to close page: ${errorMessageOf(error)}`)
     }
 
     return err(new ConversationExtractor.NoDataError('Conversation extraction not yet implemented'))
   }
 
-  private async ensureContextIsAlive(): Promise<Result<void, Error>> {
-    const pagesResult = this.resultFactory.from(() => this.context.pages())
-    return pagesResult.ok ? ok(undefined) : err(pagesResult.error)
+  private async ensureContextIsAlive(): Promise<Result<void, AuthErrorInstance>> {
+    try {
+      await this.context.pages()
+      return ok(undefined)
+    } catch (error) {
+      return err(
+        new ConversationExtractor.AuthError(error instanceof Error ? error.message : String(error))
+      )
+    }
   }
 
-  private async navigateToConversationUrl(page: Page, url: string): Promise<Result<void, Error>> {
+  private async navigateToConversationUrl(
+    page: Page,
+    url: string
+  ): Promise<Result<void, NavigationErrorInstance>> {
     const navigationResponse = await page.goto(url, {
       waitUntil: 'domcontentloaded',
       timeout: this.currentTimeoutMs,
@@ -101,7 +150,9 @@ export class ConversationExtractor {
     return this.validateNavigationResponse(navigationResponse)
   }
 
-  private validateNavigationResponse(response: Response | null): Result<void, Error> {
+  private validateNavigationResponse(
+    response: Response | null
+  ): Result<void, ConversationExtractorError> {
     if (!response) {
       return err(new ConversationExtractor.NavigationError('Navigation failed – no response'))
     }
@@ -122,3 +173,20 @@ export class ConversationExtractor {
     return ok(undefined)
   }
 }
+
+type ExtractionErrorInstance = InstanceType<typeof ConversationExtractor.ExtractionError>
+type NavigationErrorInstance = InstanceType<typeof ConversationExtractor.NavigationError>
+type NotFoundErrorInstance = InstanceType<typeof ConversationExtractor.NotFoundError>
+type AuthErrorInstance = InstanceType<typeof ConversationExtractor.AuthError>
+type ServerErrorInstance = InstanceType<typeof ConversationExtractor.ServerError>
+type NoDataErrorInstance = InstanceType<typeof ConversationExtractor.NoDataError>
+type ParsingErrorInstance = InstanceType<typeof ConversationExtractor.ParsingError>
+
+export type ConversationExtractorError =
+  | ExtractionErrorInstance
+  | NavigationErrorInstance
+  | NotFoundErrorInstance
+  | AuthErrorInstance
+  | ServerErrorInstance
+  | NoDataErrorInstance
+  | ParsingErrorInstance

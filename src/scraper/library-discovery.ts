@@ -3,9 +3,15 @@ import { logger } from '../utils/logger.js'
 import { DEFAULT_API_VERSION } from './api-version.js'
 import { errorMessageOf } from '../utils/extract-error-message.js'
 import { createNamedError } from '../utils/errors.js'
-import { from, ok, err, type Result } from 'super-result'
+import { ok, err, type Result } from 'super-result'
 import { z } from 'zod'
 import { ApiDiagnosticsWriter } from '../utils/api-diagnostics.js'
+
+export const DiscoveryError = createNamedError('DiscoveryError')
+export const ApiError = createNamedError('ApiError')
+
+type DiscoveryErrorInstance = InstanceType<typeof DiscoveryError>
+type ApiErrorInstance = InstanceType<typeof ApiError>
 
 // #region Constants
 
@@ -85,14 +91,6 @@ const RawThreadSchema = z
   })
   .passthrough()
 
-const ThreadBatchResponseSchema = z
-  .object({
-    threads: z.array(RawThreadSchema),
-    hasMore: z.boolean(),
-    total: z.number().optional(),
-  })
-  .passthrough()
-
 // #endregion Types
 
 // #region Helpers
@@ -162,8 +160,8 @@ async function evaluatePinnedThreadsInPage(
 
 // #region Version Detection
 
-async function detectApiVersion(page: Page): Promise<Result<string, Error>> {
-  const result = await from<string>(async () => await detectVersionFromResponse(page))
+async function detectApiVersion(page: Page): Promise<Result<string, DiscoveryErrorInstance>> {
+  const result = await detectVersionFromResponse(page)
   if (!result.ok) {
     logger.debug(`Version detection timeout — using fallback ${DEFAULT_API_VERSION}`)
     return ok(DEFAULT_API_VERSION)
@@ -171,15 +169,21 @@ async function detectApiVersion(page: Page): Promise<Result<string, Error>> {
   return result
 }
 
-async function detectVersionFromResponse(page: Page): Promise<string> {
-  const response = await page.waitForResponse(
-    (res) => VERSIONED_URL_PATTERNS.some((p) => res.url().includes(p)) && res.status() === 200,
-    { timeout: 15_000 }
-  )
-  const version = extractVersionFromUrl(response.url()) ?? DEFAULT_API_VERSION
-  const pathname = new URL(response.url()).pathname
-  logger.debug(`Detected API version: ${version} (from ${pathname})`)
-  return version
+async function detectVersionFromResponse(
+  page: Page
+): Promise<Result<string, DiscoveryErrorInstance>> {
+  try {
+    const response = await page.waitForResponse(
+      (res) => VERSIONED_URL_PATTERNS.some((p) => res.url().includes(p)) && res.status() === 200,
+      { timeout: 15_000 }
+    )
+    const version = extractVersionFromUrl(response.url()) ?? DEFAULT_API_VERSION
+    const pathname = new URL(response.url()).pathname
+    logger.debug(`Detected API version: ${version} (from ${pathname})`)
+    return ok(version)
+  } catch (error) {
+    return err(new DiscoveryError(error instanceof Error ? error.message : String(error)))
+  }
 }
 
 // #endregion Version Detection
@@ -191,21 +195,33 @@ async function detectVersionFromResponse(page: Page): Promise<string> {
  * /rest/userinfo fires at library load, well after /api/auth/session, ensuring
  * cookies/CSRF are fully hydrated before we call list_ask_threads.
  */
-async function waitForLibraryReady(page: Page, timeout = 12_000): Promise<void> {
-  const result = await from(async () => await waitForUserInfoResponse(page, timeout))
+async function waitForLibraryReady(
+  page: Page,
+  timeout = 12_000
+): Promise<Result<void, DiscoveryErrorInstance>> {
+  const result = await waitForUserInfoResponse(page, timeout)
   if (!result.ok) {
     logger.debug('waitForLibraryReady: timeout — proceeding anyway')
   }
 
   await page.waitForTimeout(PAGE_READY_BUFFER_MS)
+  return result
 }
 
-async function waitForUserInfoResponse(page: Page, timeout: number): Promise<void> {
-  await page.waitForResponse(
-    (res) => res.url().includes('/rest/userinfo') && res.status() === 200,
-    { timeout }
-  )
-  logger.debug('Library page ready (userinfo confirmed)')
+async function waitForUserInfoResponse(
+  page: Page,
+  timeout: number
+): Promise<Result<void, DiscoveryErrorInstance>> {
+  try {
+    await page.waitForResponse(
+      (res) => res.url().includes('/rest/userinfo') && res.status() === 200,
+      { timeout }
+    )
+    logger.debug('Library page ready (userinfo confirmed)')
+    return ok(undefined)
+  } catch (error) {
+    return err(new DiscoveryError(error instanceof Error ? error.message : String(error)))
+  }
 }
 
 // #endregion Page Readiness
@@ -217,36 +233,33 @@ async function fetchThreadBatch(
   version: string,
   offset: number,
   diagnosticsWriter: ApiDiagnosticsWriter
-): Promise<Result<ThreadBatchResponse, Error>> {
+): Promise<Result<ThreadBatchResponse, DiscoveryErrorInstance | ApiErrorInstance>> {
   const url = `${BASE_URL}/rest/thread/list_ask_threads?version=${version}&source=default`
 
-  const rawResult = await from<{ status: number; body: string }>(async () =>
-    evaluateThreadBatchInPage(page, url, offset)
-  )
-
-  if (!rawResult.ok) {
-    return err(rawResult.error)
+  let rawResult: { status: number; body: string }
+  try {
+    rawResult = await evaluateThreadBatchInPage(page, url, offset)
+  } catch (error) {
+    return err(new DiscoveryError(error instanceof Error ? error.message : String(error)))
   }
 
-  const raw = rawResult.value
+  const raw = rawResult
 
   logger.debug(`list_ask_threads offset=${offset}: status=${raw.status}`)
   logger.debug(`list_ask_threads offset=${offset}: body=${raw.body.slice(0, 500)}`)
 
   if (raw.status !== 200) {
-    return err(new LibraryDiscovery.ApiError(`list_ask_threads returned HTTP ${raw.status}`))
+    return err(new ApiError(`list_ask_threads returned HTTP ${raw.status}`))
   }
 
-  const parseResult = from(() => JSON.parse(raw.body))
-  if (!parseResult.ok) {
-    return err(
-      new LibraryDiscovery.ApiError(
-        `list_ask_threads: invalid JSON — body: ${raw.body.slice(0, 200)}`
-      )
-    )
+  let parseResult: unknown
+  try {
+    parseResult = JSON.parse(raw.body)
+  } catch (error) {
+    return err(new ApiError(`list_ask_threads: invalid JSON — body: ${raw.body.slice(0, 200)}`))
   }
 
-  const arrayValidated = z.array(RawThreadSchema).safeParse(parseResult.value)
+  const arrayValidated = z.array(RawThreadSchema).safeParse(parseResult)
   if (!arrayValidated.success) {
     const zodErrorPaths = arrayValidated.error.issues.map((issue) => issue.path.join('.'))
     diagnosticsWriter.writeFailure({
@@ -255,9 +268,7 @@ async function fetchThreadBatch(
       zodErrorPaths,
     })
     return err(
-      new LibraryDiscovery.ApiError(
-        `list_ask_threads: schema validation failed — body: ${raw.body.slice(0, 200)}`
-      )
+      new ApiError(`list_ask_threads: schema validation failed — body: ${raw.body.slice(0, 200)}`)
     )
   }
 
@@ -274,18 +285,17 @@ async function fetchPinnedThreads(
   page: Page,
   version: string,
   diagnosticsWriter: ApiDiagnosticsWriter
-): Promise<Result<RawThread[], Error>> {
+): Promise<Result<RawThread[], DiscoveryErrorInstance | ApiErrorInstance>> {
   const url = `${BASE_URL}/rest/thread/list_pinned_ask_threads?version=${version}&source=default`
 
-  const rawResult = await from<{ status: number; body: string }>(async () =>
-    evaluatePinnedThreadsInPage(page, url)
-  )
-
-  if (!rawResult.ok) {
-    return err(rawResult.error)
+  let rawResult: { status: number; body: string }
+  try {
+    rawResult = await evaluatePinnedThreadsInPage(page, url)
+  } catch (error) {
+    return err(new DiscoveryError(error instanceof Error ? error.message : String(error)))
   }
 
-  const raw = rawResult.value
+  const raw = rawResult
 
   logger.debug(`list_pinned_ask_threads: status=${raw.status}`)
 
@@ -294,14 +304,15 @@ async function fetchPinnedThreads(
     return ok([])
   }
 
-  const parseResult = await from<unknown>(() => JSON.parse(raw.body))
-
-  if (!parseResult.ok) {
+  let parseResult: unknown
+  try {
+    parseResult = JSON.parse(raw.body)
+  } catch {
     logger.debug('list_pinned_ask_threads: invalid JSON — skipping pinned')
     return ok([])
   }
 
-  const validated = z.array(RawThreadSchema).safeParse(parseResult.value)
+  const validated = z.array(RawThreadSchema).safeParse(parseResult)
   if (!validated.success) {
     const zodErrorPaths = validated.error.issues.map((issue) => issue.path.join('.'))
     diagnosticsWriter.writeFailure({
@@ -320,7 +331,7 @@ async function fetchFirstBatch(
   page: Page,
   version: string,
   diagnosticsWriter: ApiDiagnosticsWriter
-): Promise<Result<ThreadBatchResponse, Error>> {
+): Promise<Result<ThreadBatchResponse, DiscoveryErrorInstance | ApiErrorInstance>> {
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     const result = await fetchThreadBatch(page, version, 0, diagnosticsWriter)
 
@@ -336,7 +347,7 @@ async function fetchFirstBatch(
   }
 
   return err(
-    new LibraryDiscovery.DiscoveryError(
+    new DiscoveryError(
       `list_ask_threads returned empty after ${MAX_RETRIES} attempts — API may be unavailable or the library is empty`
     )
   )
@@ -347,14 +358,14 @@ async function fetchFirstBatch(
 // #region Main Discovery
 
 export class LibraryDiscovery {
-  static readonly DiscoveryError = createNamedError('DiscoveryError')
-  static readonly ApiError = createNamedError('ApiError')
+  static readonly DiscoveryError = DiscoveryError
+  static readonly ApiError = ApiError
 
   constructor(private readonly diagnosticsWriter: ApiDiagnosticsWriter) {}
 
   async discoverAllConversationsFromLibrary(
     page: Page
-  ): Promise<Result<DiscoveredConversationMeta[], Error>> {
+  ): Promise<Result<DiscoveredConversationMeta[], DiscoveryErrorInstance | ApiErrorInstance>> {
     logger.info('Discovering threads via REST API...')
 
     // Start version detection BEFORE navigation so we catch the first matching response
@@ -410,7 +421,7 @@ export class LibraryDiscovery {
     page: Page,
     version: string,
     firstBatch: ThreadBatchResponse
-  ): Promise<Result<RawThread[], Error>> {
+  ): Promise<Result<RawThread[], DiscoveryErrorInstance>> {
     const remaining: RawThread[] = []
     let offset = firstBatch.threads.length
     let hasMore = firstBatch.hasMore
@@ -424,7 +435,7 @@ export class LibraryDiscovery {
       const batchResult = await fetchThreadBatch(page, version, offset, this.diagnosticsWriter)
 
       if (!batchResult.ok) {
-        return err(batchResult.error)
+        return err(batchResult.error as DiscoveryErrorInstance)
       }
 
       const batch = batchResult.value

@@ -2,7 +2,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { ExportOrchestrator } from '../../src/export/export-orchestrator.js'
 import { type Config } from '../../src/utils/config.js'
 import { type ExtractedConversation } from '../../src/scraper/conversation-extractor.js'
-import * as fs from 'node:fs'
+import fs from 'node:fs'
+import { createMockFs, createMockPath } from '../helpers/mock-factories.js'
 
 vi.mock('node:fs')
 vi.mock('node:path', async () => {
@@ -15,12 +16,12 @@ vi.mock('node:path', async () => {
 })
 
 describe('ExportOrchestrator (Unit)', () => {
-  const mockConfig: Config = {
+  const mockConfig = {
     exportDir: 'exports',
     exportStrategies: ['markdown'],
   } as any
 
-  const mockConversation: ExtractedConversation = {
+  const mockConversation = {
     id: '123',
     title: 'Test Title',
     spaceName: 'Test Space',
