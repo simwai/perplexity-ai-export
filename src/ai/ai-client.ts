@@ -1,9 +1,9 @@
-import { errorBus } from '../utils/error-bus.js'
+import { errorBus } from '../utils/logging/error-bus.js'
 import { z } from 'zod'
 import { type Config } from '../utils/config.js'
-import { logger } from '../utils/logger.js'
+import { logger } from '../utils/logging/logger.js'
 import { ok, err, from, type Result } from 'super-result'
-import { ApiDiagnosticsWriter, zodErrorPaths } from '../utils/api-diagnostics.js'
+import { ApiDiagnosticsWriter, zodErrorPaths } from '../utils/logging/api-diagnostics.js'
 
 const embeddingItemSchema = z.object({ embedding: z.array(z.number()) }).passthrough()
 const openAiEmbedFormatSchema = z.object({ data: z.array(embeddingItemSchema) }).passthrough()

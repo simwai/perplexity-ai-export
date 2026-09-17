@@ -1,5 +1,5 @@
 import { OllamaClient } from '../src/ai/ollama-client.js'
-import { logger } from '../src/utils/logger.js'
+import { logger } from '../src/utils/logging/logger.js'
 
 const mockConfig = {
   ollamaUrl: 'http://localhost:11434',

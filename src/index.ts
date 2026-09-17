@@ -1,4 +1,4 @@
-import { errorBus } from './utils/error-bus.js'
+import { errorBus } from './utils/logging/error-bus.js'
 import { Repl } from './repl/index.js'
 import { createConfig, initializeConfigDirs } from './utils/config.js'
 import { from } from 'super-result'

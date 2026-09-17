@@ -27,7 +27,7 @@
     "test:ci": "vitest run --reporter=verbose",
     "prepare": "husky",
     "commitlint": "commitlint --edit",
-    "benchmark": "tsx src/benchmark.ts"
+    "benchmark": "tsx scripts/benchmark.ts"
   },
   "dependencies": {
     "@adaptivekind/markdown-graph": "0.0.17",

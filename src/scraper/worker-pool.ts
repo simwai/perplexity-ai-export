@@ -1,4 +1,4 @@
-import { errorBus } from '../utils/error-bus.js'
+import { errorBus } from '../utils/logging/error-bus.js'
 import { type Browser, type BrowserContext } from '@playwright/test'
 import {
   ConversationExtractor,
@@ -7,7 +7,7 @@ import {
   ExtractionError,
 } from './conversation-extractor.js'
 import { CheckpointManager, type ConversationMeta } from './checkpoint-manager.js'
-import { logger } from '../utils/logger.js'
+import { logger } from '../utils/logging/logger.js'
 import { type Config } from '../utils/config.js'
 import { isTypedError, BaseAppError } from '../utils/errors.js'
 import { join } from 'node:path'

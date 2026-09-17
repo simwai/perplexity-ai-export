@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { ApiDiagnosticsWriter } from '../../src/utils/api-diagnostics.js'
+import { ApiDiagnosticsWriter } from '../../src/utils/logging/api-diagnostics.js'
 import fs from 'node:fs/promises'
 import { join } from 'node:path'
 import { createMockFs } from '../helpers/mock-factories.js'

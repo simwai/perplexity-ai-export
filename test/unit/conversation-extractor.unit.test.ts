@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { ConversationExtractor } from '../../src/scraper/conversation-extractor.js'
-import { ApiDiagnosticsWriter } from '../../src/utils/api-diagnostics.js'
+import { ApiDiagnosticsWriter } from '../../src/utils/logging/api-diagnostics.js'
 import type { BrowserContext } from '@playwright/test'
 
 vi.mock('../../src/utils/api-diagnostics.js', () => {

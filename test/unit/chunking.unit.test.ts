@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { chunkMarkdown } from '../../src/utils/chunking.js'
+import { chunkMarkdown } from '../../src/search/chunking.js'
 
 describe('chunkMarkdown', () => {
   it('should split content exceeding maxChars into multiple chunks', () => {

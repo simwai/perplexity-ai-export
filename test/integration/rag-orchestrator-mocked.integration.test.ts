@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { RagOrchestrator } from '../../src/ai/rag-orchestrator.js'
 import { VectorStore } from '../../src/search/vector-store.js'
 import { RipgrepSearch } from '../../src/search/rg-search.js'
-import { logger } from '../../src/utils/logger.js'
+import { logger } from '../../src/utils/logging/logger.js'
 import { AiClient } from '../../src/ai/ai-client.js'
 import { ok } from 'super-result'
 

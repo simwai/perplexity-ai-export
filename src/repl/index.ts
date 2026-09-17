@@ -1,6 +1,6 @@
-import { errorBus } from '../utils/error-bus.js'
+import { errorBus } from '../utils/logging/error-bus.js'
 import { select } from '@inquirer/prompts'
-import { logger } from '../utils/logger.js'
+import { logger } from '../utils/logging/logger.js'
 import { CommandHandler } from './commands.js'
 import { type Config } from '../utils/config.js'
 import { from } from 'super-result'
