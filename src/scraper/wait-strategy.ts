@@ -1,8 +1,8 @@
 import type { Page } from '@playwright/test'
-import { type Config } from './config.js'
-import { logger } from './logger.js'
+import { type Config } from '../utils/config.js'
+import { logger } from '../utils/logging/logger.js'
 import { from, type Result } from 'super-result'
-import { BaseAppError } from './errors.js'
+import { BaseAppError } from '../utils/errors.js'
 
 export class SelectorWaitError extends BaseAppError {}
 type SelectorWaitErrorInstance = InstanceType<typeof SelectorWaitError>

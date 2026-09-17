@@ -1,9 +1,9 @@
 import { readFileSync, writeFileSync, existsSync, renameSync } from 'node:fs'
 import { type Config } from '../utils/config.js'
 import { createResult, ok, type Result } from 'super-result'
-import { logger } from '../utils/logger.js'
+import { logger } from '../utils/logging/logger.js'
 import { z } from 'zod'
-import { ApiDiagnosticsWriter } from '../utils/api-diagnostics.js'
+import { ApiDiagnosticsWriter } from '../utils/logging/api-diagnostics.js'
 
 export interface ConversationMeta {
   id: string

@@ -1,4 +1,4 @@
-import { logger } from '../utils/logger.js'
+import { logger } from '../utils/logging/logger.js'
 
 function logAction(actionName: string, actionDescription: string): void {
   logger.info(`  ${actionName}`)

@@ -1,9 +1,8 @@
 import { createColorino } from 'colorino'
 import { join } from 'node:path'
+import { LOGS_DIRECTORY, LOG_FILE_TIMESTAMP } from '../log-constants.js'
 
 const IS_DEBUG_MODE = !!process.env['DEBUG']
-const LOGS_DIRECTORY = 'logs'
-const LOG_FILE_TIMESTAMP = new Date().toISOString().replace(/[:.]/g, '-')
 const MAIN_LOG_FILENAME = `main-log-${LOG_FILE_TIMESTAMP}.txt`
 const MAIN_LOG_PATH = join(LOGS_DIRECTORY, MAIN_LOG_FILENAME)
 

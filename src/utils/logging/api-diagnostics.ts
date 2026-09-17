@@ -2,10 +2,10 @@ import { type ZodError } from 'zod'
 import fs from 'node:fs/promises'
 import { join } from 'node:path'
 import { logger } from './logger.js'
-import { errorMessageOf } from './extract-error-message.js'
+import { errorMessageOf } from '../extract-error-message.js'
 import { ok, from, type Result } from 'super-result'
-import { BaseAppError } from './errors.js'
-import type { Config } from './config.js'
+import { BaseAppError } from '../errors.js'
+import type { Config } from '../config.js'
 
 export class DiagnosticsWriteError extends BaseAppError {}
 type DiagnosticsWriteErrorInstance = InstanceType<typeof DiagnosticsWriteError>

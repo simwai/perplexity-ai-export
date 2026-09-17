@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { errorBus } from '../../src/utils/error-bus.js'
+import { errorBus } from '../../src/utils/logging/error-bus.js'
 import { createMockLogger } from '../helpers/mock-factories.js'
 
-vi.mock('../../src/utils/logger.js', () => {
+vi.mock('../../src/utils/logging/logger.js', () => {
   const mockLogger = {
     error: vi.fn(),
     info: vi.fn(),
@@ -13,7 +13,7 @@ vi.mock('../../src/utils/logger.js', () => {
   return { logger: mockLogger }
 })
 
-import { logger } from '../../src/utils/logger.js'
+import { logger } from '../../src/utils/logging/logger.js'
 
 describe('ErrorBus (Unit)', () => {
   beforeEach(() => {

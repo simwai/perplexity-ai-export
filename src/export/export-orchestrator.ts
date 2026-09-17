@@ -5,7 +5,7 @@ import { type Config } from '../utils/config.js'
 import type { ExtractedConversation } from '../scraper/conversation-extractor.js'
 import { sanitizeFilename, sanitizeSpaceName } from './sanitizer.js'
 import { type ExportStrategy } from '../exporters/export.strategy.js'
-import { logger } from '../utils/logger.js'
+import { logger } from '../utils/logging/logger.js'
 import { errorMessageOf } from '../utils/extract-error-message.js'
 import { createResult, ok, err, type Result } from 'super-result'
 

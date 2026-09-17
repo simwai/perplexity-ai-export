@@ -3,7 +3,7 @@ import { existsSync, mkdirSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { z } from 'zod'
-import { logger } from './logger.js'
+import { logger } from './logging/logger.js'
 import { err, ok, type Result } from 'super-result'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))

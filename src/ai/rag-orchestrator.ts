@@ -1,14 +1,14 @@
 import { VectorStore, type VectorSearchResult } from '../search/vector-store.js'
 import { AiClient, type ChatMessage, type LlmResponse } from './ai-client.js'
 import { RipgrepSearch } from '../search/rg-search.js'
-import { logger } from '../utils/logger.js'
+import { logger } from '../utils/logging/logger.js'
 import { join } from 'node:path'
 import { type Config } from '../utils/config.js'
 import { z } from 'zod'
 import { errorMessageOf } from '../utils/extract-error-message.js'
 import { getCrossEncoder } from './cross-encoder.js'
 import { createResult, ok, err, from, type Result } from 'super-result'
-import { ApiDiagnosticsWriter, zodErrorPaths } from '../utils/api-diagnostics.js'
+import { ApiDiagnosticsWriter, zodErrorPaths } from '../utils/logging/api-diagnostics.js'
 
 const VECTOR_SEARCH_LIMIT = 40
 const ANALYSIS_BATCH_SIZE = 10

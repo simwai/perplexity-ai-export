@@ -1,6 +1,6 @@
 import { EventEmitter } from 'node:events'
 import { logger } from './logger.js'
-import { errorMessageOf } from './extract-error-message.js'
+import { errorMessageOf } from '../extract-error-message.js'
 
 export interface AppError {
   message: string

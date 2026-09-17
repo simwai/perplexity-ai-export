@@ -4,6 +4,7 @@ import type { Request, Response } from '@playwright/test'
 import { from } from 'super-result'
 import { z } from 'zod'
 import { ApiDiagnosticsWriter } from './api-diagnostics.js'
+import { LOGS_DIRECTORY, LOG_FILE_TIMESTAMP } from '../log-constants.js'
 
 const SENSITIVE_KEY_PATTERN =
   /token|secret|authorization|cookie|password|api[_-]?key|access[_-]?token|bearer/i
@@ -34,8 +35,6 @@ function redactSensitiveData(obj: unknown): unknown {
   return obj
 }
 
-const LOGS_DIRECTORY = 'logs'
-const LOG_FILE_TIMESTAMP = new Date().toISOString().replace(/[:.]/g, '-')
 const HTTP_LOG_FILENAME = `http-req-res-log-${LOG_FILE_TIMESTAMP}.txt`
 const HTTP_LOG_PATH = join(LOGS_DIRECTORY, HTTP_LOG_FILENAME)
 

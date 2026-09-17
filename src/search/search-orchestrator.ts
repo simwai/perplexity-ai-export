@@ -1,6 +1,6 @@
 import { RipgrepSearch, type RipgrepSearchOptions } from './rg-search.js'
 import { VectorStore } from './vector-store.js'
-import { logger } from '../utils/logger.js'
+import { logger } from '../utils/logging/logger.js'
 import { type Config } from '../utils/config.js'
 import { RagOrchestrator } from '../ai/rag-orchestrator.js'
 import { errorMessageOf } from '../utils/extract-error-message.js'
