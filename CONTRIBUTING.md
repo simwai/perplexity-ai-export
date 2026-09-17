@@ -94,9 +94,9 @@ To ensure syntactic harmony and cognitive consistency, we utilize Git hooks via 
 
 Should the pre-commit process appear to reach a cognitive deadlock (hanging or appearing stuck), consider these resolutions:
 
-1. **Interrupt and Inspect**: Cancel the process (`Ctrl+C`) and run \`pnpm run format\` manually to identify if a specific file is causing a processing bottleneck.
-2. **Environmental Reset**: Ensure your dependencies are correctly instantiated (\`pnpm install\`).
-3. **Emergency Bypass**: If a stall persists and you have verified your changes manually, you may bypass the hooks using the \`--no-verify\` flag (e.g., \`git commit -m "..." --no-verify\`). Use this sparingly, as it bypasses the validation of our shared standards.
+1. **Interrupt and Inspect**: Cancel the process (`Ctrl+C`) and run `pnpm run format` manually to identify if a specific file is causing a processing bottleneck.
+2. **Environmental Reset**: Ensure your dependencies are correctly instantiated (`pnpm install`).
+3. **Emergency Bypass**: If a stall persists and you have verified your changes manually, you may bypass the hooks using the `--no-verify` flag (e.g., `git commit -m "..." --no-verify`). Use this sparingly, as it bypasses the validation of our shared standards.
 
 ---
 

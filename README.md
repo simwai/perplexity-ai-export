@@ -119,6 +119,8 @@ bash -c "cp .env.example .env"
 - **OLLAMA_MODEL**: Cognitive model for RAG synthesis (e.g., deepseek-r1).
 - **OLLAMA_EMBED_MODEL**: Model for generating vector representations (e.g., nomic-embed-text).
 - **ENABLE_VECTOR_SEARCH**: Set to `true` to activate semantic and RAG layers.
+- **EXPORT_STRATEGIES**: Comma-separated list of active export plugins (default: `markdown`).
+- **HYDE_MODE**: Configures HyDE retrieval mode (`supplement`, `fusion`, or `off`).
 
 ## Usage Guide
 
@@ -138,6 +140,7 @@ pnpm run dev
   - **Semantic**: Fuzzy matching via high-dimensional vector space.
   - **RAG**: Direct inquiry, such as "What did I learn about emergent intelligence?"
   - **Exact**: Rapid string matching via ripgrep (bundled).
+- **Chat with history**: Interactive Q&A session over exported threads using RAG and conversational history context.
 - **Build vector index**: Processes Markdown exports into a local vector store.
 - **Reset all data**: Purges checkpoints, authentication data, and the vector index.
 
