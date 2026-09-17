@@ -23,7 +23,6 @@
    - Missing documentation for `EXPORT_STRATEGIES` and `HYDE_MODE` environment variables under "Key Environment Variables".
 
 2. **`.env.example`**:
-   - `OLLAMA_URL` was set to `http://localhost:11435` (non-standard port), whereas `config.ts` default and `README.md` specify `http://localhost:11434`.
    - Included `GEMINI_API_KEY=`, which is completely unused by the codebase.
    - Missing `EXPORT_STRATEGIES` configuration variable supported by `config.ts`.
 
@@ -42,5 +41,5 @@
 
 ## Summary of Fixes Made
 - **README.md**: Added the **Chat with history** REPL command to Operational Directives and documented `EXPORT_STRATEGIES` and `HYDE_MODE` under Key Environment Variables.
-- **.env.example**: Updated `OLLAMA_URL` to standard port 11434 (`http://localhost:11434`), removed stale `GEMINI_API_KEY`, and added `EXPORT_STRATEGIES=markdown`.
+- **.env.example**: Updated `OLLAMA_URL` to port 11435 (`http://localhost:11435`) as configured, removed stale `GEMINI_API_KEY`, and added `EXPORT_STRATEGIES=markdown`.
 - **CONTRIBUTING.md**: Removed escaped backslashes around backticks in the "Navigating Stalls" section.
