@@ -35,7 +35,9 @@ This is the only loadable system file at startup. If the runtime pins files expl
 The system has 9 files in `prompt-system/`, plus `AGENTS.md` at the repo root. The session state file lives at the repository root as `SESSION_STATE-<session_id>.md` and is gitignored. Implementation scripts (e.g., `prompt-system/scripts/session-locks.ps1`) are invoked at runtime, not loaded at startup.
 
 <HIGH_PRIO>
-### STARTUP Phase (MANDATORY - cross-host bootstrap gate)
+!!!
+
+## STARTUP Phase (MANDATORY - cross-host bootstrap gate)
 
 Before ANY phase transition (including `START -> CHECKLIST`, `START -> INTAKE`, `START -> DISCUSS`, `START -> BLOCKED`), the agent MUST complete the STARTUP phase:
 
@@ -51,6 +53,7 @@ Before ANY phase transition (including `START -> CHECKLIST`, `START -> INTAKE`, 
 **On all other hosts**: The agent must explicitly perform steps 1-3 before emitting any `[PHASE: ...]` or `[MODE: DIRECT]` response. No exceptions.
 
 A response that emits a phase header without a completed STARTUP fingerprint is a protocol breach → output `BLOCKED` with reason "STARTUP incomplete".
+***
 </HIGH_PRIO>
 
 ### START routing (STRUCTURED mode)
@@ -288,8 +291,9 @@ Route on the first input:
 - **Directory, glob, or feature-area target** -> run the project style policy auto-trigger when the trigger condition holds, then `CHECKLIST` (relevance discovery runs during CHECKLIST init per `07-protocols.md`; sequential review for multi-file inventory).
 - **Goal or project spec without a concrete target** -> full mode -> run the project style policy auto-trigger when the trigger condition holds, then `INTAKE`.
 - **Greenfield target** (explicit from-scratch request, or the target repo has no existing source files) -> full mode -> `INTAKE` with the `Stack/Style:` field recorded; CHECKLIST and REVIEW run as recorded greenfield skips and the session goes PLAN-first with module conventions established. The auto-trigger skip condition "greenfield" applies.
-- **Exploratory question** -> `DISCUSS`.
+- **Exploratory question** -> `DISCUSS` or explicit `/discuss` command.
 - **Explicit drift request** (e.g. "check drift", "run drift") -> `DRIFT` on demand from any phase.
+- **Explicit `/discuss` command** -> enter `DISCUSS` from the current phase, recording `prior_phase` in session state.
 
 Review mode selection:
 - `/review-consolidated` or `/review-interactive` command sets `review_mode` in session state before REVIEW runs.
@@ -335,7 +339,7 @@ The ScrumMaster phrase "direct mode" for a concrete target means "skip the optio
 
 `AUTO` is the default. A direct request for a risky, ambiguous, or broad task must pause for explicit confirmation or use `STRUCTURED`; it must never silently weaken safety requirements.
 
-An explicit `/direct`, `/structured`, or `/auto` command wins when safe. An explicit user instruction to skip or use the phase model is treated as the corresponding mode request. In `AUTO`, choose `STRUCTURED` whenever the task is risky, ambiguous, or broad; otherwise choose `DIRECT`.
+An explicit `/direct`, `/structured`, `/auto`, or `/discuss` command wins when safe. An explicit user instruction to skip or use the phase model is treated as the corresponding mode request. In `AUTO`, choose `STRUCTURED` whenever the task is risky, ambiguous, or broad; otherwise choose `DIRECT`.
 
 Explicit `DIRECT` does not bypass safety. If the request involves security, authentication, authorization, secrets, destructive data changes, migrations, new or changed dependencies, public APIs, architecture, broad multi-file changes, or unclear requirements, explain why direct execution is unsafe and ask the user to confirm `DIRECT` or switch to `STRUCTURED`.
 
@@ -413,11 +417,14 @@ Phase set:
 `DIRECT` is intentionally absent (it is an execution mode, not a formal phase). `HANDOFF` and `TEST_STRATEGY` are transition artifacts. `SPEC` authors a spec artifact (planning, never implementation). `DRIFT` is read-only and never writes files.
 
 <HIGH_PRIO>
-### Phase header gate (enforced on every structured response)
+!!!
+
+## Phase header gate (enforced on every structured response)
 
 Before emitting any structured response, the agent MUST verify the new phase follows legally from the prior phase recorded in the session state file. Legal transitions are defined in the transition rules below. An illegal transition (e.g., PLAN -> PATCH without REVIEW, or any phase without a valid predecessor) is a protocol breach: output `BLOCKED` with the violating phases named.
 
 The phase header `[PHASE: X]` is the checkpoint. If the header is missing in STRUCTURED mode, or if the transition from `last_valid_phase` to the new phase is not in the legal set, the response is invalid and must output `BLOCKED` and nothing else.
+***
 </HIGH_PRIO>
 
 **STARTUP is the implicit first phase** — every session begins at STARTUP. No other phase transition is legal until STARTUP completes with a verified fingerprint.
@@ -506,61 +513,66 @@ Skip: CHECKLIST, DOCS, BLOCKED, FAILURE, INTAKE, BACKLOG, SPRINT, TASK_PLAN, SPE
 - `ANY PHASE -> DISCUSS`: user explicitly triggers discuss mode.
 
 <HIGH_PRIO>
+!!!
+
 ## Hard guards
 
-- **Phase header gate:** Every structured response must start with `[PHASE: X]`. If the header is missing, or if the transition from the prior phase to the new phase is not in the legal transition set, the response is a protocol breach: output `BLOCKED` with the violating phases named.
-- For each phase, only the phase-specific response template is allowed. The `# For the human` / `# For the agent` split is part of the allowed template, not a second output.
-- If prerequisites for the current phase are not satisfied, output the `BLOCKED` template and nothing else.
-- No review before checklist.
-- No checklist advance while any checkbox is unticked (`[ ]`) or mismatches its status field.
-- **No PATCH conclusion while any conformance-checklist box remains `[ ]`.**
-- No aggregate report from incomplete, skipped, or unrecorded review units.
-- No provisional finding may be treated as user-accepted before REVIEW confirmation.
-- No docs-dependent judgment before docs evidence.
-- **No plan before user-confirmed REVIEW decision, except the greenfield branch or when SPEC phase produced approved spec.**
-- No standalone CONFIRM phase; confirmation lives inside REVIEW.
-- Phase skips decided by model judgment transition automatically, no user confirmation.
-- **No patch before approved plan.**
-- **No patch before complete rewrite contract.**
-- **No partial handoff without explicit scope**: confirmed items list, pending items list, and user approval.
-- No mixed-phase response; do not skip forward to a later phase.
-- Do not continue after failure without an explicit retry request.
-- No findings from DISCUSS without explicit user promotion.
-- DISCUSS cannot transition directly to PATCH.
-- No SPEC output before the spec artifact structure is followed.
-- No `SPECS/` write outside PATCH.
-- No DRIFT output with a write; DRIFT is read-only.
-- No write to `STYLE_POLICY.md` (or configured artifact) outside the auto-trigger flow.
-- **No pass assertion (`pass`, `passed`, `clean`, `clear`, `conforms`, `LGTM`, synonym) without the evidence chain (command + real output, or `file:line` inspected, or validation-loop pass, or explicit user acceptance).**
-- **No PATCH conclusion while leftover audit fails.** The PATCH verification gate must complete the leftover audit (detect and auto-delete temp files, stale locks, uncommitted session artifacts per `06-misc.md` `## Leftover Handling`) before concluding. A missing or failed audit is a gate FAIL.
-- Decision prompts from `00-system.md` `## Decision format` are binding output, not stylistic guidance. A response uses either up to two `# Decision Needed` blocks or one `## Open question for you` header, never both. Prose-only question lists in place of the format are a protocol breach. Format mixing in a single response is a protocol breach.
-- No list items stacked without a blank line between them. Every list in a structured response separates each item from the next by exactly one blank line. Each item on its own line, one blank line between items, then the next item. Failure shape: items run-on as a single paragraph.
+<MUST>Every structured response must start with `[PHASE: X]`. If the header is missing, or if the transition from the prior phase to the new phase is not in the legal transition set, the response is a protocol breach: output `BLOCKED` with the violating phases named.</MUST>
+<MUST>For each phase, only the phase-specific response template is allowed. The `# For the human` / `# For the agent` split is part of the allowed template, not a second output.</MUST>
+<MUST>If prerequisites for the current phase are not satisfied, output the `BLOCKED` template and nothing else.</MUST>
+<MUST>No review before checklist.</MUST>
+<MUST>No checklist advance while any checkbox is unticked (`[ ]`) or mismatches its status field.</MUST>
+<MUST>No PATCH conclusion while any conformance-checklist box remains `[ ]`.</MUST>
+<MUST>No aggregate report from incomplete, skipped, or unrecorded review units.</MUST>
+<MUST>No provisional finding may be treated as user-accepted before REVIEW confirmation.</MUST>
+<MUST>No docs-dependent judgment before docs evidence.</MUST>
+<MUST>No plan before user-confirmed REVIEW decision, except the greenfield branch or when SPEC phase produced approved spec.</MUST>
+<MUST>No standalone CONFIRM phase; confirmation lives inside REVIEW.</MUST>
+<MUST>Phase skips decided by model judgment transition automatically, no user confirmation.</MUST>
+<MUST>No patch before approved plan.</MUST>
+<MUST>No patch before complete rewrite contract.</MUST>
+<MUST>No partial handoff without explicit scope: confirmed items list, pending items list, and user approval.</MUST>
+<MUST_NOT>No mixed-phase response; do not skip forward to a later phase.</MUST_NOT>
+<MUST_NOT>Do not continue after failure without an explicit retry request.</MUST_NOT>
+<MUST_NOT>No findings from DISCUSS without explicit user promotion.</MUST_NOT>
+<MUST_NOT>DISCUSS cannot transition directly to PATCH.</MUST_NOT>
+<MUST_NOT>No SPEC output before the spec artifact structure is followed.</MUST_NOT>
+<MUST_NOT>No `SPECS/` write outside PATCH.</MUST_NOT>
+<MUST_NOT>No DRIFT output with a write; DRIFT is read-only.</MUST_NOT>
+<MUST_NOT>No write to `STYLE_POLICY.md` (or configured artifact) outside the auto-trigger flow.</MUST_NOT>
+<MUST>No pass assertion (`pass`, `passed`, `clean`, `clear`, `conforms`, `LGTM`, synonym) without the evidence chain (command + real output, or `file:line` inspected, or validation-loop pass, or explicit user acceptance).</MUST>
+<MUST>No PATCH conclusion while leftover audit fails. The PATCH verification gate must complete the leftover audit (detect and auto-delete temp files, stale locks, uncommitted session artifacts per `06-misc.md` `## Leftover Handling`) before concluding. A missing or failed audit is a gate FAIL.</MUST>
+<MUST>Decision prompts from `00-system.md` `## Decision format` are binding output, not stylistic guidance. A response uses either up to two `# Decision Needed` blocks or one `## Open question for you` header, never both. Prose-only question lists in place of the format are a protocol breach. Format mixing in a single response is a protocol breach.</MUST>
+<MUST>No list items stacked without a blank line between them. Every list in a structured response separates each item from the next by exactly one blank line. Each item on its own line, one blank line between items, then the next item. Failure shape: items run-on as a single paragraph.</MUST>
 
   Scope: bullet lists, numbered lists, and `key: value` sequences inside any plan-approval, rewrite-contract, or session-state block. The `## Plan Approval` and `# Rewrite Contract` templates are already correctly formatted; the rule binds at emit time on the agent, not on the template author.
+***
 </HIGH_PRIO>
 
 <HIGH_PRIO>
+!!!
+
 ## Rewrite-contract completeness
 
 A rewrite contract is complete only if it includes:
 
 - target
-
 - must-preserve list
-
 - must-eliminate list
-
 - forbidden-in-patch list
-
 - must-add list: every concrete change proposed in the plan's prose (under `Will change`, `Mitigations`, or any other section) appears here as a testable item. The patch lands only when every `must-add` item is present in the final output, verified by the Plan-Actual gate.
+***
 </HIGH_PRIO>
 
 <HIGH_PRIO>
+!!!
+
 ## Phase header rule
 
 Use a visible phase marker at the top of every response: `[PHASE: <phase>]`. This header rule applies only in `STRUCTURED` mode. Direct responses use `[MODE: DIRECT]`. Do not emit step-wise headers.
 
-**Mandatory phase header:** Every single response in STRUCTURED mode MUST start with `[PHASE: X]`. A response without a phase header is a protocol breach. If STARTUP is incomplete, the ONLY valid phase header is `[PHASE: STARTUP]` or `[PHASE: BLOCKED]` with reason "STARTUP incomplete".
+<MUST>Every single response in STRUCTURED mode MUST start with `[PHASE: X]`. A response without a phase header is a protocol breach. If STARTUP is incomplete, the ONLY valid phase header is `[PHASE: STARTUP]` or `[PHASE: BLOCKED]` with reason "STARTUP incomplete".</MUST>
+***
 </HIGH_PRIO>
 
 ## Continuation rule
@@ -619,6 +631,8 @@ A protocol breach has occurred when:
 - a phase header is emitted without a completed STARTUP fingerprint (STARTUP incomplete)
 
 <HIGH_PRIO>
+!!!
+
 ## Loop protection (doom loops)
 
 Use in every phase, every persona, and every execution mode to prevent repeated identical read steps (doom loops) from burning the session budget. Loop-prone models can repeat the same tool call with identical arguments hundreds of times; this section makes that a protocol breach instead of a silent credit drain.
@@ -631,10 +645,10 @@ Use in every phase, every persona, and every execution mode to prevent repeated 
 
 ### Hard rules
 
-- Never perform a read step whose fingerprint already produced a result in this session. Reuse the prior result from session context instead. A re-read is allowed only when a prerequisite changed: the file was modified, new evidence arrived, or the user requested a fresh look.
-- A third consecutive identical read step with no state change is a doom loop. Stop, and either answer from the results already obtained or output the `BLOCKED` template (`03-output-and-state.md`) with the loop as the reason.
-- After one loop recovery, if the next read step repeats the same fingerprint again, terminate with `FAILURE` per `## Breach conditions` above and wait for an explicit user retry.
-- In `DIRECT` mode the same rule applies without phase templates: every read must add new information or target a changed file; an identical repeat without state change is a loop and must stop. Do not continue reading.
+<MUST>Never perform a read step whose fingerprint already produced a result in this session. Reuse the prior result from session context instead. A re-read is allowed only when a prerequisite changed: the file was modified, new evidence arrived, or the user requested a fresh look.</MUST>
+<MUST>A third consecutive identical read step with no state change is a doom loop. Stop, and either answer from the results already obtained or output the `BLOCKED` template (`03-output-and-state.md`) with the loop as the reason.</MUST>
+<MUST>After one loop recovery, if the next read step repeats the same fingerprint again, terminate with `FAILURE` per `## Breach conditions` above and wait for an explicit user retry.</MUST>
+<MUST>In `DIRECT` mode the same rule applies without phase templates: every read must add new information or target a changed file; an identical repeat without state change is a loop and must stop. Do not continue reading.</MUST>
 
 ### Comprehension reads are not loops
 
@@ -678,10 +692,36 @@ A single defined exception to the doom-loop rules, used to raise the confidence 
 
 ### Log output prohibition
 
-- Any `console.log`, `print`, `Write-Host`, `fmt.Println`, `System.out.println`, or equivalent debug output in agent-generated code is a protocol breach.
-- Evidence must come from: `file:line` inspected, command + real output, validation-loop pass, or explicit user acceptance.
-- "I checked the file" or "looks fine" without naming the specific thing inspected is not evidence.
+<MUST_NOT>Any `console.log`, `print`, `Write-Host`, `fmt.Println`, `System.out.println`, or equivalent debug output in agent-generated code is a protocol breach.</MUST_NOT>
+<MUST>Evidence must come from: `file:line` inspected, command + real output, validation-loop pass, or explicit user acceptance.</MUST>
+<MUST_NOT>"I checked the file" or "looks fine" without naming the specific thing inspected is not evidence.</MUST_NOT>
+***
 </HIGH_PRIO>
+
+## Prompt Reinforcement
+
+<MUST>Prompt reinforcement is an explicit, bounded reload of system-prompt sections. It is not automatic; it requires an explicit user request or a drift-detection trigger.</MUST>
+<MUST>Allowed reload targets are the system files in `prompt-system/` only, unless the user explicitly selects a subset or an additional file.</MUST>
+<MUST>The reload budget is one bounded reload per session unless the user explicitly requests more. Unbounded reload is prohibited.</MUST>
+<MUST>Every reinforcement event is recorded in the session state file's `## Reinforcement Log` section with timestamp, target files, trigger, and scope.</MUST>
+<MUST>Reinforcement never modifies system files; it only re-emphasizes their content in the active session context.</MUST>
+<MUST_NOT>Reinforcement is used to circumvent STARTUP completion. The STARTUP gate must complete before any reinforcement.</MUST_NOT>
+<MUST_NOT>Reinforcement introduces new rules or alters existing ones. It only restates what is already in the loaded system files.</MUST_NOT>
+
+Trigger conditions:
+- Explicit user request: "reinforce", "reload prompts", "refresh system", or equivalent.
+- Drift detection: when a spec or code drift is found and the session needs to re-check system constraints.
+- Session state corruption: when the session state file is missing or invalid and the session needs to re-establish baseline rules.
+
+Reinforcement scope options:
+- Full: reload all 8 system files (the default STARTUP set).
+- Partial: reload a named subset (e.g., `00-system.md`, `06-misc.md`, `07-protocols.md`) as specified by the user.
+- Targeted: re-emphasize a specific section or rule cited by the user.
+
+Reinforcement output:
+- A short preamble stating which files/sections were reinforced and why.
+- The relevant quoted sections verbatim inside code fences.
+- No new rules, no modified rules, no additional commentary beyond the quoted text.
 
 ## Read-only host (fileless mode)
 

@@ -2,13 +2,13 @@ import type { Page } from '@playwright/test'
 import { logger } from '../utils/logger.js'
 import { DEFAULT_API_VERSION } from './api-version.js'
 import { errorMessageOf } from '../utils/extract-error-message.js'
-import { createNamedError } from '../utils/errors.js'
+import { BaseAppError } from '../utils/errors.js'
 import { ok, err, type Result, from } from 'super-result'
 import { z } from 'zod'
 import { ApiDiagnosticsWriter } from '../utils/api-diagnostics.js'
 
-export const DiscoveryError = createNamedError('DiscoveryError')
-export const ApiError = createNamedError('ApiError')
+export class DiscoveryError extends BaseAppError {}
+export class ApiError extends BaseAppError {}
 
 type DiscoveryErrorInstance = InstanceType<typeof DiscoveryError>
 type ApiErrorInstance = InstanceType<typeof ApiError>
@@ -29,13 +29,13 @@ const JITTER_MS = 700
 /**
  * Only capture API version from endpoints that fire AFTER the library page
  * is fully initialized. /api/auth/session is intentionally excluded — it fires
- * too early (before cookies/CSRF are hydrated) and causes list_ask_threads
+ * too early (before cookies/CSRF are hydrated) and causes list_recent
  * to return [].
  */
 const VERSIONED_URL_PATTERNS = [
-  '/rest/userinfo',
-  '/rest/thread/list_ask_threads',
-  '/rest/thread/list_pinned_ask_threads',
+  '/rest/user/info',
+  '/rest/thread/list_recent',
+  '/rest/pins',
   '/rest/sidebar',
 ]
 
@@ -116,18 +116,8 @@ async function evaluateThreadBatchInPage(
   return page.evaluate(
     async ({ url, offset, batchSize }: { url: string; offset: number; batchSize: number }) => {
       const res = await fetch(url, {
-        method: 'POST',
+        method: 'GET',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          limit: batchSize,
-          offset,
-          ascending: false,
-          include_assets: true,
-          search_term: '',
-          send_last_entry: true,
-          thread_type_filter: null,
-          with_temporary_threads: false,
-        }),
         credentials: 'include',
       })
       const text = await res.text()
@@ -144,9 +134,8 @@ async function evaluatePinnedThreadsInPage(
   return page.evaluate(
     async ({ url }: { url: string }) => {
       const res = await fetch(url, {
-        method: 'POST',
+        method: 'GET',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({}),
         credentials: 'include',
       })
       const text = await res.text()
@@ -190,8 +179,8 @@ async function detectVersionFromResponse(
 
 /**
  * Wait until the library page has finished its initialization network burst.
- * /rest/userinfo fires at library load, well after /api/auth/session, ensuring
- * cookies/CSRF are fully hydrated before we call list_ask_threads.
+ * /rest/user/info fires at library load, well after /api/auth/session, ensuring
+ * cookies/CSRF are fully hydrated before we call list_recent.
  */
 async function waitForLibraryReady(
   page: Page,
@@ -213,7 +202,7 @@ async function waitForUserInfoResponse(
   const result = await from(
     async () =>
       await page.waitForResponse(
-        (res) => res.url().includes('/rest/userinfo') && res.status() === 200,
+        (res) => res.url().includes('/rest/user/info') && res.status() === 200,
         { timeout }
       )
   )
@@ -240,7 +229,7 @@ async function fetchThreadBatch(
   offset: number,
   diagnosticsWriter: ApiDiagnosticsWriter
 ): Promise<Result<ThreadBatchResponse, DiscoveryErrorInstance | ApiErrorInstance>> {
-  const url = `${BASE_URL}/rest/thread/list_ask_threads?version=${version}&source=default`
+  const url = `${BASE_URL}/rest/thread/list_recent?exclude_asi=false&limit=${BATCH_SIZE}&offset=${offset}&version=${version}&source=default`
 
   const rawResult = await from(async () => await evaluateThreadBatchInPage(page, url, offset))
   if (!rawResult.ok) {
@@ -249,28 +238,28 @@ async function fetchThreadBatch(
 
   const raw = rawResult.value
 
-  logger.debug(`list_ask_threads offset=${offset}: status=${raw.status}`)
-  logger.debug(`list_ask_threads offset=${offset}: body=${raw.body.slice(0, 500)}`)
+  logger.debug(`list_recent offset=${offset}: status=${raw.status}`)
+  logger.debug(`list_recent offset=${offset}: body=${raw.body.slice(0, 500)}`)
 
   if (raw.status !== 200) {
-    return err(new ApiError(`list_ask_threads returned HTTP ${raw.status}`))
+    return err(new ApiError(`list_recent returned HTTP ${raw.status}`))
   }
 
   const parseResult = await from(() => JSON.parse(raw.body))
   if (!parseResult.ok) {
-    return err(new ApiError(`list_ask_threads: invalid JSON — body: ${raw.body.slice(0, 200)}`))
+    return err(new ApiError(`list_recent: invalid JSON — body: ${raw.body.slice(0, 200)}`))
   }
 
   const arrayValidated = z.array(RawThreadSchema).safeParse(parseResult.value)
   if (!arrayValidated.success) {
     const zodErrorPaths = arrayValidated.error.issues.map((issue) => issue.path.join('.'))
     diagnosticsWriter.writeFailure({
-      url: `${BASE_URL}/rest/thread/list_ask_threads?version=${version}&source=default`,
+      url: `${BASE_URL}/rest/thread/list_recent?exclude_asi=false&limit=${BATCH_SIZE}&offset=${offset}&version=${version}&source=default`,
       errorType: 'zod_error',
       zodErrorPaths,
     })
     return err(
-      new ApiError(`list_ask_threads: schema validation failed — body: ${raw.body.slice(0, 200)}`)
+      new ApiError(`list_recent: schema validation failed — body: ${raw.body.slice(0, 200)}`)
     )
   }
 
@@ -288,7 +277,7 @@ async function fetchPinnedThreads(
   version: string,
   diagnosticsWriter: ApiDiagnosticsWriter
 ): Promise<Result<RawThread[], DiscoveryErrorInstance | ApiErrorInstance>> {
-  const url = `${BASE_URL}/rest/thread/list_pinned_ask_threads?version=${version}&source=default`
+  const url = `${BASE_URL}/rest/pins?limit=50&version=${version}&source=default`
 
   const rawResult = await from(async () => await evaluatePinnedThreadsInPage(page, url))
   if (!rawResult.ok) {
@@ -297,16 +286,16 @@ async function fetchPinnedThreads(
 
   const raw = rawResult.value
 
-  logger.debug(`list_pinned_ask_threads: status=${raw.status}`)
+  logger.debug(`pins: status=${raw.status}`)
 
   if (raw.status !== 200) {
-    logger.debug(`list_pinned_ask_threads returned HTTP ${raw.status} — skipping pinned`)
+    logger.debug(`pins returned HTTP ${raw.status} — skipping pinned`)
     return ok([])
   }
 
-  const parseResult = await from(() => JSON.parse(raw.body))
+  const parseResult = from(() => JSON.parse(raw.body))
   if (!parseResult.ok) {
-    logger.debug('list_pinned_ask_threads: invalid JSON — skipping pinned')
+    logger.debug('pins: invalid JSON — skipping pinned')
     return ok([])
   }
 
@@ -314,11 +303,11 @@ async function fetchPinnedThreads(
   if (!validated.success) {
     const zodErrorPaths = validated.error.issues.map((issue) => issue.path.join('.'))
     diagnosticsWriter.writeFailure({
-      url: `${BASE_URL}/rest/thread/list_pinned_ask_threads?version=${version}&source=default`,
+      url: `${BASE_URL}/rest/pins?limit=50&version=${version}&source=default`,
       errorType: 'zod_error',
       zodErrorPaths,
     })
-    logger.debug(`list_pinned_ask_threads: schema validation failed — skipping pinned`)
+    logger.debug(`pins: schema validation failed — skipping pinned`)
     return ok([])
   }
 
@@ -346,7 +335,7 @@ async function fetchFirstBatch(
 
   return err(
     new DiscoveryError(
-      `list_ask_threads returned empty after ${MAX_RETRIES} attempts — API may be unavailable or the library is empty`
+      `list_recent returned empty after ${MAX_RETRIES} attempts — API may be unavailable or the library is empty`
     )
   )
 }
@@ -356,9 +345,6 @@ async function fetchFirstBatch(
 // #region Main Discovery
 
 export class LibraryDiscovery {
-  static readonly DiscoveryError = DiscoveryError
-  static readonly ApiError = ApiError
-
   constructor(private readonly diagnosticsWriter: ApiDiagnosticsWriter) {}
 
   async discoverAllConversationsFromLibrary(

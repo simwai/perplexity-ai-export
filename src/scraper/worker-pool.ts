@@ -1,10 +1,15 @@
 import { errorBus } from '../utils/error-bus.js'
 import { type Browser, type BrowserContext } from '@playwright/test'
-import { ConversationExtractor, type ExtractedConversation } from './conversation-extractor.js'
+import {
+  ConversationExtractor,
+  type ExtractedConversation,
+  NoDataError,
+  ExtractionError,
+} from './conversation-extractor.js'
 import { CheckpointManager, type ConversationMeta } from './checkpoint-manager.js'
 import { logger } from '../utils/logger.js'
 import { type Config } from '../utils/config.js'
-import { isTypedError, createNamedError } from '../utils/errors.js'
+import { isTypedError, BaseAppError } from '../utils/errors.js'
 import { join } from 'node:path'
 import { writeFileSync, existsSync, mkdirSync, statSync } from 'node:fs'
 import { sanitizeFilename, sanitizeSpaceName } from '../export/sanitizer.js'
@@ -12,7 +17,7 @@ import { ok, err, from, createResult, type Result } from 'super-result'
 import { errorMessageOf } from '../utils/extract-error-message.js'
 import { RateLimiter } from './rate-limiter.js'
 
-export const ContextRefreshError = createNamedError('ContextRefreshError')
+export class ContextRefreshError extends BaseAppError {}
 type ContextRefreshErrorInstance = InstanceType<typeof ContextRefreshError>
 
 const MAX_RETRIES = 2
@@ -209,8 +214,8 @@ export class WorkerPool {
     queue: QueueItem[],
     error: unknown
   ): Promise<void> {
-    const isTimeout = isTypedError(error, ConversationExtractor.NoDataError)
-    const isContextLost = isTypedError(error, ConversationExtractor.ExtractionError)
+    const isTimeout = isTypedError(error, NoDataError)
+    const isContextLost = isTypedError(error, ExtractionError)
 
     if (isTimeout) worker.extractor.recoverTimeout()
 

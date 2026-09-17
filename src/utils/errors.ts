@@ -1,22 +1,12 @@
 import { errorMessageOf } from './extract-error-message.js'
 
-export function createNamedError(
-  name: string
-): new (
-  message: string,
-  options?: { cause?: unknown; context?: Record<string, unknown> }
-) => Error {
-  class NamedError extends Error {
-    constructor(message: string, options?: { cause?: unknown; context?: Record<string, unknown> }) {
-      super(message, { cause: options?.cause })
-      this.name = name
-      if (options?.context) {
-        Object.assign(this, options.context)
-      }
+export class BaseAppError extends Error {
+  constructor(message: string, options?: { cause?: unknown; context?: Record<string, unknown> }) {
+    super(message, { cause: options?.cause })
+    if (options?.context) {
+      Object.assign(this, options.context)
     }
   }
-  NamedError.prototype.name = name
-  return NamedError
 }
 
 export function isTypedError(

@@ -32,6 +32,31 @@ Verification (build/smoke/tests/Playwright) is the one place the evidence chain 
 
 A pass assertion that breaks this rule is a protocol breach.
 
+## Template Field Contract
+
+This section defines which fields in each phase template are required and which are optional. Required fields must appear in the output; optional fields may be omitted when their trigger condition is unmet. Empty optional fields are omitted, not filled with placeholders.
+
+- `[required]` — the field must be present in the output for the phase to be valid.
+- `[optional]` — the field may be omitted when its trigger condition is unmet.
+
+Template field requirements:
+
+- `BLOCKED`: `Reason` [required]; `Needed now` [required]; `Next required user action` [required]; `Status` [required].
+- `INTAKE`: `Goal` [required]; `Stack/Style` [required]; `Scope` [required]; `Target repo` [required]; `Success criteria` [required]; `Milestones` [required]; `Open questions` [optional]; `Status` [required].
+- `BACKLOG`: `Milestone map` [required]; `Items` [required]; `Split candidates` [optional]; `Allowed next move` [required].
+- `SPRINT`: `Sprint` [required]; `Serves milestone` [required]; `Selected items` [required]; `Board` [required]; `Completion criteria` [required]; `Allowed next move` [required].
+- `TASK_PLAN`: `Task` [required]; `Target` [required]; `Type` [required]; `Scope` [required]; `Size` [required]; `ICE` [required]; `Milestone` [required]; `Story` [optional]; `MVP` [optional]; `Test-first` [optional]; `Definition of done` [required]; `Allowed next move` [required].
+- `CHECKLIST`: `Target scope` [required]; `Focus` [required]; `Scope` [required]; `File inventory` [required]; `System Discovery` [required]; `Pre-review docs log` [required]; `Hard tier` [required]; `Soft tier` [required]; `Logical tier` [optional]; `Verification` [required]; `Batch log` [optional]; `Verdict` [required].
+- `SPEC`: `Path` [required]; `Status` [required]; `User Stories` [required]; `Functional Requirements` [required]; `Success Criteria` [required]; `Assumptions` [optional]; `Open Questions` [optional]; `Allowed next move` [required].
+- `DOCS`: `In scope` [required]; `Verified evidence` [required]; `Status` [required].
+- `REVIEW`: `Multi-file progress` [required]; `Findings` [required]; `Logical Findings` [optional]; `Informational` [optional]; `Confirmed Items` [optional]; `Pending Review Items` [optional]; `Partial Handoff Available` [optional]; `Plan Draft` [optional]; `Decision Items` [optional]; `Cross-team requirements` [optional]; `Verification` [required]; `Decision Needed` [required when findings are present].
+- `PLAN`: `Target` [required]; `Scope` [required]; `Scope type` [required]; `Pending review items` [required]; `Source` [required]; `System Constraints` [required]; `Will change` [required]; `Will preserve` [required]; `Conventions` [required]; `Risks` [optional]; `Logical constraints` [optional]; `Awaiting` [required].
+- `PATCH`: `Rewrite Contract` [required]; `Patch` [required]; `Self-Review` [required]; `Compliance Audit` [required]; `Constraint Verification` [required]; `Verification` [required]; `Plan-Actual` [required when plan exists]; `Commit/Push Gate` [required when edits exist].
+- `DRIFT`: `Spec` [required]; `Registry check` [required]; `Verified claims` [optional]; `Diverged claims` [optional]; `Orphaned mappings` [optional]; `Code-exceeds-spec` [optional]; `HALT` [optional]; `Fresh-eyes review` [optional]; `Exit` [required].
+- `HANDOFF`: `For the human` [required]; `For the agent` [required]; `Persona Handoff Contract` [required]; `Status` [required].
+- `TEST_STRATEGY`: `Test Strategy` [required]; `Binding items` [required]; `Strong hints` [required]; `Weak hints` [optional].
+- `FAILURE`: `Status` [required]; `Reason` [required]; `Last valid phase` [required]; `Failed phase` [required]; `Retry` [required].
+
 ## Dual-section output (human + agent)
 
 A structured phase output may split into a plain-language section for the human reader and a machine-checkable section for the receiving agent:
@@ -876,6 +901,10 @@ spec_version: [x.y.z or n/a]
 ## Phase Status
 
 phase_status: {sensei: [phase|n/a], tester: [phase|n/a], dev: [phase|n/a], merge: [pending|complete|n/a]}
+
+## Reinforcement Log
+
+- [timestamp] -- [target files] -- [trigger] -- [scope]
 
 ## Confirmed Items
 

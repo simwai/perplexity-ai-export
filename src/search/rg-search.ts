@@ -4,7 +4,7 @@ import { createInterface } from 'node:readline'
 import { type Config } from '../utils/config.js'
 import { logger } from '../utils/logger.js'
 import { rgPath } from '@vscode/ripgrep'
-import { createNamedError } from '../utils/errors.js'
+import { BaseAppError } from '../utils/errors.js'
 import { z } from 'zod'
 import { createResult, ok, err, type Result } from 'super-result'
 import { ApiDiagnosticsWriter } from '../utils/api-diagnostics.js'
@@ -34,10 +34,10 @@ export interface RipgrepMatch {
   text: string
 }
 
-export class RipgrepSearch {
-  static readonly RipgrepSearchError = createNamedError('RipgrepSearchError')
-  static readonly RipgrepNotFoundError = createNamedError('RipgrepNotFoundError')
+export class RipgrepSearchError extends BaseAppError {}
+export class RipgrepNotFoundError extends BaseAppError {}
 
+export class RipgrepSearch {
   private readonly resultFactory = createResult<Error>((error: unknown) =>
     error instanceof Error ? error : new Error(String(error))
   )
@@ -69,7 +69,7 @@ export class RipgrepSearch {
 
   private validateSearchOptions(options: RipgrepSearchOptions): Result<void, Error> {
     if (!options.pattern || options.pattern.trim().length === 0) {
-      return err(new RipgrepSearch.RipgrepSearchError('Search pattern must not be empty'))
+      return err(new RipgrepSearchError('Search pattern must not be empty'))
     }
     return ok(undefined)
   }
@@ -145,8 +145,8 @@ export class RipgrepSearch {
         resolve(
           err(
             isMissing
-              ? new RipgrepSearch.RipgrepNotFoundError(this.getRipgrepInstallationInstructions())
-              : new RipgrepSearch.RipgrepSearchError(`Search failed: ${error.message}`)
+              ? new RipgrepNotFoundError(this.getRipgrepInstallationInstructions())
+              : new RipgrepSearchError(`Search failed: ${error.message}`)
           )
         )
       })
@@ -159,7 +159,7 @@ export class RipgrepSearch {
           }
           resolve(ok(json ? matches : undefined))
         } else {
-          resolve(err(new RipgrepSearch.RipgrepSearchError(`ripgrep exited with code ${code}`)))
+          resolve(err(new RipgrepSearchError(`ripgrep exited with code ${code}`)))
         }
       })
     })
@@ -208,7 +208,7 @@ export class RipgrepSearch {
 function ensureExportDirExists(exportDir: string): Result<void, Error> {
   if (!existsSync(exportDir)) {
     return err(
-      new RipgrepSearch.RipgrepSearchError(
+      new RipgrepSearchError(
         'No exports directory found. Please run the "start" command first to export your history.'
       )
     )

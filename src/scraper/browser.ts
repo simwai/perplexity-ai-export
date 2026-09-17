@@ -4,7 +4,7 @@ import { type Config } from '../utils/config.js'
 import { logger } from '../utils/logger.js'
 import { confirm } from '@inquirer/prompts'
 import { errorMessageOf } from '../utils/extract-error-message.js'
-import { createNamedError } from '../utils/errors.js'
+import { BaseAppError } from '../utils/errors.js'
 import { ok, err, from, type Result } from 'super-result'
 import { logHttpRequest, logHttpResponse } from '../utils/http-logger.js'
 import { createWaitStrategy } from '../utils/wait-strategy.js'
@@ -42,12 +42,12 @@ const AuthSessionSchema = z.object({
   email: z.unknown().optional(),
 })
 
-export class BrowserManager {
-  static readonly BrowserLaunchError = createNamedError('BrowserLaunchError')
-  static readonly AuthError = createNamedError('AuthError')
-  static readonly ContextError = createNamedError('ContextError')
-  static readonly NavigationError = createNamedError('NavigationError')
+export class BrowserLaunchError extends BaseAppError {}
+export class AuthError extends BaseAppError {}
+export class ContextError extends BaseAppError {}
+export class NavigationError extends BaseAppError {}
 
+export class BrowserManager {
   private readonly config: Config
   private browserInstance: Browser | null = null
   private activeContext: BrowserContext | null = null
@@ -169,7 +169,7 @@ export class BrowserManager {
     })
     if (!result.ok) {
       return err(
-        new BrowserManager.BrowserLaunchError(
+        new BrowserLaunchError(
           result.error instanceof Error ? result.error.message : String(result.error)
         )
       )
@@ -179,7 +179,7 @@ export class BrowserManager {
 
   private async newFreshContext(): Promise<Result<void, ContextErrorInstance>> {
     if (!this.browserInstance) {
-      return err(new BrowserManager.ContextError('Browser not initialized'))
+      return err(new ContextError('Browser not initialized'))
     }
     this.activeContext = await this.browserInstance.newContext()
     return ok(undefined)
@@ -187,7 +187,7 @@ export class BrowserManager {
 
   private async newContextWithSavedState(): Promise<Result<void, ContextErrorInstance>> {
     if (!this.browserInstance) {
-      return err(new BrowserManager.ContextError('Browser not initialized'))
+      return err(new ContextError('Browser not initialized'))
     }
     if (existsSync(this.config.authStoragePath)) {
       logger.info('Loading saved authentication state...')
@@ -197,7 +197,7 @@ export class BrowserManager {
       })
       if (!storageResult.ok) {
         return err(
-          new BrowserManager.ContextError(
+          new ContextError(
             storageResult.error instanceof Error
               ? storageResult.error.message
               : String(storageResult.error)
@@ -257,16 +257,14 @@ export class BrowserManager {
 
   private async waitForSettingsPageLoaded(): Promise<Result<void, NavigationErrorInstance>> {
     if (!this.activeContext) {
-      return err(new BrowserManager.NavigationError('No browser context available'))
+      return err(new NavigationError('No browser context available'))
     }
 
     this.activePage = await this.activeContext.newPage()
 
     const result = await from(async () => {
       if (!this.activePage) {
-        throw new BrowserManager.NavigationError(
-          '[waitForSettingsPageLoaded] Failed to create new active page'
-        )
+        throw new NavigationError('[waitForSettingsPageLoaded] Failed to create new active page')
       }
       await this.activePage.goto(SETTINGS_URL, {
         timeout: NAVIGATION_TIMEOUT_MS,
@@ -292,7 +290,7 @@ export class BrowserManager {
     })
     if (!result.ok) {
       return err(
-        new BrowserManager.NavigationError(
+        new NavigationError(
           result.error instanceof Error ? result.error.message : String(result.error)
         )
       )
@@ -302,7 +300,7 @@ export class BrowserManager {
 
   private async ensureUserIsAuthenticated(): Promise<Result<void, AuthErrorInstance>> {
     if (!this.activePage) {
-      return err(new BrowserManager.AuthError('Page not initialized'))
+      return err(new AuthError('Page not initialized'))
     }
 
     while (true) {
@@ -326,7 +324,7 @@ export class BrowserManager {
       const challengeResult = await this.isCloudflareChallenge(this.activePage)
       if (challengeResult.ok && challengeResult.value) {
         return err(
-          new BrowserManager.AuthError(
+          new AuthError(
             'Cloudflare challenge detected. Please complete the CAPTCHA/verification, then try again.'
           )
         )
@@ -355,9 +353,7 @@ export class BrowserManager {
       })
 
       if (!retry) {
-        return err(
-          new BrowserManager.AuthError(`Login verification failed. Current URL: ${currentUrl}`)
-        )
+        return err(new AuthError(`Login verification failed. Current URL: ${currentUrl}`))
       }
     }
   }
@@ -386,7 +382,7 @@ export class BrowserManager {
   private async waitForHashRoutingToSettle(page: Page): Promise<Result<void, AuthErrorInstance>> {
     const result = await from(async () => {
       if (!page) {
-        throw new BrowserManager.AuthError('Page not initialized')
+        throw new AuthError('Page not initialized')
       }
       await page.waitForFunction(
         () => {
@@ -399,9 +395,7 @@ export class BrowserManager {
     })
     if (!result.ok) {
       return err(
-        new BrowserManager.AuthError(
-          result.error instanceof Error ? result.error.message : String(result.error)
-        )
+        new AuthError(result.error instanceof Error ? result.error.message : String(result.error))
       )
     }
     return ok(undefined)
@@ -448,9 +442,7 @@ export class BrowserManager {
     })
     if (!result.ok) {
       return err(
-        new BrowserManager.AuthError(
-          result.error instanceof Error ? result.error.message : String(result.error)
-        )
+        new AuthError(result.error instanceof Error ? result.error.message : String(result.error))
       )
     }
     return ok(result.value)
@@ -458,7 +450,7 @@ export class BrowserManager {
 
   private async persistAuthenticationState(): Promise<Result<void, AuthErrorInstance>> {
     if (!this.activeContext) {
-      return err(new BrowserManager.AuthError('No browser context available to save'))
+      return err(new AuthError('No browser context available to save'))
     }
     const currentStorageState = await this.activeContext.storageState()
     logger.debug(
@@ -483,9 +475,7 @@ export class BrowserManager {
     })
     if (!result.ok) {
       return err(
-        new BrowserManager.AuthError(
-          result.error instanceof Error ? result.error.message : String(result.error)
-        )
+        new AuthError(result.error instanceof Error ? result.error.message : String(result.error))
       )
     }
     return ok(undefined)
@@ -493,7 +483,7 @@ export class BrowserManager {
 
   private getActivePage(): Result<Page, ContextErrorInstance> {
     if (!this.activePage) {
-      return err(new BrowserManager.ContextError('Page not initialized'))
+      return err(new ContextError('Page not initialized'))
     }
     return ok(this.activePage)
   }
@@ -503,7 +493,7 @@ export class BrowserManager {
   }
 }
 
-type BrowserLaunchErrorInstance = InstanceType<typeof BrowserManager.BrowserLaunchError>
-type AuthErrorInstance = InstanceType<typeof BrowserManager.AuthError>
-type ContextErrorInstance = InstanceType<typeof BrowserManager.ContextError>
-type NavigationErrorInstance = InstanceType<typeof BrowserManager.NavigationError>
+type BrowserLaunchErrorInstance = InstanceType<typeof BrowserLaunchError>
+type AuthErrorInstance = InstanceType<typeof AuthError>
+type ContextErrorInstance = InstanceType<typeof ContextError>
+type NavigationErrorInstance = InstanceType<typeof NavigationError>

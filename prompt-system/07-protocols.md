@@ -1,6 +1,6 @@
 # 07-protocols
 
-Cross-cutting protocol details: artifact handling, pre-commit behavior, cross-team requirements, app lifecycle, library selection, session file locks, spec lifecycle, drift detection, discuss mode, and scrum planning. These were merged out of 11 separate deprecated modules; they are protocol detail that PATCH, REVIEW, and PLAN consume. "PATCH rule" sections below are cross-phase constraints that apply when PATCH touches the relevant domain — the PATCH execution protocol lives in `06-misc.md`.
+Cross-cutting protocol details: artifact handling, pre-commit behavior, cross-team requirements, app lifecycle, library selection, session file locks, spec lifecycle, drift detection, discuss mode, scrum planning, and prompt-system protection. These were merged out of 11 separate deprecated modules; they are protocol detail that PATCH, REVIEW, and PLAN consume. "PATCH rule" sections below are cross-phase constraints that apply when PATCH touches the relevant domain — the PATCH execution protocol lives in `06-misc.md`.
 
 ## Artifact handling
 
@@ -66,11 +66,34 @@ The house preference is LF line endings for every repository, including on Windo
 
 Spawn rule: when a plan or patch sets up a new repo or touches repo hygiene, spawn `.gitattributes` with `* text=auto eol=lf` when the repo lacks one. Extend the existing file in the same patch that normalizes line endings.
 
+## Prompt-system protection
+
+The `prompt-system/` folder and its files are the core system and must be protected from modification when the prompt-system is deployed to a project. These files define the agent's behavior, rules, and conventions; editing them corrupts the system for all projects using it.
+
+### Hard rules
+
+- The `prompt-system/` folder must never be edited as part of a project's work. Changes to the system go through a separate governance session.
+- When deploying the prompt-system to a new project, the `prompt-system/` files are installed as read-only artifacts.
+- Any automated tool or agent must not modify `prompt-system/` files during normal project work.
+- The `prompt-system/` folder is excluded from project-level linting, formatting, and review rules.
+
+### Enforcement
+
+- `07-protocols.md` rule detection (H13-H39) must not fire against `prompt-system/` files. The system reads `STYLE_POLICY.md` for project-level exceptions and treats `prompt-system/` as an always-excluded directory.
+- Pre-commit hooks must not include `prompt-system/` in their staged-file patterns.
+- Discovery Protocol searches must exclude `prompt-system/` from the project source tree.
+
+### Exception
+
+- Updates to the prompt-system itself (new rules, rubric changes, style updates) are performed in a dedicated governance session and deployed via the sync mechanism (`sync.ps1`), not through normal project PATCH flows.
+
 ## Discovery Protocol
 
 Trigger: CHECKLIST init for any non-greenfield target.
 
 Search budget: max 15 `rg`/`glob` invocations, max 100 hits.
+
+Search scope excludes `prompt-system/` (core system, never part of project work). All other directories are searched.
 
 ### Mandatory searches
 
@@ -652,8 +675,11 @@ Host capability reaches the script via the `BABA_READ_ONLY` environment flag; wh
 
 ### Hard rules
 
-- One file, one writer. A session must hold the lock for a file before any write to that file, and must not hold the lock for any file outside its `## Edited Files` ledger.
-- Lock acquisition is required on **first write in any phase**, not just PATCH. Reads never acquire locks. The cost of this choice is a read-then-write race that the commit/push gate re-checks at staging time.
+<MUST>One file, one writer. A session must hold the lock for a file before any write to that file, and must not hold the lock for any file outside its `## Edited Files` ledger.</MUST>
+<MUST>Lock acquisition is required on first write in any phase, not just PATCH. Reads never acquire locks. The cost of this choice is a read-then-write race that the commit/push gate re-checks at staging time.</MUST>
+<MUST_NOT>Skip lock acquisition when a shell tool can invoke the lock script.</MUST_NOT>
+<MUST_NOT>Auto-steal a live peer lock.</MUST_NOT>
+<MUST_NOT>Release a lock whose `owner` is not this session id.</MUST_NOT>
 - Stale locks are never auto-stolen. Surface the choice to the user.
 - The commit/push gate staging is refused if any path in the proposed commit is not currently locked by this session or released by this session within the current PATCH/DIRECT step.
 - A session never releases a lock whose `owner` is not its own session id. Releasing a peer's lock is a protocol violation and surfaces as BLOCKED.
@@ -680,7 +706,7 @@ The presence of a live peer does not change behavior directly. It only means loc
 
 ### Acquisition
 
-Before the first write to a file:
+<MUST>Before the first write to a file, acquire the lock. Lock acquisition MUST complete before the per-edit lint gate runs for the first write to the file; lint auto-fixes that occur before lock acquisition are a protocol breach.</MUST>
 
 1. Verify the file is in the session's `## Edited Files` ledger. A file not in the ledger is not eligible for a lock, and acquiring one anyway is BLOCKED.
 2. Compute the flat name per the Lock directory section.
@@ -688,8 +714,6 @@ Before the first write to a file:
 Use `New-LockDirectoryAtomic` (create without `-Force`); a `-Force` create is never atomic and silently steals.
 4. On success, write `owner` and `acquired_at` into the new directory. The lock is held.
 5. On "already locked", read the existing `owner` and `acquired_at`. If `acquired_at` is within `SESSION_LOCK_TTL_MINUTES`, the peer is live; enter Wait and surface. Otherwise the lock is stale; enter Stale lock handling.
-
-Lock acquisition MUST complete before the per-edit lint gate runs for the first write to the file. Lint auto-fixes that occur before lock acquisition are a protocol breach.
 
 Before the create attempt, a per-file acquisition also refuses when a live peer dependency lock covers the flat name, and session identity always comes from the once-per-session cache, never from a per-call generated fallback.
 
@@ -726,7 +750,7 @@ The model records the stale-lock event in the session's state file under `## Loc
 
 ### Commit/push gate integration
 
-The commit/push gate must, before staging, call into session file locks to verify: for every path in the proposed commit, the current session holds the lock or released it within the current PATCH/DIRECT step.
+<MUST>The commit/push gate must, before staging, call into session file locks to verify: for every path in the proposed commit, the current session holds the lock or released it within the current PATCH/DIRECT step.</MUST>
 Verification also scans every lock's `dependencies.txt`, so a file covered by a live peer dependency lock refuses staging even without an exact-path lock.
 Any path that fails this check is surfaced to the user with the same three options as Wait and surface, and staging is refused until the user decides.
 The re-read check that defends against the read-then-write race lives in the commit/push gate right after the lock check: re-read the working-tree version of each path, diff it against the in-memory expected content, and refuse to stage any path with unowned hunks.

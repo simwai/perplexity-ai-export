@@ -132,6 +132,8 @@ Hard-tier (H1-H12) and soft-tier (S1-S20) review rubrics. Hard-tier items block 
 
 **S24 -- Missing SEO test coverage**: a content page has no SEO validation for meta descriptions, title tags, or structured data.
 
+**S25 -- Missing required-field metadata in templates**: a phase template is missing the required/optional field metadata in the `## Template Field Contract` section, or the metadata does not match the actual template shape.
+
 ## Documented extension IDs
 
 When artifact, gitattributes, or pre-commit review is in scope, those extensions fall under the soft-tier coverage tick:

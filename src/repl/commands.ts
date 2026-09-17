@@ -11,20 +11,20 @@ import { RagOrchestrator } from '../ai/rag-orchestrator.js'
 import { type ChatMessage } from '../ai/ai-client.js'
 import { logger } from '../utils/logger.js'
 import { errorMessageOf } from '../utils/extract-error-message.js'
-import { createNamedError } from '../utils/errors.js'
+import { BaseAppError } from '../utils/errors.js'
 import { ok, err, from, type Result } from 'super-result'
 import { showHelp } from './help.js'
 import { LibraryDiscovery } from '../scraper/library-discovery.js'
 import { ApiDiagnosticsWriter } from '../utils/api-diagnostics.js'
 import { type Config } from '../utils/config.js'
 
-export class CommandHandler {
-  static readonly ScraperError = createNamedError('ScraperError')
-  static readonly SearchError = createNamedError('SearchError')
-  static readonly VectorizeError = createNamedError('VectorizeError')
-  static readonly ValidationError = createNamedError('ValidationError')
-  static readonly ResetError = createNamedError('ResetError')
+export class ScraperError extends BaseAppError {}
+export class SearchError extends BaseAppError {}
+export class VectorizeError extends BaseAppError {}
+export class ValidationError extends BaseAppError {}
+export class ResetError extends BaseAppError {}
 
+export class CommandHandler {
   private readonly checkpointManager: CheckpointManager
   private readonly searchOrchestrator: SearchOrchestrator
   private readonly ragOrchestrator: RagOrchestrator

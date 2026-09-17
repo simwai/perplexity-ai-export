@@ -2,9 +2,9 @@ import type { Page } from '@playwright/test'
 import { type Config } from './config.js'
 import { logger } from './logger.js'
 import { from, type Result } from 'super-result'
-import { createNamedError } from './errors.js'
+import { BaseAppError } from './errors.js'
 
-export const SelectorWaitError = createNamedError('SelectorWaitError')
+export class SelectorWaitError extends BaseAppError {}
 type SelectorWaitErrorInstance = InstanceType<typeof SelectorWaitError>
 
 export interface WaitStrategy {
