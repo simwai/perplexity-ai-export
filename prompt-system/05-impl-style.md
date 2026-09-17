@@ -462,6 +462,150 @@ The defaults above are a floor, not a ceiling. They never replace the per-edit l
   - Canonical URL tag on every indexable page
   - Open Graph and Twitter Card meta tags on shareable content pages
 
+## Design Guidelines
+
+This section covers UI/UX defaults for frontend work. Greenfield projects adopt
+these as binding conventions; existing projects apply them through
+`STYLE_POLICY.md` (`preserve-local` or `upgrade-house-style`). Override per
+project via the `Stack/Style:` field or `STYLE_POLICY.md`. Accessibility and
+SEO rules are governed by the existing rubric IDs `S21`-`S24`; this section
+does not duplicate them.
+
+### Palettes
+
+Preferred palettes: **Catppuccin Mocha** and **Dracula**. Choose one palette per project; do not mix palettes within a single interface. Palette selection is recorded in `STYLE_POLICY.md` or the `Stack/Style:` field.
+
+### CSS variables
+
+Define theme tokens as CSS custom properties on `:root`:
+
+- `--color-*` for foreground, background, border, and accent colors
+- `--font-*` for font families, sizes, and weights
+- `--spacing-*` for consistent spacing scale
+- `--radius-*` for border radius
+- `--shadow-*` for elevation and depth
+
+Require dark/light switching via a `.dark` class or `prefers-color-scheme`. Forbid hard-coded theme colors in component styles; always reference the CSS variable instead.
+
+### Typography
+
+Preferred font stacks:
+
+- **Headings**: Montserrat
+- **Body**: Inter, Onest, or Roboto
+- **Terminal / code**: Consolas, Cascadia Code, or Fira Code
+
+Require `font-display: swap` on all web font loads. Forbid custom font files unless explicitly approved in the `Stack/Style:` field.
+
+### Iconography
+
+Preferred icon sets by stack:
+
+- **Web frontend**: Lucide
+- **Vue component libraries**: Nuxt UI icons
+- **React component libraries**: Radix Icons
+- **Pine Script / terminal UIs**: Unicode symbols only
+
+Require `aria-hidden="true"` on decorative icons and accessible names on meaningful icons. Forbid icon fonts.
+
+### Component libraries
+
+Preferred component libraries by stack:
+
+- **Vue**: Nuxt UI
+- **React**: Radix UI
+
+The chosen library must support the project's palette, typography, and motion rules. Forbid mixing multiple component libraries in one project without explicit rationale.
+
+### Cards
+
+Cards are the default grouping primitive for dashboards, settings pages, and content feeds.
+
+- One card per concern.
+- Consistent padding and radius via CSS variables.
+- Shadow and elevation via CSS variable token.
+- Use cards for grouping related actions, content, or navigation.
+- Avoid card nesting deeper than two levels without explicit rationale.
+
+### Gradients
+
+At most one gradient per viewport or major section. Use gradients for background, accent, or CTA only. Forbid stacked or multi-gradient backgrounds and gradient text unless explicitly approved. Require accessible contrast on gradient-to-text transitions.
+
+### Motion and animations
+
+Animation is optional. When used, keep it purposeful and tied to user action or state change.
+
+Common pitfalls:
+
+- Over-animating: too many animations competing for attention
+- Animating properties that trigger layout or paint
+- Forgetting `prefers-reduced-motion`
+- Using motion to hide slow performance
+
+Tips:
+
+- Animate `transform` and `opacity` only
+- Keep durations short
+- Use easing that feels physical
+- Test with reduced motion enabled
+- Reserve motion for emphasis and feedback, not decoration
+
+### Decorative backgrounds
+
+Approved element types: subtle grids, abstract shapes, low-opacity doodles, wave dividers, grain or noise texture.
+
+Performance rules:
+
+- CSS-only preferred
+- SVG for vector shapes
+- Canvas only when necessary
+- Keep asset count low
+
+Placement rules:
+
+- Background only
+- Never over readable content
+- Respect content contrast
+
+Motion rules:
+
+- Static by default
+- Animation only if it respects `prefers-reduced-motion`
+
+Anti-patterns:
+
+- Full-page busy backgrounds
+- Animated backgrounds over text
+- Heavy particle systems
+- Decorative elements that compete with CTAs
+
+Decorative layers must never interfere with readability or a11y contrast.
+
+### Hero sections
+
+Every top-level page must have a hero section. The hero must include one unique
+visual or interactive element not repeated elsewhere on the page. The hero is
+the only approved location for the single allowed gradient and the single
+allowed subtle animation. The hero must establish the page's purpose in under 3
+seconds.
+
+### Input preservation
+
+Never lose user input by default. Preserve form values, selections, and scroll position across navigation and re-renders.
+
+Explicit exception: search fields may clear input after submission when the UX pattern requires it for fast repeated searches. Document any exception in the component's docstring or comment.
+
+Temporary user state not yet committed to backend storage must be persisted in
+`localStorage`. Scope: draft form values, unsaved selections, in-progress
+multi-step flows, and transient UI preferences. Exclusions: never store
+secrets, tokens, passwords, or sensitive PII in `localStorage`. Require a clear
+expiration or cleanup strategy when the state is no longer relevant. Document
+the storage key naming convention in the component or feature README.
+
+### Bring your own
+
+This section provides defaults, not immutable laws. Projects with established design systems keep their local conventions under `preserve-local`. When `upgrade-house-style` is selected, the plan's `Conventions:` field names the specific design rules being applied.
+
 ## Stack: PowerShell
 
 - Runtime: pwsh 7.6. Never author for Windows PowerShell 5.1.

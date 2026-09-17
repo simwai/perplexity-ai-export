@@ -1,11 +1,11 @@
-﻿{
-    "dependencies":  {
-                         "@spoons-and-mirrors/subtask2":  "latest",
-                         "opencode-scheduler":  "latest",
-                         "opencode-pty":  "latest",
-                         "beautiful-mermaid":  "^1.1.3",
-                         "@opencode-ai/plugin":  "1.18.25",
-                         "opencode-adaptive-thinking":  "latest",
-                         "opencode-vibeguard":  "latest"
-                     }
+{
+  "dependencies": {
+    "opencode-pty": "latest",
+    "@spoons-and-mirrors/subtask2": "latest",
+    "@opencode-ai/plugin": "1.18.31",
+    "beautiful-mermaid": "^1.1.3",
+    "opencode-vibeguard": "latest",
+    "opencode-scheduler": "latest",
+    "opencode-adaptive-thinking": "latest"
+  }
 }
