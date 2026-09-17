@@ -114,7 +114,7 @@ async function evaluateThreadBatchInPage(
   offset: number
 ): Promise<{ status: number; body: string }> {
   return page.evaluate(
-    async ({ url, offset, batchSize }: { url: string; offset: number; batchSize: number }) => {
+    async ({ url }: { url: string }) => {
       const res = await fetch(url, {
         method: 'GET',
         headers: { 'content-type': 'application/json' },

@@ -29,7 +29,7 @@ export function createMockConfig(overrides: Partial<Config> = {}): Config {
     aiApiKey: undefined,
     aiModel: undefined,
     aiEmbedModel: undefined,
-    enableVectorSearch: undefined,
+    enableVectorSearch: false,
     headless: false,
     debug: false,
     hydeMode: 'supplement',

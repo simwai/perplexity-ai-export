@@ -21,7 +21,7 @@ const mockConfig = {
   aiApiKey: undefined,
   aiModel: undefined,
   aiEmbedModel: undefined,
-  enableVectorSearch: undefined,
+  enableVectorSearch: false,
   headless: false,
   hydeMode: 'supplement' as const,
   hydeThresholdScore: 0.7,
