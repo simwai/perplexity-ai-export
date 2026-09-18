@@ -56,8 +56,11 @@ function Install-LaTeX {
 
     Write-Host "MiKTeX installed successfully. You may need to restart your terminal for the PATH to take effect." -ForegroundColor Green
 
-    # Refresh PATH for current session
-    $env:Path = [System.Environment]::GetEnvironmentVariable('Path', 'Machine') + ';' + [System.Environment]::GetEnvironmentVariable('Path', 'User')
+    # Refresh PATH for current session: merge Machine + User paths with existing Process path
+    $machinePath = [System.Environment]::GetEnvironmentVariable('Path', 'Machine')
+    $userPath    = [System.Environment]::GetEnvironmentVariable('Path', 'User')
+    $processPath = [System.Environment]::GetEnvironmentVariable('Path', 'Process')
+    $env:Path = $processPath + ';' + $machinePath + ';' + $userPath
 }
 
 # Check for LaTeX installation

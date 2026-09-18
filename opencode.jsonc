@@ -45,8 +45,7 @@
   },
 
   // opencode plugins. @latest is fine for personal/dev use; pin a version
-  // when reproducibility matters. subtask2 is PolyForm Noncommercial 1.0.0
-  // — commercial use requires a separate license from spoons-and-mirrors.
+  // when reproducibility matters.
   "plugin": [
     "opencode-vibeguard@latest",
     "opencode-adaptive-thinking@latest",

@@ -1,10 +1,13 @@
-\documentclass{article}
+\documentclass[11pt,a4paper]{article}
 
-% arXiv-style formatting
+% arXiv-compatible preamble
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
 \usepackage{geometry}
 \geometry{margin=1in, a4paper}
 \usepackage{amsmath, amssymb, amsthm}
 \usepackage{graphicx}
+\usepackage{microtype}
 \usepackage{hyperref}
 \usepackage{cite}
 \usepackage{url}
@@ -12,14 +15,19 @@
 \usepackage{listings}
 \usepackage{xcolor}
 \usepackage{enumitem}
+\usepackage{doi}
 
-% Better hyperref setup
+% PDF metadata for arXiv
 \hypersetup{
     colorlinks=true,
     linkcolor=blue,
     filecolor=magenta,
     urlcolor=cyan,
-    citecolor=blue
+    citecolor=blue,
+    pdftitle={[TITLE]},
+    pdfauthor={[AUTHORS]},
+    pdfsubject={[SUBJECT]},
+    pdfkeywords={[KEYWORDS]}
 }
 
 % Code listing style

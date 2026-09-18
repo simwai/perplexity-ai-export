@@ -36,10 +36,12 @@ If the user supplied an arXiv ID or URL:
 ### B) Auto-discovered reference
 If no reference was provided:
 1. Extract topic keywords from the project files
-2. Query OpenAlex for candidate works: `https://api.openalex.org/works?search=<keywords>&per-page=10&select=title,publication_year,cited_by_count,concepts`
-3. Rank by `cited_by_count` and filter for papers whose titles/abstracts suggest tutorial/survey/foundational exposition
+2. Query OpenAlex for candidate works with exponential backoff:
+   - Initial request: `https://api.openalex.org/works?search=<keywords>&per-page=10&select=title,publication_year,cited_by_count,concepts`
+   - On 429/5xx: wait 2s, 4s, 8s (max 3 retries), then treat as rate-limited
+3. Rank successful results by `cited_by_count` and filter for papers whose titles/abstracts suggest tutorial/survey/foundational exposition
 4. Pick the top candidate and fetch its full metadata from arXiv if available
-5. If OpenAlex is rate-limited or returns no results, fall back to arXiv search: `https://export.arxiv.org/api/query?search_query=all:<keywords>&max_results=10&sortBy=citationCount` if supported, otherwise `sortBy=submittedDate`
+5. If OpenAlex is rate-limited after retries or returns no results, fall back to arXiv search: `https://export.arxiv.org/api/query?search_query=all:<keywords>&max_results=10&sortBy=submittedDate`; client-side sort the results by citation count if available
 6. Use the selected paper as the style/structure reference
 
 ## 3) LaTeX generation
