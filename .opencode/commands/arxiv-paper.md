@@ -1,0 +1,70 @@
+---
+description: Generate a full arXiv-ready paper PDF for the current project, using either a provided reference arXiv paper or auto-discovered high-cited readable papers.
+argument-hint: [arxiv-id-or-url]
+---
+
+Generate a complete LaTeX paper formatted for arXiv and compile it to PDF.
+
+Parse `$ARGUMENTS`:
+- If an arXiv ID or URL is provided, use it as the zero-shot reference paper.
+- Otherwise, discover candidate reference papers automatically.
+
+## 1) Understand the project
+
+Read the project files and extract:
+- Problem statement
+- Methodology
+- Experiments / results
+- Concrete contributions
+
+Use these files:
+- `README.md`
+- `CHANGELOG.md`
+- `docs/*.md`
+- `package.json`
+
+## 2) Reference paper mode
+
+### A) Provided reference
+If the user supplied an arXiv ID or URL:
+1. Fetch metadata via the arXiv public API: `https://export.arxiv.org/api/query?id_list=<id>`
+2. Extract title, authors, abstract, and categories
+3. Use the reference paper's abstract as a style and structure guide for the new paper
+
+### B) Auto-discovered reference
+If no reference was provided:
+1. Extract topic keywords from the project files
+2. Query OpenAlex for candidate works: `https://api.openalex.org/works?search=<keywords>&per-page=10&select=title,publication_year,cited_by_count,concepts`
+3. Rank by `cited_by_count` and filter for papers whose titles/abstracts suggest tutorial/survey/foundational exposition
+4. Pick the top candidate and fetch its full metadata from arXiv if available
+5. If OpenAlex is rate-limited or returns no results, fall back to arXiv search: `https://export.arxiv.org/api/query?search_query=all:<keywords>&max_results=10&sortBy=citationCount` if supported, otherwise `sortBy=submittedDate`
+6. Use the selected paper as the style/structure reference
+
+## 3) LaTeX generation
+
+Create a complete, compilable LaTeX document using `prompt-system/templates/arxiv-paper.tex`.
+
+Requirements:
+- Title, authors, date, abstract
+- Sections: Introduction, Related Work, Methodology, Experiments, Results, Conclusion
+- Bibliography setup
+- Clear, beginner-friendly technical language
+- Structure and tone informed by the reference paper's abstract
+
+Do not fabricate experimental data. If data is missing, write the section honestly and mark gaps with `[TODO: ...]`.
+
+## 4) PDF compilation
+
+Run `prompt-system/scripts/build-arxiv-pdf.ps1 -TexPath <path-to-generated-tex>`.
+
+If LaTeX is not installed, output the `.tex` file path and instruct the user to compile manually.
+
+## 5) Output
+
+Present:
+1. Reference paper used and why it was selected
+2. Generated `.tex` file path
+3. PDF path if compilation succeeded
+4. Any gaps marked `[TODO: ...]`
+
+Do not submit to arXiv. This command only produces the paper locally.

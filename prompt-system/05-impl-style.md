@@ -606,6 +606,42 @@ the storage key naming convention in the component or feature README.
 
 This section provides defaults, not immutable laws. Projects with established design systems keep their local conventions under `preserve-local`. When `upgrade-house-style` is selected, the plan's `Conventions:` field names the specific design rules being applied.
 
+### Design principles
+
+Use these questions as a first filter for any UI:
+
+- **Purpose**: What is this screen for, and does the design serve it?
+- **Agency**: Can people explore, skip, and recover from mistakes?
+- **Responsibility**: Are permissions, data use, and intent transparent?
+- **Familiarity**: Do patterns match the platform and stay consistent?
+- **Flexibility**: Does it work across sizes, inputs, text sizes, and abilities?
+- **Simplicity**: Has every element earned its place?
+- **Craft**: Spacing, alignment, wording, animation: is it finished?
+- **Delight**: Is there a feeling here, and is it the right one? Don't mistake delight for decoration.
+
+### Design review lenses
+
+Review UI changes through these five lenses, in order:
+
+1. **Accessibility** - text scales, contrast meets minimums, controls are reachable, nothing is color-only, motion is optional
+2. **Platform conventions** - navigation matches platform patterns, actions live in the right places, search is discoverable, sheets/modals have clear exits
+3. **Visual design and craft** - color has role, typography has scale, alignment is consistent, icons share one language, motion is purposeful
+4. **Interaction** - loading states appear immediately, feedback lives in the interface, destructive actions warn and allow undo, modals have obvious exits
+5. **Content and writing** - labels say what happens, capitalization is consistent, errors say what went wrong and how to fix it, names come from user vocabulary
+
+### Craft checks
+
+Before approving a design, ask:
+
+- **Does it have a point of view?** Name the one thing this design would be remembered by. If nothing stands out, note it.
+- **Is it a template?** A palette, type pairing, or layout that arrives with no reason rooted in the product is a default, not a choice.
+- **Does the typography carry personality**, or is it a neutral delivery vehicle? System type is right for navigation and controls; brand can live in display text, content, and moments.
+- **Does structure encode information?** Numbering, eyebrows, dividers, and labels should say something true about the content.
+- **Is the boldness spent in one place?** One signature element, everything around it quiet.
+- **Remove one accessory.** Ask what can go without loss. If nothing can, say the design is already lean.
+
+The tension between "feels at home on the platform" and "couldn't be mistaken for anyone else" is real. Resolve it by keeping system components for navigation and controls, and letting identity live in color, type, imagery, tone of voice, and a few defining moments.
+
 ## Stack: PowerShell
 
 - Runtime: pwsh 7.6. Never author for Windows PowerShell 5.1.

@@ -18,6 +18,7 @@ Categories and canonical examples:
 - **Tooling caches**: `.pre-commit-cache/`, `.mypy_cache/`, `.ruff_cache/`, `.pyrefly_cache/`, `.pytest_cache/`, `.turbo/`, `.next/`, `.nuxt/`, `.svelte-kit/`.
  - **Scratch and WIP files**: `*.tmp`, `*.bak`, `*.orig`, `scratch/`, `todo.md`, `WIP.md` at repo root.
  - **OS temp directory**: the only allowed throwaway location is the OS temp directory (`$env:TEMP` on Windows, `/tmp` on Unix). Do not create repo-local temp directories for scratch work; use the OS temp directory instead.
+ - **OS temp directory**: the only allowed throwaway location is the OS temp directory (`$env:TEMP` on Windows, `/tmp` on Unix). Do not create repo-local temp directories for scratch work; use the OS temp directory instead.
 
 ### Review rule
 
