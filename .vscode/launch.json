@@ -4,7 +4,8 @@
     {
       "type": "node",
       "request": "launch",
-      "name": "Launch (tsx)",
+      "name": "Debug REPL (verbose)",
+      "preLaunchTask": "pnpm: type-check",
       "runtimeExecutable": "${workspaceFolder}/node_modules/.bin/tsx",
       "args": [
         "${workspaceFolder}/src/index.ts"
@@ -15,7 +16,8 @@
       ],
       "cwd": "${workspaceFolder}",
       "env": {
-        "NODE_ENV": "development"
+        "NODE_ENV": "development",
+        "DEBUG": "true"
       },
       "sourceMaps": true,
       "resolveSourceMapLocations": [
