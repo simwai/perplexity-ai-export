@@ -3,7 +3,7 @@
     Build a LaTeX file to PDF for arXiv-style papers.
 .DESCRIPTION
     Compiles a .tex file to PDF using pdflatex or latexmk.
-    Checks for LaTeX installation and reports clear errors if missing.
+    If LaTeX is not installed, attempts automatic installation via winget.
 .EXAMPLE
     .\build-arxiv-pdf.ps1 -TexPath paper.tex
 .EXAMPLE
@@ -32,6 +32,34 @@ if (-not $OutputDir) {
     }
 }
 
+function Install-LaTeX {
+    <#
+    .SYNOPSIS
+        Attempts to install MiKTeX via winget.
+    #>
+    Write-Host "LaTeX not found. Attempting automatic installation via winget..." -ForegroundColor Yellow
+
+    $winget = Get-Command winget -ErrorAction SilentlyContinue
+    if (-not $winget) {
+        Write-Error "winget is not available. Please install winget or install MiKTeX manually from https://miktex.org/download."
+        exit 1
+    }
+
+    Write-Host "Installing MiKTeX.MiKTeX..." -ForegroundColor Cyan
+    & winget install --id MiKTeX.MiKTeX --accept-source-agreements --accept-package-agreements
+    $exitCode = $LASTEXITCODE
+
+    if ($exitCode -ne 0) {
+        Write-Error "Automatic LaTeX installation failed with exit code $exitCode. Please install TeX Live or MiKTeX manually."
+        exit 1
+    }
+
+    Write-Host "MiKTeX installed successfully. You may need to restart your terminal for the PATH to take effect." -ForegroundColor Green
+
+    # Refresh PATH for current session
+    $env:Path = [System.Environment]::GetEnvironmentVariable('Path', 'Machine') + ';' + [System.Environment]::GetEnvironmentVariable('Path', 'User')
+}
+
 # Check for LaTeX installation
 $pdflatex = Get-Command pdflatex -ErrorAction SilentlyContinue
 $latexmk = Get-Command latexmk -ErrorAction SilentlyContinue
@@ -43,8 +71,22 @@ if ($UseLatexmk -and $latexmk) {
     $compiler = 'pdflatex'
     $compilerPath = $pdflatex.Path
 } else {
-    Write-Error "LaTeX is not installed. Please install TeX Live or MiKTeX and ensure pdflatex or latexmk is in PATH."
-    exit 1
+    Install-LaTeX
+
+    # Re-check after installation
+    $pdflatex = Get-Command pdflatex -ErrorAction SilentlyContinue
+    $latexmk = Get-Command latexmk -ErrorAction SilentlyContinue
+
+    if ($UseLatexmk -and $latexmk) {
+        $compiler = 'latexmk'
+        $compilerPath = $latexmk.Path
+    } elseif ($pdflatex) {
+        $compiler = 'pdflatex'
+        $compilerPath = $pdflatex.Path
+    } else {
+        Write-Error "LaTeX installation completed, but pdflatex/latexmk is still not available. Please restart your terminal and try again."
+        exit 1
+    }
 }
 
 Write-Host "Using compiler: $compiler" -ForegroundColor Cyan
