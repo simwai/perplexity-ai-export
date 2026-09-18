@@ -1,11 +1,12 @@
 <p align="center">
-  <img src="docs/header.svg" width="600" alt="Perplexity History Export" />
+  <img src="docs/header.svg" width="100%" alt="Perplexity History Export Header" />
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/TypeScript-3178C6?style=flat&logo=typescript&logoColor=white" alt="TypeScript" />
-  <img src="https://img.shields.io/badge/Playwright-2EAD33?style=flat&logo=playwright&logoColor=white" alt="Playwright" />
-  <img src="https://img.shields.io/badge/Ollama-000000?style=flat&logo=ollama&logoColor=white" alt="Ollama" />
+  <img src="https://img.shields.io/badge/Node.js-4c1d95?style=flat&logo=node.js&logoColor=white" alt="Node.js" />
+  <img src="https://img.shields.io/badge/TypeScript-5b21b6?style=flat&logo=typescript&logoColor=white" alt="TypeScript" />
+  <img src="https://img.shields.io/badge/Ollama-6d28d9?style=flat&logo=ollama&logoColor=white" alt="Ollama" />
+  <img src="https://img.shields.io/badge/Playwright-7c3aed?style=flat&logo=playwright&logoColor=white" alt="Playwright" />
   <img src="https://img.shields.io/badge/Vitest-8b5cf6?style=flat&logo=vitest&logoColor=white" alt="Vitest" />
 </p>
 
