@@ -25,9 +25,16 @@ const protocolStates = new Map<string, ProtocolState>()
 
 const PHASE_TRANSITIONS = {
   // Phase -> required protocols to check before entering
-  REVIEW: ['artifact-handling', 'pre-commit', 'locks', 'api-design'],
+  REVIEW: [
+    'artifact-handling',
+    'pre-commit',
+    'locks',
+    'api-design',
+    'code-decision-ladder',
+    'library-first',
+  ],
   PLAN: ['review-complete', 'locks', 'cross-team', 'library-selection'],
-  PATCH: ['plan-approved', 'rewrite-contract', 'locks'],
+  PATCH: ['plan-approved', 'rewrite-contract', 'locks', 'code-decision-ladder', 'library-first'],
   DRIFT: ['spec-exists'],
   CHECKLIST: ['discovery', 'artifact-handling'],
 }
@@ -262,6 +269,84 @@ const PROTOCOL_CHECKS = {
         passed: true,
         message: 'API files modified - verify API architecture protocol',
       })
+    }
+    return checks
+  },
+
+  'code-decision-ladder': async ($: any, directory: string, editedFiles: string[], _state: any) => {
+    const checks = []
+    // H28: Check if new code duplicates existing utility/stdlib/installed-deps
+    // This is a heuristic - would need actual diff analysis
+    if (editedFiles.length > 0) {
+      checks.push({
+        protocol: 'code-decision-ladder',
+        passed: true,
+        message:
+          "REVIEW/PATCH: Verify new code doesn't duplicate existing utilities (grep), stdlib, or installed deps (H28). Check existing code → stdlib → installed deps → then write new.",
+      })
+    }
+    return checks
+  },
+
+  'library-first': async ($: any, directory: string, editedFiles: string[], _state: any) => {
+    const checks = []
+    // H14: Library-First - check if hand-rolling logic that installed lib already solves
+    if (editedFiles.length > 0) {
+      // Check for common hand-rolled patterns vs installed packages
+      const packageJsonPath = `${directory}/package.json`
+      const hasPackageJson = await $.exists(packageJsonPath)
+      if (hasPackageJson) {
+        const pkg = JSON.parse(await $.readText(packageJsonPath))
+        const allDeps = { ...pkg.dependencies, ...pkg.devDependencies }
+
+        // Common patterns that often have library solutions
+        const patterns = [
+          {
+            pattern: /date-?fns|dayjs|moment|luxon/i,
+            lib: 'date-fns/dayjs/luxon',
+            desc: 'date parsing/formatting',
+          },
+          { pattern: /zod|yup|joi|valibot/i, lib: 'zod/yup/valibot', desc: 'validation' },
+          { pattern: /lodash|ramda|underscore/i, lib: 'lodash/ramda', desc: 'utility functions' },
+          { pattern: /axios|ky|got|fetch/i, lib: 'axios/ky/native fetch', desc: 'HTTP client' },
+          {
+            pattern: /clsx|classnames|tailwind-merge/i,
+            lib: 'clsx/tailwind-merge',
+            desc: 'className composition',
+          },
+          {
+            pattern: /uuid|nanoid|crypto\.randomUUID/i,
+            lib: 'uuid/nanoid/crypto.randomUUID',
+            desc: 'ID generation',
+          },
+          {
+            pattern: /zustand|jotai|redux|recoil/i,
+            lib: 'zustand/jotai/redux',
+            desc: 'state management',
+          },
+          {
+            pattern: /react-hook-form|formik|zod/i,
+            lib: 'react-hook-form/zod',
+            desc: 'forms + validation',
+          },
+          { pattern: /date-fns-tz|timezone/i, lib: 'date-fns-tz', desc: 'timezone handling' },
+          {
+            pattern: /decimal\.js|big\.js|bignumber\.js/i,
+            lib: 'decimal.js',
+            desc: 'precision math',
+          },
+        ]
+
+        for (const { pattern, lib, desc } of patterns) {
+          if (pattern.test(JSON.stringify(allDeps))) {
+            checks.push({
+              protocol: 'library-first',
+              passed: true,
+              message: `H14: ${lib} installed for ${desc} - verify new code uses it instead of hand-rolling`,
+            })
+          }
+        }
+      }
     }
     return checks
   },
