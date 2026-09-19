@@ -26,14 +26,14 @@ const protocolStates = new Map<string, ProtocolState>()
 const PHASE_TRANSITIONS = {
   // Phase -> required protocols to check before entering
   REVIEW: ['artifact-handling', 'pre-commit', 'locks', 'api-design'],
-  PLAN: ['review-complete', 'locks', 'cross-team'],
-  PATCH: ['plan-approved', 'rewrite-contract', 'locks', 'library-selection'],
+  PLAN: ['review-complete', 'locks', 'cross-team', 'library-selection'],
+  PATCH: ['plan-approved', 'rewrite-contract', 'locks'],
   DRIFT: ['spec-exists'],
   CHECKLIST: ['discovery', 'artifact-handling'],
 }
 
 const PROTOCOL_CHECKS = {
-  'artifact-handling': async ($: any, directory: string) => {
+  'artifact-handling': async ($: any, directory: string, _editedFiles: string[], _state: any) => {
     const checks = []
 
     // Check .gitignore exists and has required entries
@@ -69,7 +69,7 @@ const PROTOCOL_CHECKS = {
     return checks
   },
 
-  'pre-commit': async ($: any, directory: string) => {
+  'pre-commit': async ($: any, directory: string, _editedFiles: string[], _state: any) => {
     const checks = []
     const precommitPath = `${directory}/.pre-commit-config.yaml`
     const huskyPath = `${directory}/.husky/pre-commit`
@@ -103,7 +103,7 @@ const PROTOCOL_CHECKS = {
     return checks
   },
 
-  locks: async ($: any, directory: string, editedFiles: string[]) => {
+  locks: async ($: any, directory: string, editedFiles: string[], _state: any) => {
     const checks = []
     const lockDir = `${directory}/.session-locks`
     const hasLockDir = await $.exists(lockDir)
@@ -133,7 +133,7 @@ const PROTOCOL_CHECKS = {
     return checks
   },
 
-  'cross-team': async ($: any, directory: string) => {
+  'cross-team': async ($: any, directory: string, _editedFiles: string[], _state: any) => {
     const checks = []
     const changesPath = `${directory}/CHANGES_REQUIRED.md`
     const hasChanges = await $.exists(changesPath)
@@ -154,32 +154,52 @@ const PROTOCOL_CHECKS = {
     return checks
   },
 
-  'library-selection': async ($: any, directory: string, editedFiles: string[]) => {
+  'library-selection': async ($: any, directory: string, editedFiles: string[], state: any) => {
     const checks = []
-    // Check if any new dependencies were added (package.json, pyproject.toml, etc.)
-    const depFiles = ['package.json', 'pyproject.toml', 'Cargo.toml', 'go.mod', 'pom.xml']
-    for (const depFile of depFiles) {
-      const path = `${directory}/${depFile}`
-      if (
-        editedFiles.includes(depFile) ||
-        ((await $.exists(path)) &&
-          editedFiles.some((f) => f.startsWith(depFile.replace('.json', '').replace('.toml', ''))))
-      ) {
-        // TODO: More sophisticated check - would need git diff
+
+    // At PLAN phase: check if plan mentions new dependencies
+    if (state.currentPhase === 'PLAN') {
+      // Look for plan files that might indicate new deps
+      const planFiles = editedFiles.filter((f) => f.includes('plan') || f.includes('Plan'))
+      if (planFiles.length > 0) {
         checks.push({
           protocol: 'library-selection',
           passed: true,
-          message: 'Dependency file modified - verify library selection protocol followed',
+          message:
+            'PLAN phase - if adding new dependencies, verify library selection protocol (value density, maintenance, security, type safety, license, migration path)',
         })
       }
     }
+
+    // At PATCH/DOCS phase: check if dependency files were actually modified
+    if (state.currentPhase === 'PATCH' || state.currentPhase === 'DOCS') {
+      const depFiles = ['package.json', 'pyproject.toml', 'Cargo.toml', 'go.mod', 'pom.xml']
+      for (const depFile of depFiles) {
+        const path = `${directory}/${depFile}`
+        if (
+          editedFiles.includes(depFile) ||
+          ((await $.exists(path)) &&
+            editedFiles.some((f) =>
+              f.startsWith(depFile.replace('.json', '').replace('.toml', ''))
+            ))
+        ) {
+          checks.push({
+            protocol: 'library-selection',
+            passed: true,
+            message: 'Dependency file modified - verify library selection protocol was followed',
+          })
+        }
+      }
+    }
+
     return checks
   },
 
-  'spec-exists': async ($: any, directory: string, specVersion: string | null) => {
+  'spec-exists': async ($: any, directory: string, _editedFiles: string[], state: any) => {
     const checks = []
     const specsDir = `${directory}/SPECS`
     const hasSpecs = await $.exists(specsDir)
+    const specVersion = state.specVersion
     if (!hasSpecs || !specVersion) {
       checks.push({
         protocol: 'spec',
@@ -190,7 +210,7 @@ const PROTOCOL_CHECKS = {
     return checks
   },
 
-  'review-complete': async ($: any, directory: string) => {
+  'review-complete': async ($: any, directory: string, _editedFiles: string[], _state: any) => {
     // This would check session state for review completion
     return [
       {
@@ -201,11 +221,11 @@ const PROTOCOL_CHECKS = {
     ]
   },
 
-  'plan-approved': async ($: any, directory: string) => {
+  'plan-approved': async ($: any, directory: string, _editedFiles: string[], _state: any) => {
     return [{ protocol: 'plan', passed: true, message: 'Verify PLAN approval in session state' }]
   },
 
-  'rewrite-contract': async ($: any, directory: string) => {
+  'rewrite-contract': async ($: any, directory: string, _editedFiles: string[], _state: any) => {
     return [
       {
         protocol: 'rewrite-contract',
@@ -215,7 +235,7 @@ const PROTOCOL_CHECKS = {
     ]
   },
 
-  discovery: async ($: any, directory: string) => {
+  discovery: async ($: any, directory: string, _editedFiles: string[], _state: any) => {
     return [
       {
         protocol: 'discovery',
@@ -225,7 +245,7 @@ const PROTOCOL_CHECKS = {
     ]
   },
 
-  'api-design': async ($: any, directory: string, editedFiles: string[]) => {
+  'api-design': async ($: any, directory: string, editedFiles: string[], state: any) => {
     const checks = []
     const apiFiles = editedFiles.filter(
       (f) =>
@@ -257,7 +277,7 @@ async function checkProtocols(state: ProtocolState, $: any, directory: string) {
 
     const checkFn = PROTOCOL_CHECKS[protocol as keyof typeof PROTOCOL_CHECKS]
     if (checkFn) {
-      const checks = await checkFn($, directory, state.editedFiles)
+      const checks = await checkFn($, directory, state.editedFiles, state)
       allChecks.push(...checks)
       state.protocolsChecked.add(protocol)
     }
