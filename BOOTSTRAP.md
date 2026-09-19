@@ -2,6 +2,7 @@
 
 > **THIS IS THE FIRST FILE YOU MUST READ AND ACT ON.**
 > **STOP — Do not emit any phase output, tool calls, or decisions until you complete the fingerprint below.**
+> AGENTS.md is the sole entry point; this file supports the STARTUP gate only.
 
 ---
 
@@ -24,14 +25,7 @@ Before ANY phase transition (including `START -> CHECKLIST`, `START -> INTAKE`, 
 
 **If SHA256 unavailable**: Use `N/A` explicitly. The fallback is line_count + first_100 + last_100.
 
-3. **Load all 7 other system files** per the load order in 00-system.md, each in full with NO chunking:
-   - `prompt-system/01-personas.md`
-   - `prompt-system/03-output-and-state.md`
-   - `prompt-system/04-rubrics.md`
-   - `prompt-system/05-impl-style.md`
-   - `prompt-system/06-misc.md`
-   - `prompt-system/07-protocols.md`
-   - `prompt-system/08-plan-actual-gate.md`
+3. **Discover all system files** by running `ls prompt-system/*.md`, then read every file listed in `00-system.md`'s `## Load order` in full with NO chunking:
 
 4. **Record completion** in the session state file's `## Startup Verification` section.
 
@@ -52,11 +46,11 @@ Before ANY phase transition (including `START -> CHECKLIST`, `START -> INTAKE`, 
 
 ### Claude Code
 - Run `/bootstrap` command (auto-attaches 00-system.md) OR
-- Follow this BOOTSTRAP.md manually (imported by CLAUDE.md)
+- Follow this BOOTSTRAP.md manually
 
 ### Codex / Other hosts
 - **Manual compliance required** — follow this BOOTSTRAP.md exactly
-- AGENTS.md imports this file as `@BOOTSTRAP.md` — read it first
+- Read AGENTS.md first as the sole entry point, then follow this gate
 - No phase output until fingerprint emitted
 
 ---
@@ -66,7 +60,7 @@ Before ANY phase transition (including `START -> CHECKLIST`, `START -> INTAKE`, 
 After emitting fingerprint, confirm:
 - [ ] 00-system.md read in full (single read)
 - [ ] Fingerprint emitted in exact format above
-- [ ] All 7 other system files loaded (full, no chunking)
+- [ ] All system files loaded from `00-system.md`'s `## Load order` (full, no chunking)
 - [ ] Session state `## Startup Verification` updated (if file-capable host)
 
 ---
@@ -83,6 +77,7 @@ After emitting fingerprint, confirm:
 ## Startup Verification
 00-system.md: [cited rule] — fingerprint: <line_count> lines, first_100_chars="<first 100 chars>", last_100_chars="<last 100 chars>", sha256_first_1kb="<hash or N/A>"
 01-personas.md: [cited rule]
+02-decision-prompts.md: [cited rule]
 03-output-and-state.md: [cited rule]
 04-rubrics.md: [cited rule]
 05-impl-style.md: [cited rule]

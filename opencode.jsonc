@@ -6,16 +6,18 @@
 
   // Guarantees the system core is in every opencode session without relying
   // on the model choosing to read it. Mirrors the AGENTS.md startup instruction.
-  // The system is merged (8 files, was 39: bootstrap.txt + 38 modules; 2026-08-31 cycle-removal pass,
-  // then restoration pass to 8 files). All files are pinned so module loading is
-  // fully deterministic. Phase-specific additions are diligence-loaded by the
-  // agent reading 00-system.md's load rules.
-  // Entries are explicit paths, never globs.
-  "instructions": [
-    "AGENTS.md",
-    "prompt-system/00-system.md",
-    "prompt-system/01-personas.md",
-    "prompt-system/03-output-and-state.md",
+   // The system is merged (9 files in prompt-system/ plus AGENTS.md; was 39: bootstrap.txt + 38 modules; 2026-08-31 cycle-removal pass,
+   // then restoration pass to 9 files). All files are pinned so module loading is
+   // fully deterministic. Phase-specific additions are diligence-loaded by the
+   // agent reading 00-system.md's load rules.
+   // Entries are explicit paths, never globs.
+   // AGENTS.md is the sole entry point; prompt-system/ files follow its load order.
+   "instructions": [
+     "AGENTS.md",
+     "prompt-system/00-system.md",
+     "prompt-system/01-personas.md",
+     "prompt-system/02-decision-prompts.md",
+     "prompt-system/03-output-and-state.md",
     "prompt-system/04-rubrics.md",
     "prompt-system/05-impl-style.md",
     "prompt-system/06-misc.md",

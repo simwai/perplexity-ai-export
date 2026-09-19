@@ -53,6 +53,7 @@ Template field requirements:
 - `PLAN`: `Target` [required]; `Scope` [required]; `Scope type` [required]; `Pending review items` [required]; `Source` [required]; `System Constraints` [required]; `Will change` [required]; `Will preserve` [required]; `Conventions` [required]; `Risks` [optional]; `Logical constraints` [optional]; `Awaiting` [required].
 - `PATCH`: `Rewrite Contract` [required]; `Patch` [required]; `Self-Review` [required]; `Compliance Audit` [required]; `Constraint Verification` [required]; `Verification` [required]; `Plan-Actual` [required when plan exists]; `Commit/Push Gate` [required when edits exist].
 - `DRIFT`: `Spec` [required]; `Registry check` [required]; `Verified claims` [optional]; `Diverged claims` [optional]; `Orphaned mappings` [optional]; `Code-exceeds-spec` [optional]; `HALT` [optional]; `Fresh-eyes review` [optional]; `Exit` [required].
+- `DESIGN_PLAN`: `Target` [required]; `Scope` [required]; `Design decisions` [required]; `Constraints` [required]; `Verification` [required]; `Allowed next move` [required].
 - `HANDOFF`: `For the human` [required]; `For the agent` [required]; `Persona Handoff Contract` [required]; `Status` [required].
 - `TEST_STRATEGY`: `Test Strategy` [required]; `Binding items` [required]; `Strong hints` [required]; `Weak hints` [optional].
 - `FAILURE`: `Status` [required]; `Reason` [required]; `Last valid phase` [required]; `Failed phase` [required]; `Retry` [required].
@@ -774,6 +775,46 @@ Exit:
 - Findings requiring writes -> PLAN (drift_findings and spec_version travel via handoff contract)
 ```
 
+## `DESIGN_PLAN` template
+
+```txt
+[PHASE: DESIGN_PLAN]
+
+# For the human
+[2-4 plain-language sentences: what design decisions were made, what constraints
+BabaDev must preserve, and what the next step is]
+
+# For the agent
+
+# Design Plan
+Target: [file/module/feature]
+Scope: [full|partial]
+
+Design decisions:
+- Palette: [chosen palette] -- [reason]
+- Typography: [chosen stacks] -- [reason]
+- Iconography: [chosen icon set] -- [reason]
+- Component library: [chosen library] -- [reason]
+- Accessibility: [key a11y requirements]
+- SEO: [key SEO requirements]
+- Motion: [motion guidelines]
+- Other: [any additional design decisions]
+
+Constraints:
+- [constraint BabaDev must not break]
+- [constraint]
+
+Verification:
+- Design review completed: [yes/no]
+- Accessibility review completed: [yes/no]
+- SEO review completed: [yes/no]
+- Design tokens defined: [yes/no]
+
+Allowed next move:
+- Approve design plan -> enter HANDOFF (to BabaDev)
+- Revise design decisions
+```
+
 ## `FAILURE` template
 
 ```txt
@@ -816,8 +857,9 @@ startup_fingerprint:
 
 ## Startup Verification
 
-AGENTS.md: [cited rule]
+AGENTS.md: [cited rule] — entry point, sole entry path
 00-system.md: [cited rule] — fingerprint: <line_count> lines, first_100_chars="<first 100 chars>", last_100_chars="<last 100 chars>", sha256_first_1kb="<hash or N/A>"
+02-decision-prompts.md: [cited rule]
 01-personas.md: [cited rule]
 03-output-and-state.md: [cited rule]
 04-rubrics.md: [cited rule]
@@ -827,7 +869,9 @@ AGENTS.md: [cited rule]
 08-plan-actual-gate.md: [cited rule]
 Status: [Complete|Incomplete]
 
-**Load rule**: The initial load of all 8 system files at session start MUST read each file in full with NO chunking (single read per file, largest window). Chunking is only allowed for non-system files after STARTUP is complete.
+All files listed above must be discovered via `ls prompt-system/*.md` and read in full per `00-system.md` `## Load order`. No hard-coded file lists.
+
+**Load rule**: The initial load of all files in the load order at session start MUST read each file in full with NO chunking (single read per file, largest window). Chunking is only allowed for non-system files after STARTUP is complete.
 
 ## Phase Artifacts
 
@@ -925,7 +969,7 @@ phase_status: {sensei: [phase|n/a], tester: [phase|n/a], dev: [phase|n/a], merge
 
 Compare `target`, `scope`, `session_id`, and `spec_version` with the current request before restoring any phase, approval, or rewrite contract. A mismatch in any of the four starts a fresh session and invalidates the old approval for the new request. A legacy file (no `session_id`) is always a mismatch for approval purposes.
 
-**Fresh-session load mandate**: On every fresh session (new session_id or mismatch detected), all 8 system files MUST be reloaded from disk in full with NO chunking. Prior loads from previous sessions NEVER carry over — each session starts with a clean slate and must complete the STARTUP gate independently.
+**Fresh-session load mandate**: On every fresh session (new session_id or mismatch detected), all files in the load order MUST be reloaded from disk in full with NO chunking. Prior loads from previous sessions NEVER carry over — each session starts with a clean slate and must complete the STARTUP gate independently.
 
 ## Incomplete handoff response
 

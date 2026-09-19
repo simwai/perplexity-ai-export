@@ -12,6 +12,7 @@
 
 import { readFile, readdir } from 'node:fs/promises'
 import { join } from 'node:path'
+import { tool } from '@opencode-ai/plugin'
 
 // ============================================================================
 // Types
@@ -823,6 +824,47 @@ export const babaSubtask = async ({
         subtask: true,
       }
       log('Registered /subtask command')
+    },
+
+    tool: {
+      task: tool({
+        description:
+          'Delegate a task to a Baba subagent. Routes through baba-sensei, baba-dev, baba-tester, baba-reviewer, or baba-scrummaster.',
+        args: {
+          prompt: tool.schema.string().describe('The task prompt to delegate'),
+          agent: tool.schema
+            .string()
+            .optional()
+            .describe('Baba agent to delegate to (default: baba-sensei)'),
+        },
+        async execute(args, context) {
+          const agent = args.agent ?? 'baba-sensei'
+          if (!BABA_AGENTS.includes(agent)) {
+            return `Error: unknown agent "${agent}". Available: ${BABA_AGENTS.join(', ')}`
+          }
+          try {
+            const child = await client.session.create({
+              body: {
+                title: args.prompt.slice(0, 80),
+                agent,
+              },
+            })
+            const result = await client.session.prompt({
+              path: { id: child.id },
+              body: {
+                parts: [{ type: 'text', text: args.prompt }],
+              },
+            })
+            const text = (result.parts ?? [])
+              .filter((p: any) => p.type === 'text')
+              .map((p: any) => p.text)
+              .join('\n')
+            return text || '(no response)'
+          } catch (err) {
+            return `Error: ${err instanceof Error ? err.message : String(err)}`
+          }
+        },
+      }),
     },
 
     'command.execute.before': commandExecuteBefore,

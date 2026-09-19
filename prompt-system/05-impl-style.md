@@ -471,6 +471,10 @@ project via the `Stack/Style:` field or `STYLE_POLICY.md`. Accessibility and
 SEO rules are governed by the existing rubric IDs `S21`-`S24`; this section
 does not duplicate them.
 
+Owned by BabaDesigner. Frontend work should route through DESIGN_PLAN before
+implementation so UI choices are decided in one place, not invented during
+PATCH.
+
 ### Palettes
 
 Preferred palettes: **Catppuccin Mocha** and **Dracula**. Choose one palette per project; do not mix palettes within a single interface. Palette selection is recorded in `STYLE_POLICY.md` or the `Stack/Style:` field.

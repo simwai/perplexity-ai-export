@@ -1,6 +1,4 @@
-@BOOTSTRAP.md
-
-# AGENTS.md - Bootstrap
+# AGENTS.md - Entry Point
 
 > All credentials loaded from environment variables - never hardcode tokens.
 
@@ -40,7 +38,7 @@ Tool-assisted AI coding agent for a sandbox with full execution rights. Follow t
   choice.
 - Never add comments to code unless explaining _why_ (not _what_). The full
   comment taxonomy lives in `prompt-system/05-impl-style.md` `## Comments`.
-- AGENTS.md is entry point; `prompt-system/00-system.md` is the orchestrator and
+- AGENTS.md is the sole entry point; `prompt-system/00-system.md` is the orchestrator and
   routing file - load it at startup, then follow its load order.
 - Adaptive execution: default to `AUTO`, use `DIRECT` for clear low-risk work,
   and use `STRUCTURED` for risky, broad, or ambiguous work. The structured
@@ -135,23 +133,18 @@ Combine all Tier 1 + Tier 2 + Trello blocks above. Omit any Tier 2 servers whose
 
 ## Loading the Full Spec
 
-`AGENTS.md` is the entry point. The system lives in `prompt-system/`, which holds the merged Baba system: orchestrator + routing + decision format (00), personas (01), output contracts + state schema (03), review rubrics (04), implementation style (05), operational protocol + commit/push gate (06), cross-cutting protocol (07), Plan-Versus-Actual Gate (08).
+AGENTS.md is the sole entry point. The system lives in `prompt-system/`, which holds the merged Baba system: orchestrator + routing + decision format (00), personas (01), output contracts + state schema (03), review rubrics (04), implementation style (05), operational protocol + commit/push gate (06), cross-cutting protocol (07), Plan-Versus-Actual Gate (08).
 
 **On startup (MANDATORY - no exceptions):**
 
 1. Read `AGENTS.md` (this file).
-2. Read `prompt-system/00-system.md` (orchestrator + load order + hard guards + decision format + START routing + project style policy auto-trigger).
-3. Read `prompt-system/01-personas.md` (personas, handoff contract, persona depth).
-4. Read `prompt-system/03-output-and-state.md` (phase templates, session state file schema, handoff missing-field response).
-5. Read `prompt-system/04-rubrics.md` (H1-H12 hard-tier, S1-S20 soft-tier).
-6. Read `prompt-system/05-impl-style.md` (implementation core, stack variants, project-specific tooling).
-7. Read `prompt-system/06-misc.md` (operational protocol: PATCH behavior, commit/push gate).
-8. Read `prompt-system/07-protocols.md` (cross-cutting protocol: artifacts, pre-commit, cross-team, app lifecycle, library selection, session file locks, spec lifecycle, drift detection, discuss, scrum).
-9. Read `prompt-system/08-plan-actual-gate.md` (Plan-Versus-Actual Gate verification protocol).
+2. Discover all system files by running `ls prompt-system/*.md` (or `rg -l '^\s*-\s+\`prompt-system/' prompt-system/00-system.md`).
+3. Read `prompt-system/00-system.md` — it contains the authoritative `## Load order` listing every system file to load.
+4. Read every file in `00-system.md`'s `## Load order` in full, in order. No file is hard-coded here — the load order in `00-system.md` is the single source of truth.
 
-**All 9 files must be read in full before ANY other action.** This is not optional, not conditional on phase or persona. The STARTUP phase in `00-system.md` enforces this with a hard guard: if STARTUP is not complete, any response in any other phase is a protocol breach.
+**All discovered files must be read in full before ANY other action.** This is not optional, not conditional on phase or persona. The STARTUP phase in `00-system.md` enforces this with a hard guard: if STARTUP is not complete, any response in any other phase is a protocol breach.
 
-The full load graph is flat and a star: `00-system.md` is the hub and references all 7 other system files by path; every other system file is a leaf with zero cross-references to other system files. There are no cycles.
+The full load graph is flat and a star: `00-system.md` is the hub and references every other system file by path; each system file is a leaf with zero cross-references to other system files. There are no cycles.
 
 On opencode, the system files are pinned via `instructions` in `opencode.jsonc`, so loading is deterministic there. Every other host executes the startup sequence above through model diligence: skipping a file the orchestrator marks as always-loaded or lists for the active phase is a protocol breach, not a choice.
 

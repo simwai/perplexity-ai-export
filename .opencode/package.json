@@ -1,10 +1,10 @@
-﻿{
-    "dependencies":  {
-                         "opencode-vibeguard":  "latest",
-                         "opencode-scheduler":  "latest",
-                         "opencode-pty":  "latest",
-                         "beautiful-mermaid":  "^1.1.3",
-                         "@opencode-ai/plugin":  "1.18.31",
-                         "opencode-adaptive-thinking":  "latest"
-                     }
+{
+  "dependencies": {
+    "@opencode-ai/plugin": "1.18.31",
+    "beautiful-mermaid": "^1.1.3",
+    "opencode-adaptive-thinking": "^0.1.6",
+    "opencode-pty": "^0.3.6",
+    "opencode-scheduler": "^1.3.0",
+    "opencode-vibeguard": "^0.1.0"
+  }
 }
