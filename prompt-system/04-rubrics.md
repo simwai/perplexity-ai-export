@@ -134,23 +134,41 @@ Hard-tier (H1-H12) and soft-tier (S1-S20) review rubrics. Hard-tier items block 
 
 **S25 -- Missing required-field metadata in templates**: a phase template is missing the required/optional field metadata in the `## Template Field Contract` section, or the metadata does not match the actual template shape.
 
-## Documented extension IDs
+## Logical Correctness Tier (L1-L10)
+
+**L1 -- Mathematical Invariants** (Default: Blocking): code violates proven mathematical properties (commutativity, associativity, idempotency, conservation laws).
+
+**L2 -- Boundary Conditions** (Default: Blocking): off-by-one errors, empty collection handling, null/undefined at boundaries, inclusive vs exclusive ranges.
+
+**L3 -- State Machines** (Default: Blocking): invalid state transitions, unreachable states, missing transition guards, concurrent modification races.
+
+**L4 -- Time-Series Integrity** (Default: Blocking): timestamp ordering, gap detection, duplicate timestamps, monotonicity violations, timezone consistency.
+
+**L5 -- Portfolio Arithmetic** (Default: Blocking): position sizing math, P&L calculation, weight normalization, rebalancing drift, rounding errors.
+
+**L6 -- Statistical Validity** (Default: Blocking): p-hacking, multiple comparison correction, sample size adequacy, distribution assumptions, confidence interval correctness.
+
+**L7 -- Backtesting Integrity** (Default: Blocking): look-ahead bias, survivorship bias, overfitting detection, out-of-sample validation, transaction cost modeling.
+
+**L8 -- Risk/Sizing Logic** (Default: Blocking): VaR calculation, position limits, leverage constraints, correlation breakdown, tail risk modeling.
+
+**L9 -- Metric Correctness** (Default: Blocking): formula implementation matches specification, denominator zero handling, aggregation consistency, unit correctness.
+
+**L10 -- Strategy Logic** (Default: Blocking): signal generation correctness, entry/exit conditions, parameter sensitivity, regime detection, execution slippage.
+
+Severity classification (applied at discovery time):
+- **Blocking**: findings affecting correctness, safety, financial outcomes, or data integrity (behave like H-tier: block PATCH until accepted/excluded in REVIEW decision section)
+- **Advisory**: findings in non-critical paths -- logging, display formatting, non-validated display calculations, cosmetic state transitions (behave like S-tier: flag and discuss)
+
+The reviewer must classify each L-tier finding as blocking or advisory at discovery time. Default is Blocking; Advisory requires explicit one-line rationale.
+
+## Artifact & Git Hygiene Extensions
 
 When artifact, gitattributes, or pre-commit review is in scope, those extensions fall under the soft-tier coverage tick:
 
-- `S-artifact` -- artifact handling rules (binary files, build outputs, generated content).
-- `S-gitattributes` -- `.gitattributes` correctness (line endings, diff drivers, large-file handling).
-- `S-precommit` -- pre-commit hook configuration (file globs, hook ordering, auto-fix behavior).
-
-When logical correctness review is in scope, the L-series rubrics apply:
-
-- `L1-L10` -- Logical correctness: mathematical invariants (L1), boundary conditions (L2), state machines (L3), time-series integrity (L4), portfolio arithmetic (L5), statistical validity (L6), backtesting integrity (L7), risk/sizing logic (L8), metric correctness (L9), strategy logic (L10).
-
-Severity:
-- **Blocking**: L1-L10 findings that affect correctness, safety, financial outcomes, or data integrity are blocking (behave like H-tier: block PATCH until accepted or excluded with justification in the REVIEW decision section).
-- **Advisory**: L-tier findings in non-critical paths (logging, display formatting, non-validated display calculations, cosmetic state transitions) are advisory (behave like S-tier: flag and discuss, do not hard-block).
-
-The reviewer must classify each L-tier finding as blocking or advisory at discovery time.
+- `S-artifact` -- artifact handling rules (binary files, build outputs, generated content)
+- `S-gitattributes` -- `.gitattributes` correctness (line endings, diff drivers, large-file handling)
+- `S-precommit` -- pre-commit hook configuration (file globs, hook ordering, auto-fix behavior)
 
 ## Usage
 
