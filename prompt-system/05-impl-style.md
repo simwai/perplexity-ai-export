@@ -22,7 +22,6 @@ When the target is a new project from scratch, or new files being added to a rep
 - the error-handling idiom for the stack
 - naming and file-naming rules (kebab-case, snake_case, PascalCase per stack)
 - project structure (flat `src/`, split at 8 files, layer names)
-- region tags for new projects
 - the code-decision ladder, comment policy, and logging palette
 
 This is the one case where "defaults" are binding rather than advisory: a
@@ -175,14 +174,13 @@ prefix is mentioned.
 - **Misleading or wrong** -- says one thing while the code does another. Worse than no comment. Delete and fix the code or the comment.
 - **Noise or formatting abuse** -- restates the obvious in a noisy way, uses
   loud markers (`////////////////////////////////////////////`), ASCII art separators,
-  `// ==== Section ====`, `// ----- HEYO -----`, or `// some random label`
-  headers. Use `// #region LABEL` / `// #endregion` instead. Region tags are
-  the only sanctioned way to mark a section.
+`// ==== Section ====`, `// ----- HEYO -----`, or `// some random label`
+  headers. Use section breaks or extract-method instead.
 - **Process artifacts** -- change logs at file top ("added by X on Y"),
   attributions (`// Added by Simon`), mandated comments required by process not
   code ("this function exists"), journal comments. Use git, not comments.
 - **Dead or commented-out code** -- dead code left as a comment, commented-out code blocks. Delete; git has the history.
-- **Structural violations** -- function headers (block comment at top of every function), docstrings on private/internal code, closing-brace comments (`// } end of while`), position markers (`// ACTIONS` at arbitrary columns). Use section breaks, extract-method, or region tags.
+- **Structural violations** -- function headers (block comment at top of every function), docstrings on private/internal code, closing-brace comments (`// } end of while`), position markers (`// ACTIONS` at arbitrary columns). Use section breaks or extract-method.
 - **Nonlocal or excessive context** -- references system-wide context without a
   link ("corresponds to issue #1234"), multi-paragraph essays, HTML/markup in
   comments (`// <b>important</b>`, Markdown/reST markup). Plain prose only;
@@ -197,12 +195,6 @@ Deliberate simplifications that cut a real corner with a known ceiling (global l
 - When creating or updating `.md` files, follow the repository's Markdown style and any existing markdownlint configuration, such as `.markdownlint.jsonc`.
 - Run the repository's configured Markdown linter for changed Markdown files when available. Do not invent a lint command when no project check exists.
 - Do not disable Markdown rules inline or in configuration unless the exception is explicitly required and documented.
-
-## Region tags
-
-- Use `// #region LABEL` / `// #endregion` (or language-equivalent syntax) to group related code in greenfield projects. Region tags are also added to an existing file when the project-level style decision is `upgrade-house-style`.
-- Do not add region tags to existing codebases whose project decision is `preserve-local`, unless the file already uses them.
-- Labels should be short, descriptive Title Case, e.g. `// #region Database Layer`.
 
 ## Naming
 
