@@ -1,29 +1,29 @@
 {
-// opencode-native config for the Baba prompt system.
-// Inert for other agents (Claude Code, Cursor, Codex) — AGENTS.md + prompt-system/
-// remain the portable copy-paste unit. This file only affects opencode.
+  // opencode-native config for the Baba prompt system.
+  // Inert for other agents (Claude Code, Cursor, Codex) — AGENTS.md + prompt-system/
+  // remain the portable copy-paste unit. This file only affects opencode.
   "$schema": "https://opencode.ai/config.json",
 
   // Guarantees the system core is in every opencode session without relying
   // on the model choosing to read it. Mirrors the AGENTS.md startup instruction.
-   // The system is merged (9 files in prompt-system/ plus AGENTS.md; was 39: bootstrap.txt + 38 modules; 2026-08-31 cycle-removal pass,
-   // then restoration pass to 9 files). All files are pinned so module loading is
-   // fully deterministic. Phase-specific additions are diligence-loaded by the
-   // agent reading 00-system.md's load rules.
-   // Entries are explicit paths, never globs.
-   // AGENTS.md is the sole entry point; prompt-system/ files follow its load order.
-   "instructions": [
-     "AGENTS.md",
-     "prompt-system/00-system.md",
-     "prompt-system/01-personas.md",
-     "prompt-system/02-decision-prompts.md",
-     "prompt-system/03-output-and-state.md",
+  // The system is merged (9 files in prompt-system/ plus AGENTS.md; was 39: bootstrap.txt + 38 modules; 2026-08-31 cycle-removal pass,
+  // then restoration pass to 9 files). All files are pinned so module loading is
+  // fully deterministic. Phase-specific additions are diligence-loaded by the
+  // agent reading 00-system.md's load rules.
+  // Entries are explicit paths, never globs.
+  // AGENTS.md is the sole entry point; prompt-system/ files follow its load order.
+  "instructions": [
+    "AGENTS.md",
+    "prompt-system/00-system.md",
+    "prompt-system/01-personas.md",
+    "prompt-system/02-decision-prompts.md",
+    "prompt-system/03-output-and-state.md",
     "prompt-system/04-rubrics.md",
     "prompt-system/05-impl-style.md",
     "prompt-system/06-misc.md",
     "prompt-system/07-protocols.md",
     "prompt-system/08-plan-actual-gate.md",
-    "When the user asks for a diagram, flowchart, sequence diagram, class diagram, state diagram, ER diagram, or any visual representation using Mermaid syntax, call the mermaid_diagram tool with the Mermaid source code. Embed the returned markdown image directly in your response. Supported: flowchart, sequenceDiagram, classDiagram, stateDiagram-v2, erDiagram."
+    "When the user asks for a diagram, flowchart, sequence diagram, class diagram, state diagram, ER diagram, or any visual representation using Mermaid syntax, call the mermaid_diagram tool with the Mermaid source code. Embed the returned markdown image directly in your response. Supported: flowchart, sequenceDiagram, classDiagram, stateDiagram-v2, erDiagram.",
   ],
 
   // Prefer the read-only BabaSensei planning path by default. The native Build
@@ -36,14 +36,14 @@
   // instead of auto-approving under permissive setups. Guards credit burn on
   // loop-prone models (Grok-class). See prompt-system/00-system.md ## Loop protection.
   "permission": {
-    "doom_loop": "deny"
+    "doom_loop": "deny",
   },
 
   // Truncate oversized tool output early so one oversized read does not burn
   // the whole turn budget. Increased to 5000 to accommodate full system file reads.
   "tool_output": {
     "max_lines": 5000,
-    "max_bytes": 32768
+    "max_bytes": 32768,
   },
 
   // opencode plugins. @latest is fine for personal/dev use; pin a version
@@ -54,7 +54,7 @@
     "opencode-pty",
     "opencode-scheduler",
     ".opencode/plugins/startup-gate.ts",
-    ".opencode/plugins/baba-subtask.ts"
+    ".opencode/plugins/baba-subtask.ts",
   ],
 
   // MCP servers mirror the fallback tiers in AGENTS.md, adapted to opencode's
@@ -64,22 +64,22 @@
     // Tier 1 — no keys required
     "context7": {
       "type": "remote",
-      "url": "https://mcp.context7.com/mcp"
+      "url": "https://mcp.context7.com/mcp",
     },
     "playwright": {
       "type": "local",
       "command": ["npx", "-y", "@playwright/mcp@0.0.80"],
-      "timeout": 30000
+      "timeout": 30000,
     },
     "playwright-headless": {
       "type": "local",
-      "command": ["npx", "-y", "@playwright/mcp@0.0.80", "--headless"]
+      "command": ["npx", "-y", "@playwright/mcp@0.0.80", "--headless"],
     },
     // Remote OAuth — no key, one-time browser consent via `opencode mcp auth trello`
     "trello": {
       "type": "remote",
       "url": "https://mcp.trello.com/v1",
-      "oauth": {}
-    }
-  }
+      "oauth": {},
+    },
+  },
 }
