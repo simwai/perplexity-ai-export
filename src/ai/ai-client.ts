@@ -6,7 +6,9 @@ import { ok, err, from, type Result } from 'super-result'
 import { ApiDiagnosticsWriter, zodErrorPaths } from '../utils/logging/api-diagnostics.js'
 
 const embeddingItemSchema = z.object({ embedding: z.array(z.number()) }).passthrough()
-const openAiEmbedFormatSchema = z.object({ data: z.array(embeddingItemSchema) }).passthrough()
+const openAiEmbedFormatSchema = z
+  .object({ data: z.array(embeddingItemSchema).optional() })
+  .passthrough()
 const legacyEmbedFormatSchema = z.object({ embedding: z.array(z.number()) }).passthrough()
 
 const generationResponseSchema = z.object({
@@ -354,7 +356,7 @@ export class AiClient {
 
   private parseEmbeddingsFromResponse(responseData: unknown): Result<number[][], AiError> {
     const openAiParseResult = openAiEmbedFormatSchema.safeParse(responseData)
-    if (openAiParseResult.success) {
+    if (openAiParseResult.success && openAiParseResult.data.data) {
       return ok(openAiParseResult.data.data.map((item) => item.embedding))
     }
 

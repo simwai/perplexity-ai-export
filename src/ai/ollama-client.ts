@@ -8,7 +8,7 @@ import { ApiDiagnosticsWriter, zodErrorPaths } from '../utils/logging/api-diagno
 const OLLAMA_REQUEST_TIMEOUT_MS = 120_000
 
 const embeddingItemSchema = z.object({ embedding: z.array(z.number()) }).passthrough()
-const openAiFormatSchema = z.object({ data: z.array(embeddingItemSchema) }).passthrough()
+const openAiFormatSchema = z.object({ data: z.array(embeddingItemSchema).optional() }).passthrough()
 const legacyFormatSchema = z.object({ embedding: z.array(z.number()) }).passthrough()
 
 const generationResponseSchema = z.object({
@@ -219,7 +219,7 @@ export class OllamaClient {
 
   private parseEmbeddingsFromResponse(responseData: unknown): Result<number[][], OllamaError> {
     const openAiParseResult = openAiFormatSchema.safeParse(responseData)
-    if (openAiParseResult.success) {
+    if (openAiParseResult.success && openAiParseResult.data.data) {
       return ok(openAiParseResult.data.data.map((item) => item.embedding))
     }
 

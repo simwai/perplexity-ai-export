@@ -51,33 +51,37 @@ export class ConversationExtractor {
       .optional(),
   })
 
-  private static readonly EntrySchema = z.object({
-    thread_title: z.string().optional(),
-    collection_info: z
-      .object({
-        title: z.string().optional(),
-      })
-      .optional(),
-    updated_datetime: z.string().optional(),
-    query_str: z.string().optional(),
-    blocks: z.array(ConversationExtractor.BlockSchema).optional(),
-  })
+  private static readonly EntrySchema = z
+    .object({
+      thread_title: z.string().optional(),
+      collection_info: z
+        .object({
+          title: z.string().optional(),
+        })
+        .optional(),
+      updated_datetime: z.string().optional(),
+      query_str: z.string().optional(),
+      blocks: z.array(ConversationExtractor.BlockSchema).optional(),
+    })
+    .passthrough()
 
   private static readonly ApiResponseSchema = z.union([
     z.array(ConversationExtractor.EntrySchema),
-    z.object({
-      entries: z.array(ConversationExtractor.EntrySchema),
-      background_entries: z.array(z.unknown()).optional(),
-      has_next_page: z.boolean().optional(),
-      next_cursor: z.string().nullable().optional(),
-      status: z.string().optional(),
-      thread_metadata: z.unknown().optional(),
-      collection_info: z
-        .object({
-          has_next_page: z.boolean().optional(),
-        })
-        .optional(),
-    }),
+    z
+      .object({
+        entries: z.array(ConversationExtractor.EntrySchema),
+        background_entries: z.array(z.unknown()).optional(),
+        has_next_page: z.boolean().optional(),
+        next_cursor: z.string().nullable().optional(),
+        status: z.string().optional(),
+        thread_metadata: z.unknown().optional(),
+        collection_info: z
+          .object({
+            has_next_page: z.boolean().optional(),
+          })
+          .optional(),
+      })
+      .passthrough(),
   ])
 
   private static readonly TimestampCarrierSchema = z.object({
@@ -180,7 +184,7 @@ export class ConversationExtractor {
     await createWaitStrategy(this.config).afterScroll(conversationPage)
 
     const capturedApiData = await apiResponsePromise
-    if (!capturedApiData) {
+    if (capturedApiData.entries.length === 0 && !capturedApiData.partial) {
       const closeResult = await from(async () => {
         await conversationPage.close()
       })
@@ -269,7 +273,7 @@ export class ConversationExtractor {
   private captureConversationApiResponse(
     page: Page,
     expectedId?: string
-  ): Promise<{ entries: unknown[]; partial: boolean } | null> {
+  ): Promise<{ entries: unknown[]; partial: boolean }> {
     const accumulatedEntries: unknown[] = []
     let isRequestResolved = false
     const expectedVersionToken = `version=${encodeURIComponent(DEFAULT_API_VERSION)}`
@@ -284,8 +288,8 @@ export class ConversationExtractor {
             )
             resolve({ entries: accumulatedEntries, partial: true })
           } else {
-            logger.warn('API response timeout – resolving with null')
-            resolve(null)
+            logger.warn('API response timeout – resolving with empty entries')
+            resolve({ entries: [], partial: false })
           }
           isRequestResolved = true
         }
@@ -311,9 +315,13 @@ export class ConversationExtractor {
 
         const jsonResult = await from(async () => await response.json())
         if (!jsonResult.ok) {
-          logger.debug(
-            `JSON parse failed for response ${response.url()}: ${errorMessageOf(jsonResult.error)}`
-          )
+          this.diagnostics.writeFailure({
+            url: response.url(),
+            errorType: 'unknown_shape',
+          })
+          clearTimeout(timeoutId)
+          isRequestResolved = true
+          resolve({ entries: [], partial: false })
           return
         }
         const jsonResponse = jsonResult.value
@@ -326,6 +334,9 @@ export class ConversationExtractor {
             errorType: 'zod_error',
             zodErrorPaths: parseResult.error.issues.map((issue) => issue.path.join('.')),
           })
+          clearTimeout(timeoutId)
+          isRequestResolved = true
+          resolve({ entries: [], partial: false })
           return
         }
 
@@ -354,18 +365,21 @@ export class ConversationExtractor {
   ): Result<ExtractedConversation, ParsingErrorInstance> {
     const formattedEntries = this.ensureEntriesFormat(apiData.entries, conversationUrl)
 
+    if (formattedEntries.length === 0) {
+      this.diagnostics.writeFailure({
+        url: conversationUrl,
+        errorType: 'empty_entries',
+      })
+      logger.warn(`No parseable entries for ${conversationUrl}`)
+      return err(new ParsingError('Failed to parse conversation data'))
+    }
+
     const entriesValidationResult = z
       .array(ConversationExtractor.EntrySchema)
       .nonempty({ message: 'No valid entries found' })
       .safeParse(formattedEntries)
 
     if (!entriesValidationResult.success) {
-      if (formattedEntries.length === 0) {
-        this.diagnostics.writeFailure({
-          url: conversationUrl,
-          errorType: 'empty_entries',
-        })
-      }
       logger.warn(
         `Entry validation failed for ${conversationUrl}: ${entriesValidationResult.error.message}`
       )

@@ -44,12 +44,12 @@ const VERSIONED_URL_PATTERNS = [
 // #region Types
 
 interface RawThread {
-  uuid: string
-  slug: string
-  title: string
-  last_query_datetime: string
-  mode: string
-  thread_number: number
+  uuid?: string
+  slug?: string
+  title?: string
+  last_query_datetime?: string
+  mode?: string
+  thread_number?: number
   context_uuid?: string
   frontend_uuid?: string
   frontend_context_uuid?: string
@@ -59,12 +59,12 @@ interface RawThread {
 export interface DiscoveredConversationMeta {
   id: string
   url: string
-  uuid: string
-  slug: string
-  title: string
-  last_query_datetime: string
-  mode: string
-  thread_number: number
+  uuid?: string
+  slug?: string
+  title?: string
+  last_query_datetime?: string
+  mode?: string
+  thread_number?: number
   context_uuid?: string
   frontend_uuid?: string
   frontend_context_uuid?: string
@@ -89,6 +89,7 @@ const RawThreadSchema = z
     frontend_uuid: z.string().optional(),
     frontend_context_uuid: z.string().optional(),
   })
+  .partial()
   .passthrough()
 
 // #endregion Types
@@ -103,8 +104,8 @@ function extractVersionFromUrl(url: string): string | null {
 function rawThreadToConversationMeta(thread: RawThread): DiscoveredConversationMeta {
   return {
     ...thread,
-    id: thread.uuid,
-    url: `${BASE_URL}/search/${thread.slug}`,
+    id: thread.uuid ?? 'unknown',
+    url: `${BASE_URL}/search/${thread.slug ?? 'unknown'}`,
   }
 }
 
@@ -256,9 +257,17 @@ async function fetchThreadBatch(
     return err(new ApiError(`list_ask_threads returned HTTP ${raw.status}`))
   }
 
-  const parseResult = await from(() => JSON.parse(raw.body))
+  const parseResult = from(() => JSON.parse(raw.body))
   if (!parseResult.ok) {
-    return err(new ApiError(`list_ask_threads: invalid JSON — body: ${raw.body.slice(0, 200)}`))
+    diagnosticsWriter.writeFailure({
+      url: `${BASE_URL}/rest/thread/list_ask_threads?version=${version}&source=default`,
+      errorType: 'unknown_shape',
+    })
+    return ok({
+      threads: [],
+      hasMore: false,
+      total: 0,
+    })
   }
 
   const arrayValidated = z.array(RawThreadSchema).safeParse(parseResult.value)
@@ -269,9 +278,11 @@ async function fetchThreadBatch(
       errorType: 'zod_error',
       zodErrorPaths,
     })
-    return err(
-      new ApiError(`list_ask_threads: schema validation failed — body: ${raw.body.slice(0, 200)}`)
-    )
+    return ok({
+      threads: [],
+      hasMore: false,
+      total: 0,
+    })
   }
 
   const threads = arrayValidated.data
@@ -304,8 +315,12 @@ async function fetchPinnedThreads(
     return ok([])
   }
 
-  const parseResult = await from(() => JSON.parse(raw.body))
+  const parseResult = from(() => JSON.parse(raw.body))
   if (!parseResult.ok) {
+    diagnosticsWriter.writeFailure({
+      url: `${BASE_URL}/rest/thread/list_pinned_ask_threads?version=${version}&source=default`,
+      errorType: 'unknown_shape',
+    })
     logger.debug('list_pinned_ask_threads: invalid JSON — skipping pinned')
     return ok([])
   }
@@ -453,8 +468,12 @@ export class LibraryDiscovery {
     const merged: RawThread[] = []
 
     for (const thread of [...pinnedThreads, ...allThreads]) {
-      if (!seen.has(thread.uuid)) {
-        seen.add(thread.uuid)
+      if (thread.uuid) {
+        if (!seen.has(thread.uuid)) {
+          seen.add(thread.uuid)
+          merged.push(thread)
+        }
+      } else {
         merged.push(thread)
       }
     }
