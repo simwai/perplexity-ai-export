@@ -9,9 +9,9 @@ const FIRST_MESSAGE = `# Session Start Reminder
 
 Before you do anything else, you MUST:
 
-1. **Read AGENTS.md in full** — This is the sole entry point for the Baba prompt system
-2. **Read BOOTSTRAP.md in full** — Contains deployment and setup instructions
-3. **Follow all instructions 1:1** — No deviations, no shortcuts
+1. **Read AGENTS.md in full** -- This is the sole entry point for the Baba prompt system
+2. **Read BOOTSTRAP.md in full** -- Contains deployment and setup instructions
+3. **Follow all instructions 1:1** -- No deviations, no shortcuts
 
 The system will not function correctly if you skip this step. The STARTUP phase in 00-system.md requires you to:
 - Read prompt-system/00-system.md in full (no chunking)
@@ -41,24 +41,9 @@ export default async ({
         const sessionID = event.properties.sessionID
 
         try {
-          // Use the client to send a system message at the start of the session
-          // This adds a message to the conversation that the agent will see
-          await client.message.create({
-            sessionID,
-            role: 'system',
-            content: FIRST_MESSAGE,
-          })
-
-          console.log(`[auto-first-message] Sent initial reminder to session ${sessionID}`)
-        } catch (error) {
-          console.error(`[auto-first-message] Failed to send initial message:`, error)
-
-          // Fallback: show a toast if message creation fails
-          try {
-            await $`opencode tui toast show --title "Read AGENTS.md & BOOTSTRAP.md First" --message "Follow all instructions 1:1 before responding" --variant warning`
-          } catch (toastError) {
-            console.error(`[auto-first-message] Toast fallback also failed:`, toastError)
-          }
+          await $`opencode tui toast show --title "Read AGENTS.md & BOOTSTRAP.md First" --message "Follow all instructions 1:1 before responding" --variant warning`
+        } catch (e) {
+          console.error(`[auto-first-message] Toast failed:`, e)
         }
         return
       }

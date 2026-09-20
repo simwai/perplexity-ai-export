@@ -47,6 +47,7 @@ Rules:
 ## Rendering Rule (MANDATORY)
 
 In every `# Decision Needed` block:
+
 - The recommended option **MUST** be option A
 - Option A **MUST** be rendered as `**A**. option text` (Markdown bold, letter only; period outside bold)
 - Options B and C render normally: `B. option text`

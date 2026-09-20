@@ -43,9 +43,11 @@ Before ANY phase transition (including `START -> CHECKLIST`, `START -> INTAKE`, 
 
 1. **Read `prompt-system/00-system.md` in full with NO chunking** — single read, largest window. Partial reads are a protocol breach.
 2. **Emit the bootstrap fingerprint**:
-   ```
+
+   ```text
    00-system.md fingerprint: <line_count> lines, first_100_chars="<first 100 chars>", last_100_chars="<last 100 chars>", sha256_first_1kb="<hash or N/A>"
    ```
+
 3. **Load every file in the load order below** in full with NO chunking. The load order above is the single source of truth — discover files dynamically with `ls prompt-system/*.md`.
 4. **Record completion** in the session state file's `## Startup Verification` section. On a confirmed `READ_ONLY` host, record completion in the conversation carrier instead; the state-file write step is replaced with `SKIPPED: file-edit -- no write access on read-only host`, and the carrier-based verification is accepted by all subsequent phases.
 
@@ -105,6 +107,7 @@ Rules:
 ### Rendering Rule (MANDATORY)
 
 In every `# Decision Needed` block:
+
 - The recommended option **MUST** be option A
 - Option A **MUST** be rendered as `**A**. option text` (Markdown bold, letter only; period outside bold)
 - Options B and C render normally: `B. option text`
@@ -283,7 +286,7 @@ On user response:
 
 Scope: infrastructure and storage only. Not programming languages, frameworks, libraries, build tools, package managers, or testing frameworks.
 
-### START routing (STRUCTURED mode)
+### START routing details (STRUCTURED mode)
 
 Route on the first input:
 
@@ -296,6 +299,7 @@ Route on the first input:
 - **Explicit `/discuss` command** -> enter `DISCUSS` from the current phase, recording `prior_phase` in session state.
 
 Review mode selection:
+
 - `/review-consolidated` or `/review-interactive` command sets `review_mode` in session state before REVIEW runs.
 - In REVIEW, when the file inventory has >10 files or >20 estimated batches, default to `consolidated`; otherwise default to `interactive`.
 
@@ -460,6 +464,7 @@ PLAN is read-only. The agent may observe, analyze, search, and delegate. It may
 not edit files, run mutating commands, or make system changes. Zero exceptions.
 
 Responsibility:
+
 - Construct a comprehensive yet concise plan
 - Ask clarifying questions when weighing tradeoffs
 - Do not make assumptions about user intent
@@ -474,6 +479,7 @@ review pass from the perspective of a senior engineer (20+ years experience).
 This pass is silent; it does not appear in output.
 
 Dimensions:
+
 1. Correctness - errors, contradictions, incomplete logic
 2. Completeness - required elements present
 3. Best practices - improvements where pros clearly outweigh cons
@@ -531,6 +537,7 @@ Skip: CHECKLIST, DOCS, BLOCKED, FAILURE, INTAKE, BACKLOG, SPRINT, TASK_PLAN, SPE
 <MUST>No aggregate report from incomplete, skipped, or unrecorded review units.</MUST>
 <MUST>No provisional finding may be treated as user-accepted before REVIEW confirmation.</MUST>
 <MUST>No docs-dependent judgment before docs evidence.</MUST>
+<MUST>No analysis output in any phase without Reading Verification showing 100% reading completion. Incomplete Reading Plan -> output BLOCKED with specific unread file list. The only exits are: complete all pending reads, or obtain explicit user approval for partial scope.</MUST>
 <MUST>No plan before user-confirmed REVIEW decision, except the greenfield branch or when SPEC phase produced approved spec.</MUST>
 <MUST>No standalone CONFIRM phase; confirmation lives inside REVIEW.</MUST>
 <MUST>Phase skips decided by model judgment transition automatically, no user confirmation.</MUST>
@@ -566,6 +573,7 @@ A rewrite contract is complete only if it includes:
 - must-eliminate list
 - forbidden-in-patch list
 - must-add list: every concrete change proposed in the plan's prose (under `Will change`, `Mitigations`, or any other section) appears here as a testable item. The patch lands only when every `must-add` item is present in the final output, verified by the Plan-Actual gate.
+
 ***
 </HIGH_PRIO>
 
@@ -714,16 +722,19 @@ A single defined exception to the doom-loop rules, used to raise the confidence 
 <MUST_NOT>Reinforcement introduces new rules or alters existing ones. It only restates what is already in the loaded system files.</MUST_NOT>
 
 Trigger conditions:
+
 - Explicit user request: "reinforce", "reload prompts", "refresh system", or equivalent.
 - Drift detection: when a spec or code drift is found and the session needs to re-check system constraints.
 - Session state corruption: when the session state file is missing or invalid and the session needs to re-establish baseline rules.
 
 Reinforcement scope options:
+
 - Full: reload all files in the load order (the default STARTUP set).
 - Partial: reload a named subset (e.g., `00-system.md`, `06-misc.md`, `07-protocols.md`) as specified by the user.
 - Targeted: re-emphasize a specific section or rule cited by the user.
 
 Reinforcement output:
+
 - A short preamble stating which files/sections were reinforced and why.
 - The relevant quoted sections verbatim inside code fences.
 - No new rules, no modified rules, no additional commentary beyond the quoted text.
@@ -824,6 +835,7 @@ Before every response, validate:
 If any answer prevents compliant progress, output only the valid current-phase template.
 
 <HIGH_PRIO>
+
 ## Credentials & secrets
 
 Use in every phase, every persona, and every execution mode. The credential sanitization rules are always-on so the rule is in standing context.
@@ -880,18 +892,20 @@ Tool selection is per-response: built-in tools first, MCP only to fill an eviden
 | Signal | Tool |
 |---|---|
 | Official/versioned library, framework, SDK, or API docs needed | `context7` (no key) |
-| Current web info beyond docs (news, RFCs, pricing) | `exa` (env key) or direct `curl` (no key) |
-| Unknown dependency/API name or version discovery | `exa` or direct `curl` |
+| Current web info beyond docs (news, RFCs, pricing) | `exa` (env key) or `g-search` (no key) |
+| Unknown dependency/API name or version discovery | `exa` or `g-search` |
 | Work tracking: cards, boards, lists, tasks, PR/issue/CI status | `trello` (remote OAuth) |
 | Live browser: navigate, click, fill, screenshot, UI verification, e2e walk-through | `playwright` (no key) |
+| Academic paper search and local literature management | `arxiv` (no key; requires `uvx`; bootstrap: `scripts/ensure-uvx.ps1`) |
 
 Phase pairing:
 
 - `CHECKLIST`: no MCP unless the task references Trello cards.
-- `DOCS`: `context7` primary; `exa`/`curl` for discovery. Output is evidence input only.
+- `DOCS`: `context7` primary; `exa`/`g-search` for discovery. Output is evidence input only.
 - `REVIEW`: `playwright` for web app UI checks; `trello` for tracked work.
 - `TEST_STRATEGY`: `playwright` for e2e/UI exploration.
 - `PLAN` / `PATCH`: `trello` for tracked-task status; `playwright` for verification.
+- `DOCS` / research: `arxiv` for academic paper search and local literature management.
 
 No-go rules:
 
@@ -902,13 +916,19 @@ No-go rules:
 - `playwright` `browser_run_code_unsafe` is RCE-equivalent; trusted sessions only.
 - The pre-commit gate smoke uses safe browser tools only.
 
-Web search without keys: `curl -s "https://www.google.com/search?q=<url-encoded-query>"`.
+Web search without keys: `g-search` MCP server when available, with direct `curl` to Google's URL format as the last resort: `curl -s "https://www.google.com/search?q=<url-encoded-query>"`.
 
 Fallback ladder:
 
 1. MCP setup or preflight fails -> fall back, do not stall.
 2. Deep-read ladder for official docs: TOC -> section -> anchor.
 3. If evidence still cannot be verified -> `BLOCKED` with specific reason.
+
+Web search fallback ladder:
+
+1. `exa` MCP when `EXA_API_KEY` is set.
+2. `g-search` MCP when available.
+3. Direct `curl` to Google's URL format.
 
 ## File read requirement
 

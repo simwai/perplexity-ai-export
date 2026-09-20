@@ -27,7 +27,7 @@ Then:
    - Check ICE scores and note if any story is unsized.
 4. Emit a summary:
 
-```
+```text
 Sprint Progress Report
 ======================
 < Sprint Name >
@@ -38,8 +38,8 @@ Sprint Progress Report
   ICE average: <value>
 ```
 
-5. For all sprints, list them in order with the summary above.
-6. Flag any sprint with 0% completion or all stories unsized as `NEEDS ATTENTION`.
+1. For all sprints, list them in order with the summary above.
+2. Flag any sprint with 0% completion or all stories unsized as `NEEDS ATTENTION`.
 
 ## Trello backend (`backend: trello`)
 
@@ -53,5 +53,5 @@ Sprint Progress Report
 ## Common
 
 - If no sprints match the query, emit `[PHASE: BLOCKED]` with: "sprint not found."
-- Include blocker details in the output if any are found — flag them prominently.
+- Include blocker details in the output if any are found -- flag them prominently.
 - Record the check in the session state file under `## Project Management`.

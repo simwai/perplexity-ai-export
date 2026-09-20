@@ -9,8 +9,13 @@
  * - Library selection
  * - Spec lifecycle / DRIFT
  *
- * Runs automatically at session phase transitions via event hooks.
+ * Phase transitions are detected via phase-detect.ts, which parses
+ * assistant message text for [PHASE: X] headers. opencode session
+ * metadata does not carry phase information.
  */
+
+import { getCurrentPhase, updatePhaseFromMessages } from './phase-detect'
+import { exists, readFile } from 'node:fs/promises'
 
 interface ProtocolState {
   sessionId: string
@@ -24,7 +29,6 @@ interface ProtocolState {
 const protocolStates = new Map<string, ProtocolState>()
 
 const PHASE_TRANSITIONS = {
-  // Phase -> required protocols to check before entering
   REVIEW: [
     'artifact-handling',
     'pre-commit',
@@ -40,16 +44,14 @@ const PHASE_TRANSITIONS = {
 }
 
 const PROTOCOL_CHECKS = {
-  'artifact-handling': async ($: any, directory: string, _editedFiles: string[], _state: any) => {
+  'artifact-handling': async (_directory: string, _editedFiles: string[], _state: any) => {
     const checks = []
-
-    // Check .gitignore exists and has required entries
-    const gitignorePath = `${directory}/.gitignore`
-    const hasGitignore = await $.exists(gitignorePath)
+    const gitignorePath = '.gitignore'
+    const hasGitignore = await exists(gitignorePath)
     if (!hasGitignore) {
       checks.push({ protocol: 'artifact-handling', passed: false, message: '.gitignore missing' })
     } else {
-      const content = await $.readText(gitignorePath)
+      const content = await readFile(gitignorePath, 'utf-8')
       const required = ['.session-locks/', '.playwright-mcp/']
       for (const req of required) {
         if (!content.includes(req)) {
@@ -61,10 +63,8 @@ const PROTOCOL_CHECKS = {
         }
       }
     }
-
-    // Check .gitattributes exists
-    const gitattributesPath = `${directory}/.gitattributes`
-    const hasGitattributes = await $.exists(gitattributesPath)
+    const gitattributesPath = '.gitattributes'
+    const hasGitattributes = await exists(gitattributesPath)
     if (!hasGitattributes) {
       checks.push({
         protocol: 'gitattributes',
@@ -72,18 +72,15 @@ const PROTOCOL_CHECKS = {
         message: '.gitattributes missing (recommend: * text=auto eol=lf)',
       })
     }
-
     return checks
   },
 
-  'pre-commit': async ($: any, directory: string, _editedFiles: string[], _state: any) => {
+  'pre-commit': async (_directory: string, _editedFiles: string[], _state: any) => {
     const checks = []
-    const precommitPath = `${directory}/.pre-commit-config.yaml`
-    const huskyPath = `${directory}/.husky/pre-commit`
-
-    const hasPrecommit = await $.exists(precommitPath)
-    const hasHusky = await $.exists(huskyPath)
-
+    const precommitPath = '.pre-commit-config.yaml'
+    const huskyPath = '.husky/pre-commit'
+    const hasPrecommit = await exists(precommitPath)
+    const hasHusky = await exists(huskyPath)
     if (!hasPrecommit && !hasHusky) {
       checks.push({
         protocol: 'pre-commit',
@@ -91,9 +88,8 @@ const PROTOCOL_CHECKS = {
         message: 'No pre-commit hooks configured (pre-commit or husky)',
       })
     } else {
-      // Check for common required hooks
       if (hasPrecommit) {
-        const content = await $.readText(precommitPath)
+        const content = await readFile(precommitPath, 'utf-8')
         const required = ['formatter', 'linter', 'secret']
         for (const req of required) {
           if (!content.toLowerCase().includes(req)) {
@@ -106,15 +102,13 @@ const PROTOCOL_CHECKS = {
         }
       }
     }
-
     return checks
   },
 
-  locks: async ($: any, directory: string, editedFiles: string[], _state: any) => {
+  locks: async (_directory: string, editedFiles: string[], _state: any) => {
     const checks = []
-    const lockDir = `${directory}/.session-locks`
-    const hasLockDir = await $.exists(lockDir)
-
+    const lockDir = '.session-locks'
+    const hasLockDir = await exists(lockDir)
     if (!hasLockDir && editedFiles.length > 0) {
       checks.push({
         protocol: 'locks',
@@ -122,12 +116,10 @@ const PROTOCOL_CHECKS = {
         message: 'No .session-locks directory but files were edited',
       })
     }
-
-    // Check each edited file has a lock
     for (const file of editedFiles) {
       const flatName = file.replace(/[\\/]/g, '--')
       const lockPath = `${lockDir}/${flatName}.lock`
-      const hasLock = await $.exists(lockPath)
+      const hasLock = await exists(lockPath)
       if (!hasLock) {
         checks.push({
           protocol: 'locks',
@@ -136,20 +128,18 @@ const PROTOCOL_CHECKS = {
         })
       }
     }
-
     return checks
   },
 
-  'cross-team': async ($: any, directory: string, _editedFiles: string[], _state: any) => {
+  'cross-team': async (_directory: string, _editedFiles: string[], _state: any) => {
     const checks = []
-    const changesPath = `${directory}/CHANGES_REQUIRED.md`
-    const hasChanges = await $.exists(changesPath)
+    const changesPath = 'CHANGES_REQUIRED.md'
+    const hasChanges = await exists(changesPath)
     if (hasChanges) {
-      const content = await $.readText(changesPath)
-      // Check for unresolved entries (no "Resolved:" marker)
+      const content = await readFile(changesPath, 'utf-8')
       const unresolved = content
         .split('## ')
-        .filter((s) => s.includes('Priority:') && !s.includes('Resolved:')).length
+        .filter((s: string) => s.includes('Priority:') && !s.includes('Resolved:')).length
       if (unresolved > 0) {
         checks.push({
           protocol: 'cross-team',
@@ -161,12 +151,9 @@ const PROTOCOL_CHECKS = {
     return checks
   },
 
-  'library-selection': async ($: any, directory: string, editedFiles: string[], state: any) => {
+  'library-selection': async (_directory: string, editedFiles: string[], _state: any) => {
     const checks = []
-
-    // At PLAN phase: check if plan mentions new dependencies
-    if (state.currentPhase === 'PLAN') {
-      // Look for plan files that might indicate new deps
+    if (_state.currentPhase === 'PLAN') {
       const planFiles = editedFiles.filter((f) => f.includes('plan') || f.includes('Plan'))
       if (planFiles.length > 0) {
         checks.push({
@@ -177,18 +164,12 @@ const PROTOCOL_CHECKS = {
         })
       }
     }
-
-    // At PATCH/DOCS phase: check if dependency files were actually modified
-    if (state.currentPhase === 'PATCH' || state.currentPhase === 'DOCS') {
+    if (_state.currentPhase === 'PATCH' || _state.currentPhase === 'DOCS') {
       const depFiles = ['package.json', 'pyproject.toml', 'Cargo.toml', 'go.mod', 'pom.xml']
       for (const depFile of depFiles) {
-        const path = `${directory}/${depFile}`
         if (
           editedFiles.includes(depFile) ||
-          ((await $.exists(path)) &&
-            editedFiles.some((f) =>
-              f.startsWith(depFile.replace('.json', '').replace('.toml', ''))
-            ))
+          editedFiles.some((f) => f.startsWith(depFile.replace('.json', '').replace('.toml', '')))
         ) {
           checks.push({
             protocol: 'library-selection',
@@ -198,14 +179,13 @@ const PROTOCOL_CHECKS = {
         }
       }
     }
-
     return checks
   },
 
-  'spec-exists': async ($: any, directory: string, _editedFiles: string[], state: any) => {
+  'spec-exists': async (_directory: string, _editedFiles: string[], state: any) => {
     const checks = []
-    const specsDir = `${directory}/SPECS`
-    const hasSpecs = await $.exists(specsDir)
+    const specsDir = 'SPECS'
+    const hasSpecs = await exists(specsDir)
     const specVersion = state.specVersion
     if (!hasSpecs || !specVersion) {
       checks.push({
@@ -217,8 +197,7 @@ const PROTOCOL_CHECKS = {
     return checks
   },
 
-  'review-complete': async ($: any, directory: string, _editedFiles: string[], _state: any) => {
-    // This would check session state for review completion
+  'review-complete': async (_directory: string, _editedFiles: string[], _state: any) => {
     return [
       {
         protocol: 'review',
@@ -228,11 +207,11 @@ const PROTOCOL_CHECKS = {
     ]
   },
 
-  'plan-approved': async ($: any, directory: string, _editedFiles: string[], _state: any) => {
+  'plan-approved': async (_directory: string, _editedFiles: string[], _state: any) => {
     return [{ protocol: 'plan', passed: true, message: 'Verify PLAN approval in session state' }]
   },
 
-  'rewrite-contract': async ($: any, directory: string, _editedFiles: string[], _state: any) => {
+  'rewrite-contract': async (_directory: string, _editedFiles: string[], _state: any) => {
     return [
       {
         protocol: 'rewrite-contract',
@@ -242,7 +221,7 @@ const PROTOCOL_CHECKS = {
     ]
   },
 
-  discovery: async ($: any, directory: string, _editedFiles: string[], _state: any) => {
+  discovery: async (_directory: string, _editedFiles: string[], _state: any) => {
     return [
       {
         protocol: 'discovery',
@@ -252,7 +231,7 @@ const PROTOCOL_CHECKS = {
     ]
   },
 
-  'api-design': async ($: any, directory: string, editedFiles: string[], state: any) => {
+  'api-design': async (_directory: string, editedFiles: string[], _state: any) => {
     const checks = []
     const apiFiles = editedFiles.filter(
       (f) =>
@@ -273,33 +252,27 @@ const PROTOCOL_CHECKS = {
     return checks
   },
 
-  'code-decision-ladder': async ($: any, directory: string, editedFiles: string[], _state: any) => {
+  'code-decision-ladder': async (_directory: string, editedFiles: string[], _state: any) => {
     const checks = []
-    // H28: Check if new code duplicates existing utility/stdlib/installed-deps
-    // This is a heuristic - would need actual diff analysis
     if (editedFiles.length > 0) {
       checks.push({
         protocol: 'code-decision-ladder',
         passed: true,
         message:
-          "REVIEW/PATCH: Verify new code doesn't duplicate existing utilities (grep), stdlib, or installed deps (H28). Check existing code → stdlib → installed deps → then write new.",
+          "REVIEW/PATCH: Verify new code doesn't duplicate existing utilities (grep), stdlib, or installed deps (H28). Check existing code -> stdlib -> installed deps -> then write new.",
       })
     }
     return checks
   },
 
-  'library-first': async ($: any, directory: string, editedFiles: string[], _state: any) => {
+  'library-first': async (directory: string, editedFiles: string[], _state: any) => {
     const checks = []
-    // H14: Library-First - check if hand-rolling logic that installed lib already solves
     if (editedFiles.length > 0) {
-      // Check for common hand-rolled patterns vs installed packages
       const packageJsonPath = `${directory}/package.json`
-      const hasPackageJson = await $.exists(packageJsonPath)
+      const hasPackageJson = await exists(packageJsonPath)
       if (hasPackageJson) {
-        const pkg = JSON.parse(await $.readText(packageJsonPath))
+        const pkg = JSON.parse(await readFile(packageJsonPath, 'utf-8'))
         const allDeps = { ...pkg.dependencies, ...pkg.devDependencies }
-
-        // Common patterns that often have library solutions
         const patterns = [
           {
             pattern: /date-?fns|dayjs|moment|luxon/i,
@@ -336,7 +309,6 @@ const PROTOCOL_CHECKS = {
             desc: 'precision math',
           },
         ]
-
         for (const { pattern, lib, desc } of patterns) {
           if (pattern.test(JSON.stringify(allDeps))) {
             checks.push({
@@ -352,17 +324,16 @@ const PROTOCOL_CHECKS = {
   },
 }
 
-async function checkProtocols(state: ProtocolState, $: any, directory: string) {
+async function checkProtocols(state: ProtocolState, directory: string) {
   const requiredProtocols =
     PHASE_TRANSITIONS[state.currentPhase as keyof typeof PHASE_TRANSITIONS] || []
   const allChecks = []
 
   for (const protocol of requiredProtocols) {
     if (state.protocolsChecked.has(protocol)) continue
-
     const checkFn = PROTOCOL_CHECKS[protocol as keyof typeof PROTOCOL_CHECKS]
     if (checkFn) {
-      const checks = await checkFn($, directory, state.editedFiles, state)
+      const checks = await checkFn(directory, state.editedFiles, state)
       allChecks.push(...checks)
       state.protocolsChecked.add(protocol)
     }
@@ -402,7 +373,6 @@ export default async ({
         protocolStates.set(sessionId, state)
       }
 
-      // Session created
       if (event.type === 'session.created') {
         state.currentPhase = 'STARTUP'
         state.protocolsChecked.clear()
@@ -410,65 +380,47 @@ export default async ({
         return
       }
 
-      // Track phase from session metadata
-      if (event.type === 'session.updated') {
-        const info = event.properties?.info
-        if (info?.metadata?.phase) {
-          const newPhase = info.metadata.phase
-          if (newPhase !== state.currentPhase) {
-            console.log(
-              `[protocol-enforce] Session ${sessionId} phase transition: ${state.currentPhase} -> ${newPhase}`
-            )
-
-            // Run protocol checks for new phase
-            const checks = await checkProtocols(state, $, directory)
-
-            const failed = checks.filter((c) => !c.passed)
-            if (failed.length > 0) {
-              // Send blocking notification
-              const msg =
-                `Protocol checks failed for ${newPhase}:\n` +
-                failed.map((f) => `- ${f.protocol}: ${f.message}`).join('\n')
-
-              try {
-                await $`opencode tui toast show --title "Protocol Check Failed" --message "${msg}" --variant error`
-              } catch (e) {
-                console.error(`[protocol-enforce] Toast failed:`, e)
-              }
-
-              // Also send as system message to agent
-              try {
-                await client.message.create({
-                  sessionID: sessionId,
-                  role: 'system',
-                  content: `PROTOCOL ENFORCEMENT: Cannot enter ${newPhase} phase.\nFailed checks:\n${failed.map((f) => `- ${f.protocol}: ${f.message}`).join('\n')}\nFix these before proceeding.`,
-                })
-              } catch (e) {
-                console.error(`[protocol-enforce] Message create failed:`, e)
-              }
-            }
-
-            state.currentPhase = newPhase
-          }
-
-          // Track spec version
-          if (info?.metadata?.spec_version) {
-            state.specVersion = info.metadata.spec_version
-            state.hasSpec = true
-          }
-
-          // Track edited files
-          if (info?.metadata?.edited_files) {
-            state.editedFiles = info.metadata.edited_files
-          }
-        }
-      }
-
-      // Session deleted
       if (event.type === 'session.deleted') {
         protocolStates.delete(sessionId)
         console.log(`[protocol-enforce] Session ${sessionId} deleted`)
         return
+      }
+    },
+
+    'experimental.chat.messages.transform': async ({
+      input,
+      output,
+    }: {
+      input: any
+      output: { messages: any[] }
+    }) => {
+      const sessionId = input.sessionID ?? input.session_id
+      if (!sessionId) return
+
+      const state = protocolStates.get(sessionId)
+      if (!state) return
+
+      updatePhaseFromMessages(sessionId, output.messages)
+
+      const newPhase = getCurrentPhase(sessionId)
+      if (!newPhase || newPhase === state.currentPhase) return
+
+      const previousPhase = state.currentPhase
+      state.currentPhase = newPhase
+      state.protocolsChecked.clear()
+
+      console.log(
+        `[protocol-enforce] Session ${sessionId} phase transition: ${previousPhase} -> ${newPhase}`
+      )
+
+      const checks = await checkProtocols(state, directory)
+      const failed = checks.filter((c) => !c.passed)
+
+      if (failed.length > 0) {
+        console.log(
+          `[protocol-enforce] Protocol checks failed for ${newPhase}:`,
+          failed.map((f) => `${f.protocol}: ${f.message}`).join(', ')
+        )
       }
     },
   }

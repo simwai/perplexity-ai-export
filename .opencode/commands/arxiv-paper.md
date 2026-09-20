@@ -6,18 +6,21 @@ argument-hint: [arxiv-id-or-url]
 Generate a complete LaTeX paper formatted for arXiv and compile it to PDF.
 
 Parse `$ARGUMENTS`:
+
 - If an arXiv ID or URL is provided, use it as the zero-shot reference paper.
 - Otherwise, discover candidate reference papers automatically.
 
 ## 1) Understand the project
 
 Read the project files and extract:
+
 - Problem statement
 - Methodology
 - Experiments / results
 - Concrete contributions
 
 Use these files:
+
 - `README.md`
 - `CHANGELOG.md`
 - `docs/*.md`
@@ -26,13 +29,17 @@ Use these files:
 ## 2) Reference paper mode
 
 ### A) Provided reference
+
 If the user supplied an arXiv ID or URL:
+
 1. Fetch metadata via the arXiv public API: `https://export.arxiv.org/api/query?id_list=<id>`
 2. Extract title, authors, abstract, and categories
 3. Use the reference paper's abstract as a style and structure guide for the new paper
 
 ### B) Auto-discovered reference
+
 If no reference was provided:
+
 1. Extract topic keywords from the project files
 2. Query OpenAlex for candidate works with exponential backoff:
    - Initial request: `https://api.openalex.org/works?search=<keywords>&per-page=10&select=title,publication_year,cited_by_count,concepts`
@@ -47,6 +54,7 @@ If no reference was provided:
 Create a complete, compilable LaTeX document using `prompt-system/templates/arxiv-paper.tex`.
 
 Requirements:
+
 - Title, authors, date, abstract
 - Sections: Introduction, Related Work, Methodology, Experiments, Results, Conclusion
 - Bibliography setup
@@ -64,6 +72,7 @@ If LaTeX is not installed, output the `.tex` file path and instruct the user to 
 ## 5) Output
 
 Present:
+
 1. Reference paper used and why it was selected
 2. Generated `.tex` file path
 3. PDF path if compilation succeeded

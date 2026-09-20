@@ -125,7 +125,7 @@ Required fields by transition:
 
 ### Multi-persona session order
 
-```
+```text
 BabaScrumMaster  -> INTAKE -> BACKLOG -> SPRINT -> TASK_PLAN -> HANDOFF   (optional, full mode only)
 BabaSensei       -> CHECKLIST -> DOCS -> REVIEW -> PLAN -> HANDOFF
 BabaTester       -> CHECKLIST -> DOCS -> REVIEW -> TEST_STRATEGY -> HANDOFF

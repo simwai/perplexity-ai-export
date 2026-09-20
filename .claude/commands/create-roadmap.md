@@ -47,7 +47,7 @@ phases:
 - **Done**: No items yet.
 ```
 
-4. Emit confirmation: roadmap created at `project-management/roadmap-NNN.md`.
+1. Emit confirmation: roadmap created at `project-management/roadmap-NNN.md`.
 
 ## Trello backend (`backend: trello`)
 

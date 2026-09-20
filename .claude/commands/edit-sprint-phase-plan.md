@@ -46,7 +46,7 @@ Then:
 ## Common
 
 - If `$ARGUMENTS` is empty or doesn't specify a sprint, emit `[PHASE: BLOCKED]` with: "sprint ID/name is required".
-- Follow scrum conventions: ICE scoring (ICE = Impact * Confidence * Ease), size bands (XS/S/M/L), milestones, DoD, task-card enrichment (MVP-first ordering).
+- Follow scrum conventions: ICE scoring (ICE = Impact *Confidence* Ease), size bands (XS/S/M/L), milestones, DoD, task-card enrichment (MVP-first ordering).
 - Ties broken by size (smaller first), then by milestone target date.
 - Recalculate ICE after any edit that changes impact, confidence, or size.
 - Record the updated sprint ID in the session state file.

@@ -670,7 +670,7 @@ async function handleSessionIdle(sessionID: string) {
 // Plugin entry
 // ============================================================================
 
-export const babaSubtask = async (input: PluginInput): Promise<Hooks> => {
+export default async (input: PluginInput): Promise<Hooks> => {
   setClient(input.client)
 
   const commandDirs = [
@@ -746,6 +746,68 @@ export const babaSubtask = async (input: PluginInput): Promise<Hooks> => {
               path: { id: child.id },
               body: {
                 parts: [{ type: 'text', text: args.prompt }],
+              },
+            })
+            const text = (result.parts ?? [])
+              .filter((p: any) => p.type === 'text')
+              .map((p: any) => p.text)
+              .join('\n')
+            return text || '(no response)'
+          } catch (err) {
+            return `Error: ${err instanceof Error ? err.message : String(err)}`
+          }
+        },
+      }),
+      evaluateSession: tool({
+        description:
+          'Run a close-session evaluation by delegating to baba-reviewer with the standard session evaluation prompt.',
+        args: {
+          session_id: tool.schema.string().describe('The session ID to evaluate'),
+          final_phase: tool.schema.string().describe('The final phase of the session'),
+          mode: tool.schema.string().describe('Execution mode: AUTO, DIRECT, or STRUCTURED'),
+          edits_made: tool.schema.boolean().describe('Whether the session made file edits'),
+          final_commit: tool.schema.string().optional().describe('Final commit SHA or n/a'),
+        },
+        async execute(args) {
+          const prompt = `Evaluate this session against the prompt-system protocol and produce a structured assessment.
+
+Session ID: ${args.session_id}
+Final phase: ${args.final_phase}
+Mode: ${args.mode}
+Edits made: ${args.edits_made ? 'yes' : 'no'}
+Final commit: ${args.final_commit ?? 'n/a'}
+
+Read the session state file \`SESSION_STATE-${args.session_id}.md\` and assess:
+
+1. Session outcome: completed / blocked / partial / failed
+2. Phase efficiency: which phases ran, which skipped, token cost per phase (from Read Ledger)
+3. Protocol compliance: hard guard triggers, breach types, skip reasons
+4. Plan-actual fidelity: GREEN/RED/SKIPPED, retry count, scope violations
+5. Findings: confirmed vs disputed, mitigation choices, pending items
+6. Bug fix quality: regression tests added, baseline/post-fix results
+7. Drift: diverged claims, orphaned mappings, code-exceeds-spec
+8. Key decisions: A/B/C/skip/accept distribution, time-to-decision
+9. Lessons: what slowed the session, what worked well
+
+Output format:
+- Verdict: PASS (session completed cleanly) | FAIL (session had significant protocol or quality issues) | SKIPPED (trivial session, no evaluation warranted)
+- Summary: one-line assessment
+- Strengths: 1-3 bullet points
+- Improvements: 1-3 bullet points
+- Metrics: session duration, phases completed, findings count, plan-actual verdict`
+
+          const agent = 'baba-reviewer'
+          try {
+            const child = await (input.client as any).session.create({
+              body: {
+                title: `session eval ${args.session_id}`,
+                agent,
+              },
+            })
+            const result = await (input.client as any).session.prompt({
+              path: { id: child.id },
+              body: {
+                parts: [{ type: 'text', text: prompt }],
               },
             })
             const text = (result.parts ?? [])
