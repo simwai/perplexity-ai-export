@@ -1,11 +1,11 @@
 {
   "dependencies": {
     "opencode-pty": "latest",
-    "opencode-scheduler": "latest",
-    "opencode-adaptive-thinking": "latest",
-    "@libsql/client": "^0.4.3",
     "opencode-vibeguard": "latest",
-    "beautiful-mermaid": "^1.1.3"
+    "@libsql/client": "^0.4.3",
+    "beautiful-mermaid": "^1.1.3",
+    "opencode-adaptive-thinking": "latest",
+    "opencode-scheduler": "latest"
   },
   "peerDependencies": {
     "@opencode-ai/plugin": "1.18.31"
