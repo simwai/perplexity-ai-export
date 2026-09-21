@@ -1,6 +1,7 @@
 const PHASE_RE = /\[PHASE:\s*([A-Z]+)\]/gi
 
-// opencode loads every file in plugins/ as a plugin, so a default export is required even though this file is only a helper.
+// Helper imported by baba-protocol-enforce. Lives in lib/ (not plugins/)
+// because opencode auto-loads every top-level file in plugins/ as a plugin.
 export default async () => ({})
 
 const sessionPhases = new Map<string, { phase: string; updatedAt: number }>()
