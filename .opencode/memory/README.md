@@ -1,81 +1,63 @@
-# Memory Worth
+# Memory Worth Plugin v4.2
 
-Persistent, self-maintaining memory for OpenCode with a trust signal the agent tunes itself.
+Persistent agent memory with trust signals, invalidation, and self-tuning.
 
-## What this is
+## Architecture
 
-A plugin that gives the OpenCode assistant a memory that persists across sessions. The assistant decides what to store, update, merge, or delete. Each memory carries a trust score derived from whether it co-occurred with successful task outcomes.
+The plugin is a multi-file TypeScript module under `.opencode/plugins/memory-worth/`:
 
-## What this is not
+```text
+memory-worth/
+  index.ts          -- plugin entry point
+  prompt.ts         -- prompt injection fragments
+  outcome.ts        -- outcome detection heuristics
+  runtime/          -- Node/Bun abstraction layer
+    detect.ts       -- runtime detection (Node vs Bun)
+    shell.ts        -- shell command execution
+    shim/           -- path/env/process shims
+  core/             -- pure ES2022 business logic
+    types.ts        -- domain types
+    prng.ts         -- seeded PRNG
+    trust.ts        -- trust scoring
+    governance.ts   -- invalidation, merge, status, tune, stats
+  db/               -- database access
+    connection.ts   -- libsql client factory
+    schema.ts       -- 3NF schema definitions
+    migrate.ts      -- migration runner
+    queries.ts      -- shared data-access helpers
+  tools/            -- OpenCode tool registrations (12 tools)
+  hooks/            -- chat.message, tool.execute.after, event, compacting
+```
 
-This is not a training loop. There is no background daemon, no network calls at runtime, and no automatic parameter tuning. The intelligence lives in the agent, not in a training pipeline.
+## Database
 
-## Trust scores are associational, not causal
+- Path: `.opencode/memory.db` (flat file)
+- Driver: `@libsql/client`
+- Schema: 3NF with lookup tables, no JSON columns
 
-A memory's score reflects how often it appeared alongside success, not whether it caused success. This is honest about what the signal can and cannot tell you.
+## Cross-runtime
 
-### Two confounds to be aware of
+Runs on both Desktop (Node.js/Electron) and CLI (Bun) without modification. The `runtime/` layer absorbs runtime differences; `core/` modules are pure ES2022.
 
-1. **Task difficulty confounding**: memories about hard problems look bad simply because hard tasks fail more. Partitioning trust scores by task type fixes this.
-2. **Co-retrieval confounding**: a memory retrieved alongside a successful memory gets credit it may not deserve. Retrieval diversity (searching broadly, not just taking the top result) mitigates this.
+## Sim Harness
 
-## Storage
-
- Memories are stored in `.opencode/memory/memories.db` using SQLite via the Turso/libsql driver in local-file mode. No network calls. No separate server.
+The simulation harness lives at `opencode-memory-mw/sim/` as a separate Node-only package.
 
 ## Tools
 
-| Tool | Purpose |
-|---|---|
-| `memory_store` | Save a memory. Refuses near-duplicates; points to the existing memory instead. |
-| `memory_search` | Full-text search with trust-aware ranking. Returns high/neutral/low/unproven labels. |
-| `memory_update` | Reword a memory. Preserves accumulated trust scores. |
-| `memory_merge` | Combine two memories. Adds their evidence together; inherits the stronger signal. |
-| `memory_delete` | Permanently remove a memory. |
-| `memory_dashboard` | Health report: calibration, discrimination, distribution, and named flags. |
-| `memory_tune` | Adjust one tuning knob. Requires a written rationale. Change is logged. |
-| `memory_get_params` | Inspect current knob values. |
-| `memory_get_audit` | Read the tuning audit log. |
-| `memory_reset` | Wipe all memories, outcomes, and audit log. Preserves tuning params. |
+1. `memory_search` -- free-text search with trust labels
+2. `memory_get` -- retrieve by ID
+3. `memory_synthesize` -- combine multiple memories
+4. `memory_wakeup` -- surface stale memories
+5. `memory_write` -- store new memory
+6. `memory_update` -- update content (preserves trust)
+7. `memory_invalidate` -- mark as invalidated
+8. `memory_merge` -- merge two memories
+9. `memory_delete` -- soft-delete
+10. `memory_set_status` -- set active/archived/invalidated/merged
+11. `memory_stats` -- calibration, discrimination, distribution
+12. `memory_tune` -- adjust tuning knobs with rationale
 
-## Tuning knobs
+## Logging
 
-| Knob | Controls | Bounds |
-|---|---|---|
-| `decay_rate` | How quickly old observations stop mattering | 0 < rate < 1 |
-| `trust_quantile` | What fraction of memories count as "high trust" | 0 < rate < 1 |
-| `doubt_quantile` | What fraction count as "low trust" | 0 < rate < 1 |
-| `min_evidence` | How many observations before a memory can be trusted or doubted | positive integer |
-| `active_partition` | Which task-type bucket retrieval currently prefers | existing partition name |
-
-Constraints:
-- `trust_quantile` must be greater than `doubt_quantile`
-- `active_partition` must be an existing task type in the database
-
-## Decision table for tuning
-
-Use this table as a guide, not a rule. Explain your reasoning in the rationale.
-
-| Dashboard flag | Suggested action |
-|---|---|
-| calibration is degrading | lower the decay rate |
-| my scores are worse than guessing | raise the minimum-evidence threshold |
-| too many stale memories | raise the doubt quantile |
-| too few trusted memories | lower the trust quantile |
-| one partition is misbehaving | switch the active partition |
-| not enough data | do nothing |
-
-## When to tune
-
-Tune roughly every 50 tasks, not every task. The dashboard reports how many tasks have elapsed since the last tuning cycle. Do not tune when the dashboard reports insufficient data. Do not change more than one knob per cycle.
-
-## Fresh install behavior
-
-On first run with an empty database, the dashboard reports "insufficient data" rather than producing nulls, NaNs, or errors. The agent can start writing memories immediately. The first tuning cycle happens only after enough data exists to make it meaningful.
-
-## Inspectability and reversibility
-
-- The audit log of tuning changes is a plain record in the database (`tuning_audit` table).
-- `memory_get_audit` shows what the agent has changed and why.
-- `memory_reset` wipes all memories and outcomes but preserves tuning params.
-- `memory_get_params` shows the current knob values at any time.
+All logging uses `ctx.client.app.log({ body: { service, level, message, extra } })`. No `console.log` in plugin code.

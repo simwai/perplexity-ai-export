@@ -14,7 +14,7 @@
  * metadata does not carry phase information.
  */
 
-import { getCurrentPhase, updatePhaseFromMessages } from './phase-detect'
+import { getCurrentPhase, updatePhaseFromMessages } from './baba-phase-detect'
 import { access, readFile } from 'node:fs/promises'
 
 async function fileExists(path: string): Promise<boolean> {
@@ -351,6 +351,29 @@ async function checkProtocols(state: ProtocolState, directory: string) {
   return allChecks
 }
 
+// Credential sanitization helpers (H1 compliance)
+function sanitizeGitRemoteGetUrl(name: string): string {
+  return `git remote get-url ${name} | ForEach-Object { $_ -replace '://[^/@]*@', '://<redacted>@' }`
+}
+
+function sanitizeGitPushOutput(output: string): string {
+  return output
+    .replace(/^To\s+https?:\/\/\S+$/gm, 'To <url>')
+    .replace(/oauth2:[^@\s]+@/g, 'oauth2:<token>@')
+    .replace(/x-access-token:[^@\s]+@/g, 'x-access-token:<token>@')
+    .replace(/https?:\/\/[^@\s]+@/g, 'https://<redacted>@')
+}
+
+function sanitizeGitRemoteVerboseOutput(output: string): string {
+  return output
+    .replace(/^(\S+)\s+https?:\/\/[^\s]+\s+\(fetch\)/gm, '$1 (fetch)')
+    .replace(/^(\S+)\s+https?:\/\/[^\s]+\s+\(push\)/gm, '$1 (push)')
+}
+
+function sanitizeGitRemoteGetUrlOutput(output: string): string {
+  return output.replace(/:\/\/[^/@]*@/g, '://<redacted>@')
+}
+
 export default async ({
   client,
   $,
@@ -365,6 +388,53 @@ export default async ({
   worktree: string
 }) => {
   return {
+    'tool.execute.before': async (input: { tool: string; args: any }, output: { args: any }) => {
+      if (input.tool !== 'bash') return
+
+      const cmd = (input.args?.command || '').trim()
+
+      // 1. git remote -v → rewrite to git remote (names only)
+      if (cmd === 'git remote -v') {
+        output.args.command = 'git remote'
+        return
+      }
+
+      // 2. git remote get-url <name> → sanitize via PowerShell
+      const getUrlMatch = cmd.match(/^git remote get-url\s+(\S+)$/)
+      if (getUrlMatch) {
+        const name = getUrlMatch[1]
+        output.args.command = sanitizeGitRemoteGetUrl(name)
+        return
+      }
+    },
+
+    'tool.execute.after': async (
+      input: { tool: string; args: any },
+      output: { output: string }
+    ) => {
+      if (input.tool !== 'bash') return
+
+      const cmd = (input.args?.command || '').trim()
+      let out = output.output || ''
+
+      // Belt-and-suspenders: sanitize git remote -v output if it slipped through
+      if (cmd === 'git remote -v') {
+        out = sanitizeGitRemoteVerboseOutput(out)
+      }
+
+      // Sanitize git push output
+      if (cmd.startsWith('git push')) {
+        out = sanitizeGitPushOutput(out)
+      }
+
+      // Sanitize git remote get-url output
+      if (cmd.match(/^git remote get-url\s+/)) {
+        out = sanitizeGitRemoteGetUrlOutput(out)
+      }
+
+      output.output = out
+    },
+
     event: async ({ event }: { event: any }) => {
       const sessionId = event.properties?.sessionID
       if (!sessionId) return

@@ -41,9 +41,15 @@ export default async ({
         const sessionID = event.properties.sessionID
 
         try {
-          await $`opencode tui toast show --title "Read AGENTS.md & BOOTSTRAP.md First" --message "Follow all instructions 1:1 before responding" --variant warning`
-        } catch (e) {
-          console.error(`[auto-first-message] Toast failed:`, e)
+          await client.tui.showToast({
+            body: {
+              variant: 'warning',
+              message:
+                'Read AGENTS.md & BOOTSTRAP.md First: Follow all instructions 1:1 before responding',
+            },
+          })
+        } catch {
+          // tui may not be available
         }
         return
       }

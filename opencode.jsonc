@@ -40,20 +40,20 @@
 
   // opencode plugins. @latest is fine for personal/dev use; pin a version
   // when reproducibility matters.
-  "plugin": [
+"plugin": [
     "opencode-vibeguard@latest",
     "opencode-adaptive-thinking@latest",
     "opencode-pty",
     "opencode-scheduler",
-    ".opencode/plugins/startup-gate.ts",
-    ".opencode/plugins/reading-protocol.ts",
-    ".opencode/plugins/protocol-enforce.ts",
-    ".opencode/plugins/prompt-system-loader.ts",
-    ".opencode/plugins/phase-detect.ts",
-    ".opencode/plugins/memory-worth.ts",
+    ".opencode/plugins/baba-startup-gate.ts",
+    ".opencode/plugins/baba-reading-protocol.ts",
+    ".opencode/plugins/baba-protocol-enforce.ts",
+    ".opencode/plugins/baba-prompt-system-loader.ts",
+    ".opencode/plugins/memory-worth",
     ".opencode/plugins/baba-subtask.ts",
     ".opencode/plugins/baba-goal-detect.ts",
     ".opencode/plugins/baba-bootstrap.ts",
+    ".opencode/plugins/baba-drift.ts",
     ".opencode/plugins/adaptive-temperature.ts"
   ],
 
