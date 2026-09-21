@@ -125,7 +125,11 @@ export default async (_ctx: any, options?: Record<string, unknown>): Promise<any
       }),
     },
 
-    'command.execute.before': async (input) => {
+    'command.execute.before': async (input: {
+      command: string
+      sessionID?: string
+      arguments?: string
+    }) => {
       const { command, sessionID, arguments: args } = input
       if (!sessionID || command !== 'feedback') return
 
@@ -145,7 +149,10 @@ export default async (_ctx: any, options?: Record<string, unknown>): Promise<any
       }
     },
 
-    'experimental.chat.system.transform': async ({ sessionID, model }, { system }) => {
+    'experimental.chat.system.transform': async (
+      { sessionID, model }: { sessionID?: string; model?: any },
+      { system }: { system: string[] }
+    ) => {
       if (!sessionID) return
 
       const state = sessionStates.get(sessionID)
@@ -161,7 +168,7 @@ export default async (_ctx: any, options?: Record<string, unknown>): Promise<any
       )
     },
 
-    event: async ({ event }) => {
+    event: async ({ event }: { event: any }) => {
       if (event.type === 'session.deleted') {
         const sessionID = (event as any).properties?.sessionID
         if (sessionID) {

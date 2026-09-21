@@ -1,4 +1,4 @@
-{
+﻿{
   // opencode-native config for the Baba prompt system.
   // Inert for other agents (Claude Code, Cursor, Codex) — AGENTS.md + prompt-system/
   // remain the portable copy-paste unit. This file only affects opencode.
@@ -6,24 +6,24 @@
 
   // Guarantees the system core is in every opencode session without relying
   // on the model choosing to read it. Mirrors the AGENTS.md startup instruction.
-   // The system is merged (9 files in prompt-system/ plus AGENTS.md; was 39: bootstrap.txt + 38 modules; 2026-08-31 cycle-removal pass,
-   // then restoration pass to 9 files). All files are pinned so module loading is
-   // fully deterministic. Phase-specific additions are diligence-loaded by the
-   // agent reading 00-system.md's load rules.
-   // Entries are explicit paths, never globs.
-   // AGENTS.md is the sole entry point; prompt-system/ files follow its load order.
-"instructions": [
-      "AGENTS.md",
-      "prompt-system/00-system.md",
-      "prompt-system/01-personas.md",
-      "prompt-system/02-decision-prompts.md",
-      "prompt-system/03-output-and-state.md",
-      "prompt-system/04-rubrics.md",
-      "prompt-system/05-impl-style.md",
-      "prompt-system/06-misc.md",
-      "prompt-system/07-protocols.md",
-      "prompt-system/08-plan-actual-gate.md"
-    ],
+  // The system is merged (9 files in prompt-system/ plus AGENTS.md; was 39: bootstrap.txt + 38 modules; 2026-08-31 cycle-removal pass,
+  // then restoration pass to 9 files). All files are pinned so module loading is
+  // fully deterministic. Phase-specific additions are diligence-loaded by the
+  // agent reading 00-system.md's load rules.
+  // Entries are explicit paths, never globs.
+  // AGENTS.md is the sole entry point; prompt-system/ files follow its load order.
+  "instructions": [
+    "AGENTS.md",
+    "prompt-system/00-system.md",
+    "prompt-system/01-personas.md",
+    "prompt-system/02-decision-prompts.md",
+    "prompt-system/03-output-and-state.md",
+    "prompt-system/04-rubrics.md",
+    "prompt-system/05-impl-style.md",
+    "prompt-system/06-misc.md",
+    "prompt-system/07-protocols.md",
+    "prompt-system/08-plan-actual-gate.md"
+  ],
 
   // Prefer the read-only BabaSensei planning path by default. The native Build
   // and Plan overrides in .opencode/agents/ orchestrate the role subagents below.
@@ -46,10 +46,15 @@
     "opencode-pty",
     "opencode-scheduler",
     ".opencode/plugins/startup-gate.ts",
-    ".opencode/plugins/baba-subtask.ts",
-    ".opencode/plugins/baba-bootstrap.ts",
+    ".opencode/plugins/reading-protocol.ts",
     ".opencode/plugins/protocol-enforce.ts",
-    ".opencode/plugins/baba-goal-detect.ts"
+    ".opencode/plugins/prompt-system-loader.ts",
+    ".opencode/plugins/phase-detect.ts",
+    ".opencode/plugins/memory-worth.ts",
+    ".opencode/plugins/baba-subtask.ts",
+    ".opencode/plugins/baba-goal-detect.ts",
+    ".opencode/plugins/baba-bootstrap.ts",
+    ".opencode/plugins/adaptive-temperature.ts"
   ],
 
   // MCP servers mirror the fallback tiers in AGENTS.md, adapted to opencode's

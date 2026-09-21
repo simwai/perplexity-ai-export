@@ -91,14 +91,14 @@ Servers are grouped by what works when env keys are missing. Configure the ones 
 
 **OpenCode PTY** — interactive terminal plugin: background processes, multiple sessions, stdin, output regex filter. Auto-installed by OpenCode on next run.
 
-### Tier 2 - Requires env keys (optional - only configure if key available)
+### Tier 2 - OAuth (no env keys required)
 
 ```json
 {
   "exa": {
-    "type": "http",
+    "type": "remote",
     "url": "https://mcp.exa.ai/mcp",
-    "headers": { "x-api-key": "${EXA_API_KEY}" }
+    "oauth": {}
   }
 }
 ```
@@ -137,7 +137,7 @@ Combine all Tier 1 + Tier 2 + Trello blocks above. Omit any Tier 2 servers whose
 
 | Variable | Server | Required |
 |---|---|---|
-| `EXA_API_KEY` | Exa | No (skipped if missing) |
+| `EXA_API_KEY` | Exa | No (OAuth used instead) |
 
 ---
 

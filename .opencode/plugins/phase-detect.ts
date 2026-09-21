@@ -8,8 +8,11 @@ export function getCurrentPhase(sessionId: string): string | undefined {
 
 export function updatePhaseFromMessages(
   sessionId: string,
-  messages: Array<{ content?: unknown; parts?: Array<{ type?: string; text?: string }> }>
+  messages:
+    | Array<{ content?: unknown; parts?: Array<{ type?: string; text?: string }> }>
+    | undefined
 ): void {
+  if (!Array.isArray(messages)) return
   let latestPhase: string | undefined
   let latestIndex = -1
 
