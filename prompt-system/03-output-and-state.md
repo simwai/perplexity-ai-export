@@ -49,7 +49,7 @@ Template field requirements:
 - `CHECKLIST`: `Target scope` [required]; `Focus` [required]; `Scope` [required]; `File inventory` [required]; `System Discovery` [required]; `Pre-review docs log` [required]; `Hard tier` [required]; `Soft tier` [required]; `Logical tier` [optional]; `Verification` [required]; `Batch log` [optional]; `Verdict` [required].
 - `SPEC`: `Path` [required]; `Status` [required]; `User Stories` [required]; `Functional Requirements` [required]; `Success Criteria` [required]; `Assumptions` [optional]; `Open Questions` [optional]; `Allowed next move` [required].
 - `DOCS`: `In scope` [required]; `Verified evidence` [required]; `Reading Verification` [required]; `Status` [required].
-- `REVIEW`: `Multi-file progress` [required]; `Findings` [required]; `Reading Verification` [required]; `Logical Findings` [optional]; `Informational` [optional]; `Confirmed Items` [optional]; `Pending Review Items` [optional]; `Partial Handoff Available` [optional]; `Plan Draft` [optional]; `Decision Items` [optional]; `Cross-team requirements` [optional]; `Verification` [required]; `Decision Needed` [required when findings are present].
+- `REVIEW`: `Multi-file progress` [required]; `Auto-Approval Status` [optional]; `Findings` [required]; `Reading Verification` [required]; `Logical Findings` [optional]; `Informational` [optional]; `Confirmed Items` [optional]; `Pending Review Items` [optional]; `Partial Handoff Available` [optional]; `Plan Draft` [optional]; `Decision Items` [optional]; `Cross-team requirements` [optional]; `Verification` [required]; `Decision Needed` [required when findings are present].
 - `PLAN`: `Target` [required]; `Scope` [required]; `Scope type` [required]; `Pending review items` [required]; `Source` [required]; `System Constraints` [required]; `Will change` [required]; `Will preserve` [required]; `Reading Verification` [required]; `Conventions` [required]; `Risks` [optional]; `Logical constraints` [optional]; `Awaiting` [required].
 - `PATCH`: `Rewrite Contract` [required]; `Patch` [required]; `Self-Review` [required]; `Compliance Audit` [required]; `Constraint Verification` [required]; `Verification` [required]; `Plan-Actual` [required when plan exists]; `Commit/Push Gate` [required when edits exist].
 - `DRIFT`: `Spec` [required]; `Registry check` [required]; `Verified claims` [optional]; `Diverged claims` [optional]; `Orphaned mappings` [optional]; `Code-exceeds-spec` [optional]; `HALT` [optional]; `Fresh-eyes review` [optional]; `Exit` [required].
@@ -351,6 +351,53 @@ Allowed next move:
 - Approve spec -> enter CHECKLIST (or hand back to TASK_PLAN for task updates)
 ```
 
+## `BOOTSTRAP` template
+
+```txt
+[PHASE: BOOTSTRAP]
+
+# For the human
+[2-4 plain-language sentences: what was analyzed, how many specs generated, and the next step]
+
+# For the agent
+
+# Bootstrap Report
+Target: [repository path]
+Scope: [full|partial|domain-filter]
+
+## Analysis Summary
+Project type: [Node.js/Python/Go/Rust/Cloudflare Workers/other]
+Framework: [Express/FastAPI/Next.js/Wrangler/other]
+Architecture: [REST/GraphQL/CLI/Workers/library]
+Entry points found: [N] -- [list: main.ts, server.ts, worker.ts, etc.]
+
+## Generated Specs
+L1 Concept Specs: [N]
+- [feature-name] -- [one-line description] -- Status: Draft
+- ...
+
+L2 Implementation Specs: [N]
+- [feature-name] -- Implements: [L1-id] -- Status: Draft
+- ...
+
+## Registry Updates
+SPECS/index.md: [N] new rows appended (all status=Draft)
+
+## Reading Verification
+Planned: N | Completed: M | Status: [complete | incomplete]
+Pending: [specific file paths or "none"]
+
+## Quality Gates
+- Artifact exclusion applied: [yes/no] -- [test files, generated code, vendor excluded]
+- Clustering threshold met: [yes/no] -- [min cohesion score]
+- NEEDS CLARIFICATION markers: [N] -- [list if any]
+
+Allowed next move:
+- Enter SPEC phase to review generated Draft specs
+- Re-run bootstrap with --only <domain> to focus
+- Abort (specs remain as phase output, not written to disk)
+```
+
 ## `DOCS` template
 
 ```txt
@@ -401,11 +448,17 @@ the one decision you must confirm]
 Reviewed: [X/Y] files -- [Z] batches complete
 Review mode: [interactive|consolidated]
 
+# Auto-Approval Status
+Clean files (auto-approved): [N] -- [file paths or "none"]
+Files with findings: [M] -- [file paths or "none"]
+
 # Reading Verification
 Planned: N | Completed: M | Status: [complete | incomplete]
 Pending: [specific file paths or "none"]
 
 # Findings
+Emit findings only for files with actual violations. Clean files are auto-approved and do not appear here.
+
 File: [file path or ALL FILES]
 Batch: [lines X-Y or FULL or AGGREGATE -- all files complete] ([N] of [M] for this file, when applicable)
 
@@ -485,6 +538,7 @@ Playwright e2e smoke is aggregate-level (H11): it runs once at verdict time, not
 Do not invent commands. If none exist, record SKIPPED with reason.
 
 # Decision Needed
+<IF>findings_present</IF>
 Please confirm:
 - Accepted violations: [list]
 - Disputed violations: [list]
@@ -493,6 +547,9 @@ Please confirm:
 
 Next batch:
 - [file path] -- [lines X-Y or FULL] -- [next batch, or "all files complete - confirm aggregate decision before PLAN"]
+<ELSE></ELSE>
+No findings requiring confirmation. Auto-advancing to PLAN.
+</IF>
 
 Sections omitted (when applicable):
 - [Cross-team requirements / Validation loop / Open questions / Informational / Confirmed Items / Pending Review Items / Partial Handoff Available / Plan Draft -- list the omitted sections and why]
@@ -578,6 +635,15 @@ Will preserve:
 Conventions:
 - [dominating error-handling/style idiom per touched file, with evidence, and how the plan preserves it]
 - For new files or a new project: [the 05-impl-style.md defaults being established as conventions -- stack, DI container, error idiom, naming, structure -- or the user override recorded in the INTAKE `Stack/Style:` field]
+
+Conventions Review (auto-populated from Discovery Protocol):
+- Style policy: [preserve-local|upgrade-house-style] (from STYLE_POLICY.md, immutable)
+- Error idiom: [dominating pattern per touched file, with file:line evidence]
+- Architecture flags: [from system_evidence.architecture_flags -- high_coupling, circular_dependency, pattern_concentration]
+- API defaults: [versioning/pagination/idempotency/error-shape if API files in scope]
+- Design system: [deferred to DESIGN_PLAN if frontend in scope]
+- Test strategy: [binding/strong/weak hints from BabaTester if loaded]
+- Rule exceptions: [from STYLE_POLICY.md rule_exceptions.H14-H40 if any]
 
 Risks:
 - [risk]
@@ -742,22 +808,26 @@ Gate result: ALL PASS required. Any FAIL -> return to PLAN.
 [PHASE: DRIFT]
 
 # Drift Report
-Spec: [SPECS/NNN-name/spec.md] -- [version] -- [status]
+Spec: [SPECS/feature-name.md] -- [version] -- [status]
+Mode: [standard|auto-fix] -- [auto-fix enabled via --auto-fix flag]
 Registry check: [match | HALT] -- [registry version vs header version]
 
 Verified claims:
 - [claim id] -- [code location]
 
 Diverged claims:
-- [claim id] -- [code location] -- [expected vs actual]
+- [claim id] -- [code location] -- [expected vs actual] -- [classification: trivial|structural]
   - Mitigations:
-    - A. [apply: update code to match the spec] (Recommended)
+    - A. [auto-fix: generate patch for trivial divergence] (Recommended) -- [only when classification=trivial]
       - Pros: [one line]
       - Cons: [one line]
-    - B. [sync: human picks which side wins]
+    - B. [apply: update code to match the spec]
       - Pros: [one line]
       - Cons: [one line]
-    - C. [extract: spec needs a new claim] (omit when not viable)
+    - C. [sync: human picks which side wins]
+      - Pros: [one line]
+      - Cons: [one line]
+    - D. [extract: spec needs a new claim] (omit when not viable)
       - Pros: [one line]
       - Cons: [one line]
 
@@ -790,6 +860,7 @@ Fresh-eyes review (when requested):
 
 Exit:
 - Clean -> [prior phase]
+- Auto-fix confirmed -> PLAN (auto-fix patches flow through PATCH with full verification)
 - Findings requiring writes -> PLAN (drift_findings and spec_version travel via handoff contract)
 ```
 
@@ -862,6 +933,8 @@ persona: [BabaScrumMaster|BabaSensei|BabaTester|BabaDev|BabaReviewer|n/a]
 current_phase: [phase]
 last_valid_phase: [phase]
 mode: [AUTO|DIRECT|STRUCTURED]
+review_mode: [interactive|consolidated|fast-track]
+review_auto_approved_clean: [true|false]
 style_policy: [preserve-local|upgrade-house-style]
 style_policy_source: [STYLE_POLICY.md artifact|INTAKE Stack/Style field|SKIPPED: file-edit -- no write access; policy recorded in conversation carrier|auto-trigger pending]
 style_policy_resolved: [yes|no]
@@ -968,6 +1041,13 @@ plan_actual_history: [list of (timestamp, items, verdict) tuples]
 prior_phase: [phase or n/a]
 spec_version: [x.y.z or n/a]
 
+## Bootstrap State
+
+bootstrap_specs_generated: [N]
+bootstrap_l1_specs: [list of feature-names]
+bootstrap_l2_specs: [list of feature-names with Implements refs]
+bootstrap_clarifications: [N] -- [list of NEEDS CLARIFICATION items]
+
 ## Phase Status
 
 phase_status: {sensei: [phase|n/a], tester: [phase|n/a], dev: [phase|n/a], merge: [pending|complete|n/a]}
@@ -992,6 +1072,31 @@ phase_status: {sensei: [phase|n/a], tester: [phase|n/a], dev: [phase|n/a], merge
 - scored_candidates: [ {file, keyword_match, entry_distance, layer_fit, test_proximity, recency, total} ]
 - inventory_source: discovery|manual|task-card
 ```
+
+## In-memory state carrier (subagent)
+
+A `task`-spawned subagent does not write a `SESSION_STATE-<session_id>.md` file. Its state lives in an in-memory carrier with the same field set as the session state file, minus file-backed fields. The carrier is initialized by the `task` tool per `00-system.md` `## Subagent bootstrap`.
+
+Required carrier fields:
+
+- `session_id`: generated for the subagent or inherited from parent
+- `current_phase`: receiving persona's entry phase
+- `last_valid_phase`: same as `current_phase`
+- `mode`: per `00-system.md` entry-phase table
+- `persona`: target agent name
+- `target`: from handoff payload
+- `scope`: from handoff payload
+- `spec_version`: from handoff payload or `n/a`
+- `style_policy`: inherited from parent
+- `style_policy_resolved`: inherited from parent
+- `startup_verified`: `true` if parent's startup was verified
+- `read_ledger`: inherited from parent (context-only)
+- `mcp_preflight`: inherited from parent
+- `handoff_payload`: parent's handoff contract
+- `phase_status`: initialized to the subagent's persona entry phase
+- `reading_plan`: from handoff scope or `n/a`
+
+The carrier is the single source of truth for the subagent's active phase and mode. Any system-reminder or phase-header check reads from the carrier, not from the parent session.
 
 Compare `target`, `scope`, `session_id`, and `spec_version` with the current request before restoring any phase, approval, or rewrite contract. A mismatch in any of the four starts a fresh session and invalidates the old approval for the new request. A legacy file (no `session_id`) is always a mismatch for approval purposes.
 
@@ -1030,8 +1135,10 @@ Read the session state file `SESSION_STATE-<session_id>.md` and assess:
 5. Findings: confirmed vs disputed, mitigation choices, pending items
 6. Bug fix quality: regression tests added, baseline/post-fix results
 7. Drift: diverged claims, orphaned mappings, code-exceeds-spec
-8. Key decisions: A/B/C/skip/accept distribution, time-to-decision
-9. Lessons: what slowed the session, what worked well
+8. Bootstrap: specs generated (L1/L2), clarifications, promotion rate
+9. Auto-fix: attempts, successes, escalations to PLAN
+10. Key decisions: A/B/C/skip/accept distribution, time-to-decision
+11. Lessons: what slowed the session, what worked well
 
 Output format:
 - Verdict: PASS (session completed cleanly) | FAIL (session had significant protocol or quality issues) | SKIPPED (trivial session, no evaluation warranted)

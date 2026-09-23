@@ -33,6 +33,7 @@ interface ProtocolState {
   hasSpec: boolean
   editedFiles: string[]
   protocolsChecked: Set<string>
+  planVersion: number // 1 = PLAN v1 start, 2 = post-reload
 }
 
 const protocolStates = new Map<string, ProtocolState>()
@@ -448,6 +449,7 @@ export default async ({
           hasSpec: false,
           editedFiles: [],
           protocolsChecked: new Set(),
+          planVersion: 1,
         }
         protocolStates.set(sessionId, state)
       }
@@ -455,6 +457,7 @@ export default async ({
       if (event.type === 'session.created') {
         state.currentPhase = 'STARTUP'
         state.protocolsChecked.clear()
+        state.planVersion = 1
         console.log(`[protocol-enforce] Session ${sessionId} created, phase: STARTUP`)
         return
       }
@@ -485,6 +488,14 @@ export default async ({
       console.log(
         `[protocol-enforce] Session ${sessionId} phase transition: ${previousPhase} -> ${newPhase}`
       )
+
+      // Signal PLAN v1 start at REVIEW → PLAN transition
+      if (previousPhase === 'REVIEW' && newPhase === 'PLAN') {
+        state.planVersion = 1
+        console.log(
+          '[protocol-enforce] REVIEW→PLAN: planVersion=1 (prompt-system-loader will bump to 2)'
+        )
+      }
 
       const checks = await checkProtocols(state, directory)
       const failed = checks.filter((c) => !c.passed)

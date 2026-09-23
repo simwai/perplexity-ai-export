@@ -1,12 +1,12 @@
 import type { Plugin } from '@opencode-ai/plugin'
 import { createConnection, getDbPath } from './db/connection.js'
-import { ensureTaskType, getTuningParams } from './db/queries.js'
-import { handleCompacting } from './hooks/compacting.js'
-import { handleSessionCreated, handleSessionDeleted } from './hooks/session-events.js'
-import { recordOutcome } from './hooks/tool-execute-after.js'
-import { classifyOutcome, isOutcomeSignal } from './outcome.js'
-import { detectRuntime } from './runtime/detect.js'
-import { fromAsync, isErr } from './core/result.js'
+import { buildInjectionTexts } from './hooks/chat-message.js'
+import { buildCompactionContext } from './hooks/compacting.js'
+import { handleSessionCreated, handleSessionIdle } from './hooks/session-events.js'
+import { resolveSessionOutcome } from './hooks/tool-execute-after.js'
+import { buildSystemPrompt } from './prompt.js'
+import { IS_BUN } from './runtime/detect.js'
+import { fromAsync, isErr, isRecord } from './core/result.js'
 import {
   memoryDeleteTool,
   memoryGetTool,
@@ -23,15 +23,16 @@ import {
 } from './tools/index.js'
 
 function readSessionId(properties: unknown): string | undefined {
-  if (typeof properties !== 'object' || properties === null) return undefined
-  if (!('sessionID' in properties)) return undefined
-  const value = (properties as { sessionID: unknown }).sessionID
+  if (!isRecord(properties) || !('sessionID' in properties)) return undefined
+  const value = properties['sessionID']
   return typeof value === 'string' ? value : undefined
 }
 
+const injectedSessions = new Set<string>()
+
 const MemoryWorthPlugin: Plugin = async ({ client, directory }) => {
   const db = await createConnection(directory)
-  const runtime = detectRuntime()
+  const runtime = IS_BUN ? 'bun' : 'node'
   const logged = await fromAsync(() =>
     client.app.log({
       body: {
@@ -54,45 +55,55 @@ const MemoryWorthPlugin: Plugin = async ({ client, directory }) => {
       }
       if (evt.type === 'session.deleted') {
         const sessionId = readSessionId(evt.properties)
-        if (sessionId) await handleSessionDeleted(db, sessionId)
+        if (sessionId) injectedSessions.delete(sessionId)
+        return
+      }
+      if (evt.type === 'session.idle') {
+        const sessionId = readSessionId(evt.properties)
+        if (sessionId) await handleSessionIdle(db, sessionId)
+        return
+      }
+      if (evt.type === 'session.compacted') {
+        const sessionId = readSessionId(evt.properties)
+        if (sessionId) await handleSessionIdle(db, sessionId)
       }
     },
 
-    'experimental.chat.system.transform': async ({ sessionID }, { system }) => {
-      if (!sessionID) return
-      system.push(
-        `MEMORY-WORTH (${runtime}): you have persistent memory tools. Search memory before answering when prior context could help; store durable insights with memory_write; prefer updating over duplicating. Trust labels are associational: high means co-occurred with success, low means co-occurred with failure, unproven means insufficient evidence.`
-      )
+    'chat.message': async (input, output) => {
+      const sessionId = input.sessionID
+      if (!sessionId) return
+      const isFirst = !injectedSessions.has(sessionId)
+      const texts = await buildInjectionTexts(db, sessionId, isFirst)
+      if (texts.length === 0) return
+      injectedSessions.add(sessionId)
+      const messageId = input.messageID ?? `memory-worth-${sessionId}`
+      const systemPart = {
+        id: `memory-worth-system-${sessionId}`,
+        sessionID: sessionId,
+        messageID: messageId,
+        type: 'text' as const,
+        text: buildSystemPrompt(),
+      }
+      const memoryParts = texts.map((text, index) => ({
+        id: `memory-worth-digest-${sessionId}-${index}`,
+        sessionID: sessionId,
+        messageID: messageId,
+        type: 'text' as const,
+        text,
+      }))
+      output.parts.push(systemPart, ...memoryParts)
     },
 
     'tool.execute.after': async (input, output) => {
       const text = typeof output.output === 'string' ? output.output : ''
-      if (!isOutcomeSignal(text)) return
-      const outcome = classifyOutcome(text) === 'success'
-      const params = await getTuningParams(db)
-      const taskTypeId = await ensureTaskType(db, params.active_partition)
-
-      const retrieved = await db.execute({
-        sql: `SELECT memory_id AS memory_id FROM session_memory WHERE session_id = ? ORDER BY retrieved_at DESC`,
-        args: [input.sessionID],
-      })
-      for (const row of retrieved.rows) {
-        const value = row['memory_id']
-        const memoryId =
-          typeof value === 'number' ? value : typeof value === 'bigint' ? Number(value) : 0
-        if (memoryId) await recordOutcome(db, input.sessionID, memoryId, outcome, taskTypeId)
-      }
-      await db.execute({
-        sql: `DELETE FROM session_memory WHERE session_id = ?`,
-        args: [input.sessionID],
-      })
+      await resolveSessionOutcome(db, input.sessionID, text)
     },
 
     'experimental.session.compacting': async (input, output) => {
-      await handleCompacting(db, input.sessionID)
-      output.context.push(
-        'memory-worth: session retrieval ledger cleared; long-term memories remain in the database.'
-      )
+      const lines = await buildCompactionContext(db, input.sessionID)
+      for (const line of lines) {
+        output.context.push(line)
+      }
     },
 
     tool: {

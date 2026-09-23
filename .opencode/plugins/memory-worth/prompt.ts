@@ -1,19 +1,8 @@
-import type { SearchResult } from './core/types.js'
-
-export function buildMemoryPromptFragment(memories: ReadonlyArray<SearchResult>): string {
-  if (memories.length === 0) return ''
-
-  const lines: string[] = []
-  for (let i = 0; i < memories.length; i++) {
-    const item = memories[i]
-    if (!item) continue
-    let confidence = 'neutral'
-    if (item.trust_score >= 0.7) confidence = 'high'
-    else if (item.trust_score <= 0.3) confidence = 'low'
-    lines.push(
-      `[${i + 1}] (trust: ${item.trust_label}, confidence: ${confidence})\n${item.content}`
-    )
-  }
-
-  return `\n\n--- Persistent memories (${memories.length}) ---\n${lines.join('\n\n')}\n--- End memories ---\n`
+export function buildSystemPrompt(): string {
+  return [
+    'MEMORY-WORTH memory policy: trust is associational, never causal.',
+    'Search memory before answering when prior context could help; store durable insights with memory_write (applies_when is required); prefer updating over duplicating.',
+    'Trust labels are population quantiles: high co-occurred with success, low with failure, unproven means too little evidence.',
+    'Write-time constraints beat post-hoc filters: ground memories to files, symbols, or git refs.',
+  ].join(' ')
 }

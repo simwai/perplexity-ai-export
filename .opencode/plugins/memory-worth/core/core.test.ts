@@ -1,7 +1,16 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { createSeededRandom, hashString } from './prng.js'
-import { computeTrustLabel, computeTrustScore, mergePartitions, updateEma } from './trust.js'
+import {
+  computeTrustLabel,
+  computeTrustScore,
+  mergePartitions,
+  mwOf,
+  quantileLabel,
+  trustOf,
+  updateCounters,
+  updateEma,
+} from './trust.js'
 import {
   computeStatus,
   createAuditEntry,
@@ -10,6 +19,9 @@ import {
   validateTuningParams,
 } from './governance.js'
 import { err, from, fromAsync, isErr, isOk, ok } from './result.js'
+import { applyInvalidation, isInvalidated } from './invalidation.js'
+import { calibrationError, deciles, discrimination } from './calibration.js'
+import type { CalibrationEntry, Episode } from './types.js'
 
 describe('prng', () => {
   it('replays the same sequence for the same seed', () => {
@@ -146,5 +158,83 @@ describe('result', () => {
   it('captures rejecting helpers', async () => {
     const settled = await fromAsync(async () => 3)
     assert.equal(isOk(settled), true)
+  })
+})
+
+describe('mw-trust', () => {
+  it('computes posterior means with a neutral default', () => {
+    assert.equal(mwOf(3, 1), 0.75)
+    assert.equal(mwOf(0, 0), 0.5)
+    assert.deepEqual(trustOf(3, 1), { s_plus: 3, s_minus: 1, mw: 0.75 })
+  })
+
+  it('counts support and conflict observations', () => {
+    assert.deepEqual(updateCounters(2, 1, true), { s_plus: 3, s_minus: 1 })
+    assert.deepEqual(updateCounters(2, 1, false), { s_plus: 2, s_minus: 2 })
+  })
+
+  it('grades mw against population quantiles', () => {
+    const population: number[] = []
+    for (let i = 1; i <= 20; i++) {
+      population.push(i / 20)
+    }
+    assert.equal(quantileLabel(0.95, population, 0.3, 0.3), 'high')
+    assert.equal(quantileLabel(0.05, population, 0.3, 0.3), 'low')
+    assert.equal(quantileLabel(0.5, population, 0.3, 0.3), 'neutral')
+    assert.equal(quantileLabel(0.95, [0.9], 0.3, 0.3), 'neutral')
+  })
+})
+
+describe('invalidation', () => {
+  it('invalidates on observation without erasing status history', () => {
+    assert.equal(applyInvalidation('active', { cause: 'contradiction' }), 'invalidated')
+    assert.equal(
+      applyInvalidation('active', { cause: 'superseded', supersededBy: 7 }),
+      'invalidated'
+    )
+    assert.equal(applyInvalidation('merged', { cause: 'revoked' }), 'merged')
+    assert.equal(isInvalidated('invalidated'), true)
+    assert.equal(isInvalidated('active'), false)
+  })
+
+  it('carries episode and calibration-entry shapes', () => {
+    const episode: Episode = {
+      id: 1,
+      session_id: 's',
+      task_type: 'general',
+      started_at: '0',
+      resolved_at: undefined,
+      outcome: null,
+    }
+    const entry: CalibrationEntry = { episode_id: episode.id, memory_id: 2, mw_before: 0.6 }
+    assert.equal(entry.mw_before, 0.6)
+  })
+})
+
+describe('calibration', () => {
+  it('bins predictions into deciles', () => {
+    const buckets = deciles([
+      { predicted: 0.05, actual: 0 },
+      { predicted: 0.95, actual: 1 },
+    ])
+    assert.equal(buckets.length, 10)
+    assert.equal(buckets[0]?.count, 1)
+    assert.equal(buckets[9]?.count, 1)
+  })
+
+  it('scores perfect predictions at zero error', () => {
+    const errValue = calibrationError([
+      { predicted: 0.1, actual: 0 },
+      { predicted: 0.9, actual: 1 },
+    ])
+    assert.ok(Math.abs(errValue - 0.02) < 1e-9)
+  })
+
+  it('separates high and low trust rates', () => {
+    const result = discrimination([
+      { predicted: 0.9, actual: 1 },
+      { predicted: 0.1, actual: 0 },
+    ])
+    assert.equal(result.delta, 1)
   })
 })

@@ -40,19 +40,6 @@ Before ANY phase transition (including `START -> CHECKLIST`, `START -> INTAKE`, 
 - Writes `startup_verified: true` + `startup_fingerprint` to session state
 - **You do not need to manually emit fingerprint on opencode** — the plugin handles it
 
-### Cursor
-- **Auto-enforced** by `.cursor/rules/bootstrap.mdc` with `alwaysApply: true`
-- Rule injects fingerprint requirement into every session automatically
-
-### Claude Code
-- Run `/bootstrap` command (auto-attaches 00-system.md) OR
-- Follow this BOOTSTRAP.md manually
-
-### Codex / Other hosts
-- **Manual compliance required** — follow this BOOTSTRAP.md exactly
-- Read AGENTS.md first as the sole entry point, then follow this gate
-- No phase output until fingerprint emitted
-
 ---
 
 ## Verification Checklist

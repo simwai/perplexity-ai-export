@@ -1,44 +1,41 @@
 import { tool } from '@opencode-ai/plugin'
 import { asNumber, asText } from '../db/decode.js'
 import { daysAgo } from '../db/epoch.js'
+import { getStatsFull } from '../db/queries.js'
 import { getToolDb } from './get-db.js'
 
 export const memoryWakeupTool = tool({
-  description: 'Surface stale but potentially relevant memories for re-evaluation.',
-  args: {
-    min_age_days: tool.schema.number().optional().describe('Minimum age in days (default 7)'),
-    max_results: tool.schema.number().optional().describe('Max results (default 20)'),
-  },
-  async execute(args, context) {
-    const minAge = args.min_age_days ?? 7
-    const maxResults = Math.max(1, Math.min(args.max_results ?? 20, 50))
+  description:
+    'Session-start digest: health counts, unresolved episodes, stale and unproven memories.',
+  args: {},
+  async execute(_args, context) {
     const db = await getToolDb(context.directory)
-
-    const result = await db.execute({
-      sql: `SELECT m.id AS id, m.content AS content, m.evidence_count AS evidence_count, m.ema_success AS ema_success, m.ema_failure AS ema_failure, m.updated_at AS updated_at FROM memory m JOIN memory_status ms ON m.memory_status_id = ms.id WHERE m.deleted_at IS NULL AND ms.name = 'active' AND CAST(m.updated_at AS INTEGER) < CAST(? AS INTEGER) ORDER BY m.updated_at ASC LIMIT ?`,
-      args: [daysAgo(minAge), maxResults],
+    const stats = await getStatsFull(db)
+    const staleRows = await db.execute({
+      sql: `SELECT m.id AS id, m.content AS content, m.updated_at AS updated_at FROM memory m JOIN memory_status ms ON m.status_id = ms.id WHERE ms.name = 'active' AND m.updated_at < ? ORDER BY m.updated_at ASC LIMIT 5`,
+      args: [Number(daysAgo(7))],
     })
-
-    const memories: Array<{
-      id: number
-      content: string
-      trust_score: number
-      evidence_count: number
-      updated_at: string
-    }> = []
-    for (const row of result.rows) {
-      const success = asNumber(row['ema_success'])
-      const failure = asNumber(row['ema_failure'])
-      const total = success + failure
-      const score = total === 0 ? 0.5 : success / total
-      memories.push({
+    const stale: Array<{ id: number; snippet: string; updated_at: number }> = []
+    for (const row of staleRows.rows) {
+      stale.push({
         id: asNumber(row['id']),
-        content: asText(row['content']),
-        trust_score: Math.round(score * 100) / 100,
-        evidence_count: asNumber(row['evidence_count']),
-        updated_at: asText(row['updated_at']),
+        snippet: asText(row['content']).slice(0, 160),
+        updated_at: asNumber(row['updated_at']),
       })
     }
-    return { output: JSON.stringify({ memories, min_age_days: minAge }) }
+    const unproven = await db.execute({
+      sql: `SELECT COUNT(*) AS cnt FROM memory m JOIN memory_status ms ON m.status_id = ms.id WHERE ms.name = 'active' AND (m.s_plus + m.s_minus) < CAST((SELECT value FROM parameter WHERE key = 'min_evidence') AS REAL)`,
+      args: [],
+    })
+    return {
+      output: JSON.stringify({
+        total: stats.total,
+        by_status: stats.by_status,
+        avg_mw: Math.round(stats.avg_mw * 1000) / 1000,
+        unresolved_episodes: stats.unresolved_episodes,
+        stale,
+        unproven: asNumber(unproven.rows[0]?.['cnt']),
+      }),
+    }
   },
 })

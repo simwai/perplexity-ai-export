@@ -1,4 +1,4 @@
-import type { TrustLabel, TrustScore, PartitionData, TuningParams } from './types.js'
+import type { MemoryTrust, PartitionData, TrustLabel, TrustScore, TuningParams } from './types.js'
 import { createSeededRandom } from './prng.js'
 import { ok, Result, from } from './result.js'
 
@@ -45,6 +45,40 @@ export function computeTrustScore(emaSuccess: number, emaFailure: number): Trust
     score,
     label: 'neutral',
   }
+}
+
+export function mwOf(sPlus: number, sMinus: number): number {
+  const total = sPlus + sMinus
+  return total <= 0 ? 0.5 : sPlus / total
+}
+
+export function trustOf(sPlus: number, sMinus: number): MemoryTrust {
+  return { s_plus: sPlus, s_minus: sMinus, mw: mwOf(sPlus, sMinus) }
+}
+
+export function updateCounters(
+  sPlus: number,
+  sMinus: number,
+  outcome: boolean
+): { s_plus: number; s_minus: number } {
+  return { s_plus: sPlus + (outcome ? 1 : 0), s_minus: sMinus + (outcome ? 0 : 1) }
+}
+
+export function quantileLabel(
+  mw: number,
+  population: ReadonlyArray<number>,
+  trustQ: number,
+  doubtQ: number
+): TrustLabel {
+  if (population.length < 10) return 'neutral'
+  const sorted = [...population].sort((a, b) => a - b)
+  const highIdx = Math.min(Math.floor(sorted.length * (1 - trustQ)), sorted.length - 1)
+  const lowIdx = Math.min(Math.floor(sorted.length * doubtQ), sorted.length - 1)
+  const highCut = sorted[highIdx] ?? 0.5
+  const lowCut = sorted[lowIdx] ?? 0.5
+  if (mw >= highCut) return 'high'
+  if (mw <= lowCut) return 'low'
+  return 'neutral'
 }
 
 export function updateEma(

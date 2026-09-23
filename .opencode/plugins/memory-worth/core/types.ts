@@ -76,6 +76,27 @@ export interface OutcomeRecord {
   logged_at: string
 }
 
+export interface MemoryTrust {
+  s_plus: number
+  s_minus: number
+  mw: number
+}
+
+export interface Episode {
+  id: number
+  session_id: string
+  task_type: string
+  started_at: string
+  resolved_at: string | undefined
+  outcome: Outcome
+}
+
+export interface CalibrationEntry {
+  episode_id: number
+  memory_id: number
+  mw_before: number
+}
+
 export interface TuningAuditEntry {
   changed_at: string
   changed_by: string

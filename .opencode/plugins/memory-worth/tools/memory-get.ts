@@ -1,5 +1,5 @@
 import { tool } from '@opencode-ai/plugin'
-import { getMemory } from '../db/queries.js'
+import { getMemoryFull, labelMemory } from '../db/queries.js'
 import { getToolDb } from './get-db.js'
 
 export const memoryGetTool = tool({
@@ -9,8 +9,9 @@ export const memoryGetTool = tool({
   },
   async execute(args, context) {
     const db = await getToolDb(context.directory)
-    const memory = await getMemory(db, args.id)
-    if (!memory) return { output: `Error: Memory ${args.id} not found` }
-    return { output: JSON.stringify(memory) }
+    const memory = await getMemoryFull(db, args.id)
+    if (!memory) return { output: JSON.stringify({ error: `memory ${args.id} not found` }) }
+    const trust_label = await labelMemory(db, memory.mw, memory.s_plus, memory.s_minus)
+    return { output: JSON.stringify({ ...memory, trust_label }) }
   },
 })

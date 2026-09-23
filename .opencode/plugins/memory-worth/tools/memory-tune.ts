@@ -1,73 +1,86 @@
 import { tool } from '@opencode-ai/plugin'
-import { getTuningParams } from '../db/queries.js'
-import {
-  DEFAULT_TUNING_PARAMS,
-  createAuditEntry,
-  validateTuningParams,
-} from '../core/governance.js'
-import { isErr } from '../core/result.js'
-import { epochNow } from '../db/epoch.js'
-import { ensureTaskType } from '../db/queries.js'
+import { ensureTaskType, getParameter, setParameter } from '../db/queries.js'
 import { getToolDb } from './get-db.js'
 
+const KNOBS = [
+  'trust_q',
+  'doubt_q',
+  'min_evidence',
+  'active_partition',
+  'tune_interval',
+  'window_size',
+] as const
+
+type Knob = (typeof KNOBS)[number]
+
+function validateKnob(knob: Knob, value: string, current: Record<Knob, string>): string | null {
+  switch (knob) {
+    case 'trust_q':
+    case 'doubt_q': {
+      const numeric = Number(value)
+      if (!Number.isFinite(numeric) || numeric <= 0 || numeric >= 1)
+        return `${knob} must be between 0 and 1 (exclusive)`
+      const other = knob === 'trust_q' ? Number(current['doubt_q']) : Number(current['trust_q'])
+      if (knob === 'trust_q' && numeric <= other)
+        return `trust_q (${numeric}) must exceed doubt_q (${other})`
+      if (knob === 'doubt_q' && numeric >= other)
+        return `doubt_q (${numeric}) must stay below trust_q (${other})`
+      return null
+    }
+    case 'min_evidence':
+    case 'tune_interval':
+    case 'window_size': {
+      const numeric = Number(value)
+      if (!Number.isInteger(numeric) || numeric < 1) return `${knob} must be a positive integer`
+      return null
+    }
+    case 'active_partition':
+      return value.trim().length > 0 ? null : 'active_partition requires a non-empty name'
+  }
+}
+
 export const memoryTuneTool = tool({
-  description: 'Adjust a tuning knob. Requires a written rationale. Only one knob per call.',
+  description:
+    'Adjust a tuning knob. Requires a written rationale. Every change is audited and reversible.',
   args: {
     knob: tool.schema
-      .enum(['decay_rate', 'trust_quantile', 'doubt_quantile', 'min_evidence', 'active_partition'])
+      .enum([
+        'trust_q',
+        'doubt_q',
+        'min_evidence',
+        'active_partition',
+        'tune_interval',
+        'window_size',
+      ])
       .describe('Knob name'),
-    value: tool.schema.string().describe('New value as text (numbers parse to numeric knobs)'),
+    value: tool.schema.string().describe('New value as text'),
     rationale: tool.schema.string().min(10).describe('One-sentence explanation for this change'),
   },
   async execute(args, context) {
     const db = await getToolDb(context.directory)
-    const current = await getTuningParams(db)
-    const oldValues: Record<string, unknown> = { ...current }
-
-    let parsed: string | number = args.value.trim()
-    if (args.knob !== 'active_partition') {
-      const numeric = Number(args.value)
-      if (!Number.isFinite(numeric))
-        return { output: `Error: knob "${args.knob}" requires a numeric value` }
-      parsed = numeric
-    } else if (!parsed) {
-      return { output: 'Error: active_partition requires a non-empty partition name' }
+    const current: Record<Knob, string> = {
+      trust_q: await getParameter(db, 'trust_q', '0.70'),
+      doubt_q: await getParameter(db, 'doubt_q', '0.30'),
+      min_evidence: await getParameter(db, 'min_evidence', '3'),
+      active_partition: await getParameter(db, 'active_partition', 'auto'),
+      tune_interval: await getParameter(db, 'tune_interval', '50'),
+      window_size: await getParameter(db, 'window_size', '50'),
     }
-
-    const updates: Record<string, unknown> = { [args.knob]: parsed }
-    const validation = validateTuningParams(updates as Partial<typeof DEFAULT_TUNING_PARAMS>)
-    if (isErr(validation)) return { output: `Error: ${validation.error}` }
-
-    if (args.knob === 'active_partition' && typeof parsed === 'string') {
-      await ensureTaskType(db, parsed)
+    const problem = validateKnob(args.knob, args.value.trim(), current)
+    if (problem !== null) return { output: JSON.stringify({ error: problem }) }
+    if (args.knob === 'active_partition' && args.value.trim() !== 'auto') {
+      await ensureTaskType(db, args.value.trim())
     }
-
-    const now = epochNow()
-    const stored = typeof parsed === 'number' ? String(parsed) : parsed
-    await db.execute({
-      sql: `INSERT INTO tuning_param (key, value, updated_at) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
-      args: [args.knob, stored, now],
-    })
-
-    const audit = createAuditEntry('agent', args.rationale.trim(), oldValues, updates)
-    const inserted = await db.execute({
-      sql: `INSERT INTO tuning_audit (changed_at, changed_by, rationale) VALUES (?, ?, ?)`,
-      args: [audit.changed_at, audit.changed_by, audit.rationale],
-    })
-    const auditIdRaw = inserted.lastInsertRowid
-    const auditId = typeof auditIdRaw === 'bigint' ? Number(auditIdRaw) : 0
-    await db.execute({
-      sql: `INSERT INTO tuning_audit_entry (audit_id, param_key, old_value, new_value) VALUES (?, ?, ?, ?)`,
-      args: [auditId, args.knob, String(oldValues[args.knob] ?? ''), stored],
-    })
-
+    const applied = await setParameter(db, args.knob, args.value.trim(), args.rationale.trim())
+    const warnings: string[] = []
+    if (args.knob === 'tune_interval' && Number(args.value) < 10) {
+      warnings.push('tune_interval below 10 invites thrash; stage changes deliberately')
+    }
+    if (args.knob === 'min_evidence' && Number(args.value) > 100) {
+      warnings.push('min_evidence above 100 keeps most memories unproven for a long time')
+    }
     return {
-      output: JSON.stringify({
-        tuned: true,
-        knob: args.knob,
-        new_value: parsed,
-        rationale: args.rationale.trim(),
-      }),
+      output: JSON.stringify({ applied: true, previous: applied.previous ?? null, warnings }),
     }
   },
 })

@@ -1,24 +1,21 @@
 import { tool } from '@opencode-ai/plugin'
-import { epochNow } from '../db/epoch.js'
+import { deleteMemoryFull } from '../db/queries.js'
 import { getToolDb } from './get-db.js'
 
 export const memoryDeleteTool = tool({
-  description: 'Permanently delete a memory.',
+  description:
+    'Permanently delete a memory. Tag links and grounds cascade; calibration history is preserved.',
   args: {
     id: tool.schema.number().describe('Memory ID to delete'),
+    reason: tool.schema.string().optional().describe('Why this memory is deleted'),
   },
   async execute(args, context) {
     const db = await getToolDb(context.directory)
-    const existing = await db.execute({
-      sql: `SELECT id FROM memory WHERE id = ? AND deleted_at IS NULL`,
-      args: [args.id],
-    })
-    if (existing.rows.length === 0) return { output: `Error: Memory ${args.id} not found` }
-
-    await db.execute({
-      sql: `UPDATE memory SET deleted_at = ? WHERE id = ?`,
-      args: [epochNow(), args.id],
-    })
-    return { output: JSON.stringify({ deleted: true, id: args.id }) }
+    const deleted = await deleteMemoryFull(db, args.id)
+    if (!deleted) return { output: JSON.stringify({ error: `memory ${args.id} not found` }) }
+    if (args.reason !== undefined) {
+      return { output: JSON.stringify({ ok: true, id: args.id, reason: args.reason }) }
+    }
+    return { output: JSON.stringify({ ok: true, id: args.id }) }
   },
 })

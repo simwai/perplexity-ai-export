@@ -1,147 +1,89 @@
 import { tool } from '@opencode-ai/plugin'
-import { asNumber } from '../db/decode.js'
-import { getTuningParams } from '../db/queries.js'
+import { asNumber, asText } from '../db/decode.js'
+import { getParameter, getStatsFull } from '../db/queries.js'
+import { quantileLabel } from '../core/trust.js'
 import { getToolDb } from './get-db.js'
 
 export const memoryStatsTool = tool({
-  description:
-    'Inspect memory health: calibration, discrimination, distribution, and named flags. Use this before tuning.',
-  args: {},
-  async execute(_args, context) {
+  description: 'Health dashboard: status counts, trust-label distribution, episode outcomes.',
+  args: {
+    window: tool.schema
+      .number()
+      .optional()
+      .describe('Recent resolved episodes to score (default 50)'),
+    partition: tool.schema
+      .string()
+      .optional()
+      .describe('Task-type partition to scope memory counts'),
+  },
+  async execute(args, context) {
     const db = await getToolDb(context.directory)
-    const params = await getTuningParams(db)
+    const stats = await getStatsFull(db)
+    const windowSize = args.window === undefined ? 50 : Math.max(1, Math.floor(args.window))
 
-    const totalMemoriesResult = await db.execute({
-      sql: `SELECT COUNT(*) AS cnt FROM memory WHERE deleted_at IS NULL`,
-      args: [],
-    })
-    const totalOutcomesResult = await db.execute({
-      sql: `SELECT COUNT(*) AS cnt FROM outcome`,
-      args: [],
-    })
-    const totalMemories = asNumber(totalMemoriesResult.rows[0]?.['cnt'])
-    const totalOutcomes = asNumber(totalOutcomesResult.rows[0]?.['cnt'])
-
-    if (totalMemories === 0 || totalOutcomes === 0) {
-      return {
-        output: JSON.stringify({
-          status: 'insufficient_data',
-          message: 'Not enough data to generate meaningful stats.',
-          memories: totalMemories,
-          outcomes: totalOutcomes,
-        }),
-      }
-    }
-
-    const scoredRows = await db.execute({
-      sql: `SELECT m.ema_success AS ema_success, m.ema_failure AS ema_failure, o.outcome AS outcome FROM memory m JOIN outcome o ON o.memory_id = m.id WHERE m.deleted_at IS NULL AND m.evidence_count >= ?`,
-      args: [params.min_evidence],
-    })
-
-    const scored: Array<{ predicted: number; actual: number }> = []
-    for (const row of scoredRows.rows) {
-      const success = asNumber(row['ema_success'])
-      const failure = asNumber(row['ema_failure'])
-      const total = success + failure
-      scored.push({
-        predicted: total === 0 ? 0.5 : success / total,
-        actual: asNumber(row['outcome']),
+    let memories = stats.total
+    let distribution: Record<string, number> = {}
+    if (args.partition !== undefined) {
+      const taskTypeId = await db.execute({
+        sql: `SELECT id FROM task_type WHERE name = ?`,
+        args: [args.partition],
       })
-    }
-
-    const deciles: Array<{
-      bin: string
-      count: number
-      avg_predicted: number
-      avg_actual: number
-    }> = []
-    for (let i = 0; i < 10; i++) {
-      const lo = i / 10
-      const hi = (i + 1) / 10
-      let count = 0
-      let predictedSum = 0
-      let actualSum = 0
-      for (const item of scored) {
-        if (item.predicted >= lo && item.predicted < hi) {
-          count += 1
-          predictedSum += item.predicted
-          actualSum += item.actual
-        }
+      if (taskTypeId.rows.length === 0) {
+        return { output: JSON.stringify({ error: `unknown partition "${args.partition}"` }) }
       }
-      deciles.push({
-        bin: `${Math.round(lo * 100)}-${Math.round(hi * 100)}%`,
-        count,
-        avg_predicted: count > 0 ? predictedSum / count : 0,
-        avg_actual: count > 0 ? actualSum / count : 0,
+      const id = asNumber(taskTypeId.rows[0]?.['id'])
+      const scoped = await db.execute({
+        sql: `SELECT ms.name AS status, COUNT(*) AS cnt FROM memory m JOIN memory_status ms ON m.status_id = ms.id WHERE m.task_type_id = ? GROUP BY ms.name`,
+        args: [id],
       })
-    }
-
-    let calibrationSum = 0
-    for (const bin of deciles) {
-      calibrationSum += Math.abs(bin.avg_predicted - bin.avg_actual)
-    }
-    const calibrationError = calibrationSum / deciles.length
-
-    let highCount = 0
-    let highSum = 0
-    let lowCount = 0
-    let lowSum = 0
-    for (const item of scored) {
-      if (item.predicted >= 0.7) {
-        highCount += 1
-        highSum += item.actual
+      memories = 0
+      distribution = {}
+      for (const row of scoped.rows) {
+        const cnt = asNumber(row['cnt'])
+        distribution[asText(row['status'])] = cnt
+        memories += cnt
       }
-      if (item.predicted <= 0.3) {
-        lowCount += 1
-        lowSum += item.actual
+    } else {
+      const rows = await db.execute({
+        sql: `SELECT m.mw AS mw, m.s_plus AS s_plus, m.s_minus AS s_minus FROM memory m JOIN memory_status ms ON m.status_id = ms.id WHERE ms.name = 'active'`,
+        args: [],
+      })
+      const minEv = Number(await getParameter(db, 'min_evidence', '3'))
+      const trustQ = Number(await getParameter(db, 'trust_q', '0.70'))
+      const doubtQ = Number(await getParameter(db, 'doubt_q', '0.30'))
+      const population: number[] = []
+      for (const row of rows.rows) {
+        population.push(asNumber(row['mw']))
+      }
+      for (const row of rows.rows) {
+        const evidence = asNumber(row['s_plus']) + asNumber(row['s_minus'])
+        const label =
+          evidence < minEv
+            ? 'unproven'
+            : quantileLabel(asNumber(row['mw']), population, trustQ, doubtQ)
+        distribution[label] = (distribution[label] ?? 0) + 1
       }
     }
-    const highRate = highCount > 0 ? highSum / highCount : 0
-    const lowRate = lowCount > 0 ? lowSum / lowCount : 0
 
-    const sorted: number[] = []
-    for (const item of scored) {
-      sorted.push(item.predicted)
+    const recent = await db.execute({
+      sql: `SELECT outcome FROM episode WHERE resolved_at IS NOT NULL ORDER BY resolved_at DESC LIMIT ?`,
+      args: [windowSize],
+    })
+    let successes = 0
+    for (const row of recent.rows) {
+      successes += asNumber(row['outcome'])
     }
-    sorted.sort((a, b) => a - b)
-    const pct = (p: number): number => sorted[Math.floor(sorted.length * p)] ?? 0
-
-    const flags: string[] = []
-    if (calibrationError > 0.15) flags.push('calibration is degrading')
-    if (highRate - lowRate < 0.05 && scored.length > 20)
-      flags.push("I can't tell good memories from bad ones")
-    if (highRate < lowRate + 0.05 && highCount > 10 && lowCount > 10)
-      flags.push('my scores are worse than guessing')
-
-    let status = 'nominal'
-    if (flags.length > 0) {
-      let severe = false
-      for (const flag of flags) {
-        if (flag.includes('worse than guessing') || flag.includes("can't tell")) severe = true
-      }
-      status = severe ? 'degraded' : 'watch'
-    }
-
     return {
       output: JSON.stringify({
-        status,
-        memories: totalMemories,
-        outcomes: totalOutcomes,
-        calibration: { error: Math.round(calibrationError * 1000) / 1000, deciles },
-        discrimination: {
-          high_trust_rate: Math.round(highRate * 1000) / 1000,
-          low_trust_rate: Math.round(lowRate * 1000) / 1000,
-          delta: Math.round((highRate - lowRate) * 1000) / 1000,
-        },
-        distribution: {
-          p5: Math.round(pct(0.05) * 100) / 100,
-          p25: Math.round(pct(0.25) * 100) / 100,
-          p50: Math.round(pct(0.5) * 100) / 100,
-          p75: Math.round(pct(0.75) * 100) / 100,
-          p95: Math.round(pct(0.95) * 100) / 100,
-        },
-        flags,
-        recommendation: flags.length > 0 ? flags[0] : 'no action needed',
+        memories,
+        by_status: stats.by_status,
+        trust_distribution: distribution,
+        episodes: stats.episodes,
+        unresolved_episodes: stats.unresolved_episodes,
+        recent_success_rate:
+          recent.rows.length > 0
+            ? Math.round((successes / recent.rows.length) * 1000) / 1000
+            : null,
       }),
     }
   },
