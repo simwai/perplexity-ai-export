@@ -188,7 +188,7 @@ sequenceDiagram
     P->>P: Generate HyDE passage
     P->>R: [Semantic Queries + HyDE Passage + Hard Keywords]
     R->>R: Fusion Ranking (RRF)
-    R->>CE: Top N candidates (35 precise / 60 exhaustive)
+    R->>CE: Top N candidates (50 precise / 80 exhaustive)
     CE->>CE: Joint (query, passage) scoring
     CE->>MR: Reranked results
     loop Fact Extraction
