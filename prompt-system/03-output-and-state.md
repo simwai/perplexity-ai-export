@@ -373,15 +373,15 @@ Entry points found: [N] -- [list: main.ts, server.ts, worker.ts, etc.]
 
 ## Generated Specs
 L1 Concept Specs: [N]
-- [feature-name] -- [one-line description] -- Status: Draft
+- [FEATURE_NAME] -- [one-line description] -- Status: Draft
 - ...
 
 L2 Implementation Specs: [N]
-- [feature-name] -- Implements: [L1-id] -- Status: Draft
+- [FEATURE_NAME] -- Implements: [L1-id] -- Status: Draft
 - ...
 
 ## Registry Updates
-SPECS/index.md: [N] new rows appended (all status=Draft)
+SPECS/INDEX.md: [N] new rows appended (all status=Draft)
 
 ## Reading Verification
 Planned: N | Completed: M | Status: [complete | incomplete]
@@ -394,7 +394,7 @@ Pending: [specific file paths or "none"]
 
 Allowed next move:
 - Enter SPEC phase to review generated Draft specs
-- Re-run bootstrap with --only <domain> to focus
+- Re-run bootstrap with a focused domain filter
 - Abort (specs remain as phase output, not written to disk)
 ```
 
@@ -808,8 +808,8 @@ Gate result: ALL PASS required. Any FAIL -> return to PLAN.
 [PHASE: DRIFT]
 
 # Drift Report
-Spec: [SPECS/feature-name.md] -- [version] -- [status]
-Mode: [standard|auto-fix] -- [auto-fix enabled via --auto-fix flag]
+Spec: [SPECS/FEATURE_NAME.md] -- [version] -- [status]
+Mode: [standard|auto-fix] -- [auto-fix selected via DRIFT mitigation choice]
 Registry check: [match | HALT] -- [registry version vs header version]
 
 Verified claims:
@@ -1044,8 +1044,8 @@ spec_version: [x.y.z or n/a]
 ## Bootstrap State
 
 bootstrap_specs_generated: [N]
-bootstrap_l1_specs: [list of feature-names]
-bootstrap_l2_specs: [list of feature-names with Implements refs]
+bootstrap_l1_specs: [list of FEATURE_NAMES]
+bootstrap_l2_specs: [list of FEATURE_NAMES with Implements refs]
 bootstrap_clarifications: [N] -- [list of NEEDS CLARIFICATION items]
 
 ## Phase Status

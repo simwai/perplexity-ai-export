@@ -949,7 +949,7 @@ A spec is a living artifact under `SPECS/`. Each spec has a registry entry (fron
 
 ### Spec artifact format
 
-Every spec lives at `SPECS/NNN-name/spec.md` where `NNN` is a zero-padded sequence number and `name` is kebab-case.
+Every spec lives at `SPECS/FEATURE_NAME.md` where `FEATURE_NAME` is UPPER_SNAKE_CASE. For L2 implementation specs, use `SPECS/FEATURE_NAME_IMPL.md` to avoid collision with the L1 concept spec.
 
 ```md
 # <Title>
@@ -1003,7 +1003,7 @@ Promotion order: `Draft -> RFC -> Stable`; `Deprecated` is a terminal state reac
 
 ### Registry
 
-`SPECS/index.md` is the registry: one append-audit entry per spec status row.
+`SPECS/INDEX.md` is the registry: one append-audit entry per spec status row.
 
 ```md
 | id | name | version | status | layer | implements | updated | session |
@@ -1033,7 +1033,7 @@ Bootstrap generates spec artifacts from an undocumented codebase. It is the cold
 
 - Session starts with a target repository that has no `SPECS/` directory.
 - Explicit user request: `/bootstrap` command from any phase.
-- Explicit user request: `spec-bootstrap <target-dir>` via CLI tool.
+- Explicit user request: `bootstrap <target-dir>` via agent command.
 
 ### Bootstrap Pipeline
 
@@ -1067,7 +1067,7 @@ Bootstrap generates spec artifacts from an undocumented codebase. It is the cold
 - `[NEEDS CLARIFICATION]` markers for dynamic routes, reflection, unknowns (max 3 per spec)
 
 **Step 6: Registry Population**
-- Append rows to `SPECS/index.md` with generated IDs, names, versions, status=Draft
+- Append rows to `SPECS/INDEX.md` with generated IDs, names, versions, status=Draft
 - L2 rows carry `Implements: <L1-id>`
 - Registry uses append-audit semantics (never edit in place)
 
@@ -1075,7 +1075,7 @@ Bootstrap generates spec artifacts from an undocumented codebase. It is the cold
 
 - Phase output: generated spec artifacts (as phase output, not written to disk)
 - Handoff to SPEC phase: `target: SPECS/`, `spec_version: n/a`, `drift_findings: n/a`
-- CLI tool (`scripts/spec-bootstrap.ps1`): `--dry-run` prints summaries; `--only <domain>` limits scope
+- Agent-driven execution: the BOOTSTRAP pipeline runs directly in the agent; no external PS1/CLI tool required
 
 ### Guardrails
 
