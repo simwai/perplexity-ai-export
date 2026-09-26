@@ -1,14 +1,16 @@
-import { type Page, type BrowserContext, type Response } from '@playwright/test'
-import { logger } from '../utils/logging/logger.js'
+import type { Page, BrowserContext } from '@playwright/test'
 import crypto from 'node:crypto'
-import { createWaitStrategy } from './wait-strategy.js'
-import { type Config } from '../utils/config.js'
+import { logger } from '../utils/logging/logger.js'
 import { errorMessageOf } from '../utils/extract-error-message.js'
 import { BaseAppError } from '../utils/errors.js'
 import { ok, err, type Result, from } from 'super-result'
 import { ApiDiagnosticsWriter } from '../utils/logging/api-diagnostics.js'
 import { DEFAULT_API_VERSION } from './api-version.js'
+import { fetchThreadById } from './library-discovery.js'
 import { z } from 'zod'
+import { type Config } from '../utils/config.js'
+
+// ─── Public types ────────────────────────────────────────────────────────────
 
 export interface ConversationMessage {
   role: 'user' | 'assistant'
@@ -25,13 +27,7 @@ export interface ExtractedConversation {
   messages: ConversationMessage[]
 }
 
-type RawEntry = {
-  thread_title?: string
-  collection_info?: { title?: string }
-  updated_datetime?: string
-  query_str?: string
-  blocks?: Array<{ intended_usage?: string; markdown_block?: { answer?: string } }>
-}
+// ─── Errors ──────────────────────────────────────────────────────────────────
 
 export class ExtractionError extends BaseAppError {}
 export class NavigationError extends BaseAppError {}
@@ -40,6 +36,38 @@ export class AuthError extends BaseAppError {}
 export class ServerError extends BaseAppError {}
 export class NoDataError extends BaseAppError {}
 export class ParsingError extends BaseAppError {}
+
+type ExtractionErrorInstance = InstanceType<typeof ExtractionError>
+type NavigationErrorInstance = InstanceType<typeof NavigationError>
+type NotFoundErrorInstance = InstanceType<typeof NotFoundError>
+type AuthErrorInstance = InstanceType<typeof AuthError>
+type ServerErrorInstance = InstanceType<typeof ServerError>
+type NoDataErrorInstance = InstanceType<typeof NoDataError>
+type ParsingErrorInstance = InstanceType<typeof ParsingError>
+
+export type ConversationExtractorError =
+  | ExtractionErrorInstance
+  | NavigationErrorInstance
+  | NotFoundErrorInstance
+  | AuthErrorInstance
+  | ServerErrorInstance
+  | NoDataErrorInstance
+  | ParsingErrorInstance
+
+// ─── Internal types ──────────────────────────────────────────────────────────
+
+type RawEntry = {
+  thread_title?: string
+  collection_info?: { title?: string }
+  updated_datetime?: string
+  query_str?: string
+  blocks?: Array<{
+    intended_usage?: string
+    markdown_block?: { answer?: string }
+  }>
+}
+
+// ─── Extractor ───────────────────────────────────────────────────────────────
 
 export class ConversationExtractor {
   private static readonly BlockSchema = z.object({
@@ -65,25 +93,6 @@ export class ConversationExtractor {
     })
     .passthrough()
 
-  private static readonly ApiResponseSchema = z.union([
-    z.array(ConversationExtractor.EntrySchema),
-    z
-      .object({
-        entries: z.array(ConversationExtractor.EntrySchema),
-        background_entries: z.array(z.unknown()).optional(),
-        has_next_page: z.boolean().optional(),
-        next_cursor: z.string().nullable().optional(),
-        status: z.string().optional(),
-        thread_metadata: z.unknown().optional(),
-        collection_info: z
-          .object({
-            has_next_page: z.boolean().optional(),
-          })
-          .optional(),
-      })
-      .passthrough(),
-  ])
-
   private static readonly TimestampCarrierSchema = z.object({
     updated_datetime: z.string().optional(),
   })
@@ -97,7 +106,7 @@ export class ConversationExtractor {
   private readonly diagnostics: ApiDiagnosticsWriter
 
   constructor(
-    private readonly config: Config,
+    config: Config,
     private readonly context: BrowserContext
   ) {
     this.diagnostics = new ApiDiagnosticsWriter(config)
@@ -117,6 +126,83 @@ export class ConversationExtractor {
       this.currentTimeoutMs + ConversationExtractor.TIMEOUT_STEP_UP_MS
     )
   }
+
+  // ─── Public entrypoint ────────────────────────────────────────────────────
+
+  async extract(
+    conversationUrl: string,
+    expectedId?: string
+  ): Promise<Result<ExtractedConversation, ConversationExtractorError>> {
+    const pageResult = await this.getApiPage()
+    if (!pageResult.ok) return err(pageResult.error)
+
+    const page = pageResult.value
+    const uuid = expectedId ?? this.extractIdFromUrl(conversationUrl)
+    if (!uuid || uuid === 'unknown') {
+      return err(new ParsingError(`Could not determine thread uuid from ${conversationUrl}`))
+    }
+
+    const rawResult = await fetchThreadById(page, uuid, DEFAULT_API_VERSION, {
+      timeoutMs: this.currentTimeoutMs,
+    })
+
+    if (!rawResult.ok) {
+      return err(this.classifyFetchError(rawResult.error))
+    }
+
+    const apiData = {
+      entries: rawResult.value.entries ?? [],
+      partial: false,
+    }
+
+    return this.parseConversationData(apiData, conversationUrl, uuid)
+  }
+
+  // ─── Page acquisition ────────────────────────────────────────────────────
+  //
+  // We need a page whose origin is perplexity.ai so that `credentials: 'include'`
+  // inside page.evaluate(fetch(...)) actually sends the session cookies. The
+  // discovery phase leaves one such page behind; if for some reason it isn't
+  // there, fall back to a fresh navigation.
+
+  private async getApiPage(): Promise<Result<Page, ExtractionErrorInstance>> {
+    const pagesResult = await from(async () => this.context.pages())
+    if (!pagesResult.ok) {
+      return err(new ExtractionError(errorMessageOf(pagesResult.error)))
+    }
+
+    const pages = pagesResult.value
+    const onPerplexity = pages.find((p) => p.url().startsWith('https://www.perplexity.ai'))
+    if (onPerplexity) return ok(onPerplexity)
+
+    const page = pages[0] ?? (await this.context.newPage())
+    const navResult = await from(async () =>
+      page.goto('https://www.perplexity.ai', { waitUntil: 'domcontentloaded' })
+    )
+    if (!navResult.ok) {
+      return err(
+        new ExtractionError(
+          `Failed to establish perplexity.ai page: ${errorMessageOf(navResult.error)}`
+        )
+      )
+    }
+
+    return ok(page)
+  }
+
+  // ─── Error classification ────────────────────────────────────────────────
+
+  private classifyFetchError(error: unknown): ConversationExtractorError {
+    const msg = errorMessageOf(error)
+    if (msg.includes('HTTP 404')) return new NotFoundError('Conversation not found (404)')
+    if (msg.includes('HTTP 401') || msg.includes('HTTP 403')) {
+      return new AuthError('Authentication required or expired')
+    }
+    if (/HTTP 5\d\d/.test(msg)) return new ServerError(msg)
+    return new NoDataError(msg)
+  }
+
+  // ─── Hashing ─────────────────────────────────────────────────────────────
 
   hashEntries(entries: unknown[]): string {
     const sorted = entries.map((e) => this.sortEntryForHash(e))
@@ -145,218 +231,7 @@ export class ConversationExtractor {
     return obj
   }
 
-  async extract(
-    conversationUrl: string,
-    _expectedId?: string
-  ): Promise<
-    Result<
-      ExtractedConversation,
-      | ExtractionErrorInstance
-      | NavigationErrorInstance
-      | NotFoundErrorInstance
-      | AuthErrorInstance
-      | ServerErrorInstance
-      | NoDataErrorInstance
-      | ParsingErrorInstance
-    >
-  > {
-    const ensureResult = await this.ensureContextIsAlive()
-    if (!ensureResult.ok) return err(ensureResult.error as ExtractionErrorInstance)
-
-    const newPageResult = await from(async () => await this.context.newPage())
-    if (!newPageResult.ok) {
-      return err(new ExtractionError('Failed to create new page'))
-    }
-    const conversationPage = newPageResult.value
-
-    const apiResponsePromise = this.captureConversationApiResponse(conversationPage, _expectedId)
-
-    const navigationResult = await this.navigateToConversationUrl(conversationPage, conversationUrl)
-    if (!navigationResult.ok) {
-      const closeResult = await from(async () => {
-        await conversationPage.close()
-      })
-      if (!closeResult.ok) {
-        logger.warn(`Failed to close page: ${errorMessageOf(closeResult.error)}`)
-      }
-      return err(navigationResult.error as NavigationErrorInstance)
-    }
-    await createWaitStrategy(this.config).afterScroll(conversationPage)
-
-    const capturedApiData = await apiResponsePromise
-    if (capturedApiData.entries.length === 0 && !capturedApiData.partial) {
-      const closeResult = await from(async () => {
-        await conversationPage.close()
-      })
-      if (!closeResult.ok) {
-        logger.warn(`Failed to close page: ${errorMessageOf(closeResult.error)}`)
-      }
-      return err(new NoDataError('API response timeout or not found'))
-    }
-
-    const extractedConversation = this.parseConversationData(
-      capturedApiData,
-      conversationUrl,
-      _expectedId
-    )
-    if (!extractedConversation.ok) {
-      const closeResult = await from(async () => {
-        await conversationPage.close()
-      })
-      if (!closeResult.ok) {
-        logger.warn(`Failed to close page: ${errorMessageOf(closeResult.error)}`)
-      }
-      return err(extractedConversation.error as ParsingErrorInstance)
-    }
-
-    const closeResult = await from(async () => {
-      await conversationPage.close()
-    })
-    if (!closeResult.ok) {
-      logger.warn(`Failed to close page: ${errorMessageOf(closeResult.error)}`)
-    }
-
-    return ok(extractedConversation.value)
-  }
-
-  private async ensureContextIsAlive(): Promise<Result<void, ExtractionErrorInstance>> {
-    const result = await from(async () => await this.context.pages())
-    if (!result.ok) {
-      const error = result.error
-      return err(new ExtractionError(error instanceof Error ? error.message : String(error)))
-    }
-    return ok(undefined)
-  }
-
-  private async navigateToConversationUrl(
-    page: Page,
-    url: string
-  ): Promise<Result<void, NavigationErrorInstance>> {
-    const navigationResult = await from(
-      async () =>
-        await page.goto(url, {
-          waitUntil: 'domcontentloaded',
-          timeout: this.currentTimeoutMs,
-        })
-    )
-    if (!navigationResult.ok) {
-      return err(
-        new NavigationError(`Navigation failed: ${errorMessageOf(navigationResult.error)}`)
-      )
-    }
-    return this.validateNavigationResponse(navigationResult.value)
-  }
-
-  private validateNavigationResponse(
-    response: Response | null
-  ): Result<void, ConversationExtractorError> {
-    if (!response) {
-      return err(new NavigationError('Navigation failed – no response'))
-    }
-
-    const httpStatusCode = response.status()
-    if (httpStatusCode === 404) {
-      return err(new NotFoundError('Conversation not found (404)'))
-    }
-    if (httpStatusCode === 403 || httpStatusCode === 401) {
-      return err(new AuthError('Authentication required or expired'))
-    }
-    if (httpStatusCode >= 500) {
-      return err(new ServerError(`Server error (${httpStatusCode})`))
-    }
-    if (httpStatusCode >= 400) {
-      return err(new NavigationError(`HTTP error ${httpStatusCode}`))
-    }
-    return ok(undefined)
-  }
-
-  private captureConversationApiResponse(
-    page: Page,
-    expectedId?: string
-  ): Promise<{ entries: unknown[]; partial: boolean }> {
-    const accumulatedEntries: unknown[] = []
-    let isRequestResolved = false
-    const expectedVersionToken = `version=${encodeURIComponent(DEFAULT_API_VERSION)}`
-    const expectedThreadToken = expectedId ? `/rest/thread/${expectedId}` : ''
-
-    return new Promise((resolve) => {
-      const timeoutId = setTimeout(() => {
-        if (!isRequestResolved) {
-          if (accumulatedEntries.length > 0) {
-            logger.info(
-              `API response timeout – resolving with ${accumulatedEntries.length} accumulated entries (partial)`
-            )
-            resolve({ entries: accumulatedEntries, partial: true })
-          } else {
-            logger.warn('API response timeout – resolving with empty entries')
-            resolve({ entries: [], partial: false })
-          }
-          isRequestResolved = true
-        }
-      }, this.currentTimeoutMs)
-
-      page.on('response', async (response: Response) => {
-        if (isRequestResolved) return
-
-        const responseUrl = response.url()
-        const isThreadApiRequest = responseUrl.includes('/rest/thread/')
-        const isListRequest =
-          responseUrl.includes('list_ask_threads') ||
-          responseUrl.includes('list_recent') ||
-          responseUrl.includes('list_pinned')
-
-        if (!isThreadApiRequest || isListRequest) return
-        if (expectedThreadToken && !responseUrl.includes(expectedThreadToken)) return
-        if (page.isClosed()) return
-
-        if (!responseUrl.includes(expectedVersionToken) && responseUrl.includes('version=')) {
-          logger.debug(`[extractor] thread response version drift: ${responseUrl}`)
-        }
-
-        const jsonResult = await from(async () => await response.json())
-        if (!jsonResult.ok) {
-          this.diagnostics.writeFailure({
-            url: response.url(),
-            errorType: 'unknown_shape',
-          })
-          clearTimeout(timeoutId)
-          isRequestResolved = true
-          resolve({ entries: [], partial: false })
-          return
-        }
-        const jsonResponse = jsonResult.value
-
-        const parseResult = ConversationExtractor.ApiResponseSchema.safeParse(jsonResponse)
-
-        if (!parseResult.success) {
-          this.diagnostics.writeFailure({
-            url: response.url(),
-            errorType: 'zod_error',
-            zodErrorPaths: parseResult.error.issues.map((issue) => issue.path.join('.')),
-          })
-          clearTimeout(timeoutId)
-          isRequestResolved = true
-          resolve({ entries: [], partial: false })
-          return
-        }
-
-        const responseData = parseResult.data
-        const currentEntries = Array.isArray(responseData) ? responseData : responseData.entries
-        accumulatedEntries.push(...currentEntries)
-
-        const hasNextPage = !Array.isArray(responseData) && responseData.has_next_page === true
-
-        if (!hasNextPage) {
-          clearTimeout(timeoutId)
-          isRequestResolved = true
-          resolve({ entries: accumulatedEntries, partial: false })
-          return
-        }
-
-        logger.info(`Captured paginated response, ${accumulatedEntries.length} entries so far...`)
-      })
-    })
-  }
+  // ─── Parsing pipeline ────────────────────────────────────────────────────
 
   private parseConversationData(
     apiData: { entries: unknown[]; partial: boolean },
@@ -417,7 +292,9 @@ export class ConversationExtractor {
     if (Array.isArray(data)) return data as unknown[]
 
     const dataObject = data as Record<string, unknown>
-    if (dataObject && Array.isArray(dataObject.entries)) return dataObject.entries as unknown[]
+    if (dataObject && Array.isArray(dataObject.entries)) {
+      return dataObject.entries as unknown[]
+    }
     if (dataObject && (dataObject.query_str || dataObject.blocks)) return [data]
 
     logger.warn(`Unknown API response shape for ${url}`)
@@ -451,19 +328,36 @@ export class ConversationExtractor {
         messages.push({ role: 'user', content: question })
       }
 
-      let answer = ''
-      for (const block of entry.blocks ?? []) {
-        if (block.markdown_block?.answer) {
-          answer += block.markdown_block.answer + '\n\n'
-        }
-      }
-
-      if (answer.trim()) {
-        messages.push({ role: 'assistant', content: answer.trim() })
+      const answer = this.pickAnswerFromBlocks(entry.blocks ?? [])
+      if (answer) {
+        messages.push({ role: 'assistant', content: answer })
       }
     }
 
     return messages
+  }
+
+  /**
+   * A single entry can contain several markdown-bearing blocks with the same
+   * textual content:
+   *
+   *   - `ask_text_0_markdown` — the full answer, single chunk
+   *   - `ask_text`            — the same answer, chunked into ~15-char pieces
+   *
+   * Both expose `markdown_block.answer`. Naively concatenating them duplicates
+   * the entire answer. Prefer `ask_text_0_markdown`, fall back to `ask_text`,
+   * then to whatever markdown block is present.
+   */
+  private pickAnswerFromBlocks(blocks: NonNullable<RawEntry['blocks']>): string {
+    const withAnswer = blocks.filter((b) => b.markdown_block?.answer)
+    if (withAnswer.length === 0) return ''
+
+    const preferred =
+      withAnswer.find((b) => b.intended_usage === 'ask_text_0_markdown') ??
+      withAnswer.find((b) => b.intended_usage === 'ask_text') ??
+      withAnswer[0]
+
+    return preferred?.markdown_block?.answer?.trim() ?? ''
   }
 
   private convertMessagesToMarkdown(messages: ConversationMessage[]): string {
@@ -478,20 +372,3 @@ export class ConversationExtractor {
     return markdown.trim()
   }
 }
-
-type ExtractionErrorInstance = InstanceType<typeof ExtractionError>
-type NavigationErrorInstance = InstanceType<typeof NavigationError>
-type NotFoundErrorInstance = InstanceType<typeof NotFoundError>
-type AuthErrorInstance = InstanceType<typeof AuthError>
-type ServerErrorInstance = InstanceType<typeof ServerError>
-type NoDataErrorInstance = InstanceType<typeof NoDataError>
-type ParsingErrorInstance = InstanceType<typeof ParsingError>
-
-export type ConversationExtractorError =
-  | ExtractionErrorInstance
-  | NavigationErrorInstance
-  | NotFoundErrorInstance
-  | AuthErrorInstance
-  | ServerErrorInstance
-  | NoDataErrorInstance
-  | ParsingErrorInstance
