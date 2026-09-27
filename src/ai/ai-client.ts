@@ -2,8 +2,9 @@ import { errorBus } from '../utils/logging/error-bus.js'
 import { z } from 'zod'
 import { type Config } from '../utils/config.js'
 import { logger } from '../utils/logging/logger.js'
-import { ok, err, from, type Result } from 'super-result'
+import { ok, err, type Result } from 'super-result'
 import { ApiDiagnosticsWriter, zodErrorPaths } from '../utils/logging/api-diagnostics.js'
+import { errorMessageOf } from '../utils/extract-error-message.js'
 
 const embeddingItemSchema = z.object({ embedding: z.array(z.number()) }).passthrough()
 const openAiEmbedFormatSchema = z
@@ -93,7 +94,7 @@ export class AiClient {
     const httpResult = await this.performHttpRequest(baseUrl, endpoint, requestBody)
     if (!httpResult.ok) return httpResult
 
-    return this.parseEmbeddingsFromResponse(httpResult.value)
+    return this.parseEmbeddingsFromResponse(httpResult.value.data, httpResult.value.rawText)
   }
 
   async generate(promptText: string, modelOverride?: string): Promise<Result<string, AiError>> {
@@ -113,13 +114,14 @@ export class AiClient {
       )
       if (!httpResult.ok) return httpResult
 
-      const parseResult = generationResponseSchema.safeParse(httpResult.value)
+      const parseResult = generationResponseSchema.safeParse(httpResult.value.data)
       if (!parseResult.success) {
-        const paths = zodErrorPaths(parseResult)
+        const paths = zodErrorPaths(parseResult, httpResult.value.rawText)
         this.diagnosticsWriter.writeFailure({
           url: `${this.config.ollamaUrl}/api/generate`,
           errorType: 'zod_error',
-          zodErrorPaths: paths,
+          zodErrorDetails: paths,
+          rawResponse: httpResult.value.rawText,
         })
         return err(new AiError(`Invalid AI generate response: ${parseResult.error.message}`))
       }
@@ -137,13 +139,14 @@ export class AiClient {
       const httpResult = await this.performHttpRequest(baseUrl, '/v1/chat/completions', requestBody)
       if (!httpResult.ok) return httpResult
 
-      const parseResult = generationResponseSchema.safeParse(httpResult.value)
+      const parseResult = generationResponseSchema.safeParse(httpResult.value.data)
       if (!parseResult.success) {
-        const paths = zodErrorPaths(parseResult)
+        const paths = zodErrorPaths(parseResult, httpResult.value.rawText)
         this.diagnosticsWriter.writeFailure({
           url: `${baseUrl}/v1/chat/completions`,
           errorType: 'zod_error',
-          zodErrorPaths: paths,
+          zodErrorDetails: paths,
+          rawResponse: httpResult.value.rawText,
         })
         return err(new AiError(`Invalid AI chat response: ${parseResult.error.message}`))
       }
@@ -173,13 +176,14 @@ export class AiClient {
       )
       if (!httpResult.ok) return httpResult
 
-      const parseResult = generationResponseSchema.safeParse(httpResult.value)
+      const parseResult = generationResponseSchema.safeParse(httpResult.value.data)
       if (!parseResult.success) {
-        const paths = zodErrorPaths(parseResult)
+        const paths = zodErrorPaths(parseResult, httpResult.value.rawText)
         this.diagnosticsWriter.writeFailure({
           url: `${this.config.ollamaUrl}/api/generate`,
           errorType: 'zod_error',
-          zodErrorPaths: paths,
+          zodErrorDetails: paths,
+          rawResponse: httpResult.value.rawText,
         })
         return err(new AiError(`Invalid AI generate response: ${parseResult.error.message}`))
       }
@@ -204,13 +208,14 @@ export class AiClient {
       const httpResult = await this.performHttpRequest(baseUrl, '/v1/chat/completions', requestBody)
       if (!httpResult.ok) return httpResult
 
-      const parseResult = generationResponseSchema.safeParse(httpResult.value)
+      const parseResult = generationResponseSchema.safeParse(httpResult.value.data)
       if (!parseResult.success) {
-        const paths = zodErrorPaths(parseResult)
+        const paths = zodErrorPaths(parseResult, httpResult.value.rawText)
         this.diagnosticsWriter.writeFailure({
           url: `${baseUrl}/v1/chat/completions`,
           errorType: 'zod_error',
-          zodErrorPaths: paths,
+          zodErrorDetails: paths,
+          rawResponse: httpResult.value.rawText,
         })
         return err(new AiError(`Invalid AI chat response: ${parseResult.error.message}`))
       }
@@ -247,13 +252,14 @@ export class AiClient {
       )
       if (!httpResult.ok) return httpResult
 
-      const parseResult = generationResponseSchema.safeParse(httpResult.value)
+      const parseResult = generationResponseSchema.safeParse(httpResult.value.data)
       if (!parseResult.success) {
-        const paths = zodErrorPaths(parseResult)
+        const paths = zodErrorPaths(parseResult, httpResult.value.rawText)
         this.diagnosticsWriter.writeFailure({
           url: `${this.config.ollamaUrl}/api/chat`,
           errorType: 'zod_error',
-          zodErrorPaths: paths,
+          zodErrorDetails: paths,
+          rawResponse: httpResult.value.rawText,
         })
         return err(new AiError(`Invalid AI chat response: ${parseResult.error.message}`))
       }
@@ -278,13 +284,14 @@ export class AiClient {
       const httpResult = await this.performHttpRequest(baseUrl, '/v1/chat/completions', requestBody)
       if (!httpResult.ok) return httpResult
 
-      const parseResult = generationResponseSchema.safeParse(httpResult.value)
+      const parseResult = generationResponseSchema.safeParse(httpResult.value.data)
       if (!parseResult.success) {
-        const paths = zodErrorPaths(parseResult)
+        const paths = zodErrorPaths(parseResult, httpResult.value.rawText)
         this.diagnosticsWriter.writeFailure({
           url: `${baseUrl}/v1/chat/completions`,
           errorType: 'zod_error',
-          zodErrorPaths: paths,
+          zodErrorDetails: paths,
+          rawResponse: httpResult.value.rawText,
         })
         return err(new AiError(`Invalid AI chat response: ${parseResult.error.message}`))
       }
@@ -317,7 +324,7 @@ export class AiClient {
     baseUrl: string,
     apiEndpoint: string,
     requestBody: object
-  ): Promise<Result<unknown, AiError>> {
+  ): Promise<Result<{ data: unknown; rawText: string }, AiError>> {
     const sanitizedBaseUrl = baseUrl.replace(/\/\/(.+):(.+)@/, '//<redacted>:<redacted>@')
     const fullRequestUrl = `${sanitizedBaseUrl}${apiEndpoint}`
     const headers: Record<string, string> = { 'Content-Type': 'application/json' }
@@ -326,35 +333,45 @@ export class AiClient {
       headers['Authorization'] = `Bearer ${this.config.aiApiKey}`
     }
 
-    return from(async () => {
+    try {
       const httpResponse = await fetch(fullRequestUrl, {
         method: 'POST',
         headers,
         body: JSON.stringify(requestBody),
       })
 
-      if (!httpResponse.ok) {
-        let rawErrorBody = ''
-        const textResult = await from(() => httpResponse.text())
-        rawErrorBody = textResult.ok ? textResult.value : ''
+      const rawText = await httpResponse.text()
 
+      if (!httpResponse.ok) {
         const safeContext = {
           url: fullRequestUrl,
-          errorBody: rawErrorBody.slice(0, 500),
+          errorBody: rawText.slice(0, 500),
         }
         errorBus.emitError(`AI HTTP ${httpResponse.status}`, undefined, safeContext)
 
-        const errorExcerpt = rawErrorBody.slice(0, 200)
+        const errorExcerpt = rawText.slice(0, 200)
         return err(
           new AiError(`AI request failed with status ${httpResponse.status} – ${errorExcerpt}`)
         )
       }
 
-      return await httpResponse.json()
-    })
+      let data: unknown
+      try {
+        data = JSON.parse(rawText)
+      } catch {
+        data = rawText
+      }
+
+      return ok({ data, rawText })
+    } catch (error) {
+      return err(new AiError(`AI request failed: ${errorMessageOf(error)}`))
+    }
   }
 
-  private parseEmbeddingsFromResponse(responseData: unknown): Result<number[][], AiError> {
+  private parseEmbeddingsFromResponse(
+    responseData: unknown,
+    rawText: string
+  ): Result<number[][], AiError> {
     const openAiParseResult = openAiEmbedFormatSchema.safeParse(responseData)
     if (openAiParseResult.success && openAiParseResult.data.data) {
       return ok(openAiParseResult.data.data.map((item) => item.embedding))
@@ -365,11 +382,12 @@ export class AiClient {
       return ok([legacyParseResult.data.embedding])
     }
 
-    const paths = zodErrorPaths(openAiParseResult)
+    const paths = zodErrorPaths(openAiParseResult, rawText)
     this.diagnosticsWriter.writeFailure({
       url: `${this.config.aiEmbedProvider === 'ollama' ? this.config.ollamaUrl : (this.config.aiBaseUrl ?? this.config.ollamaUrl)}/v1/embeddings`,
       errorType: 'zod_error',
-      zodErrorPaths: paths,
+      zodErrorDetails: paths,
+      rawResponse: rawText,
     })
 
     return err(new AiError('Unexpected response format from AI embeddings endpoint'))

@@ -4,11 +4,12 @@ import { logger } from '../utils/logging/logger.js'
 import { errorMessageOf } from '../utils/extract-error-message.js'
 import { BaseAppError } from '../utils/errors.js'
 import { ok, err, type Result, from } from 'super-result'
-import { ApiDiagnosticsWriter } from '../utils/logging/api-diagnostics.js'
+import { ApiDiagnosticsWriter, zodErrorPaths } from '../utils/logging/api-diagnostics.js'
 import { DEFAULT_API_VERSION } from './api-version.js'
 import { fetchThreadById } from './library-discovery.js'
 import { z } from 'zod'
 import { type Config } from '../utils/config.js'
+import { assertSafeFilename, slugify } from '../utils/shell-safety.js'
 
 // ─── Public types ────────────────────────────────────────────────────────────
 
@@ -25,6 +26,19 @@ export interface ExtractedConversation {
   timestamp: Date
   content: string
   messages: ConversationMessage[]
+
+  /**
+   * Filesystem-safe filename for this conversation. Always derived from
+   * `id` (a UUID), never from `title`. Use this whenever a path is needed.
+   *
+   * The `title` and `content` fields are raw, untrusted strings from the
+   * Perplexity API. Do NOT pass them to:
+   *   - shell commands (exec / execSync / spawn with shell:true)
+   *   - path building (path.join, fs.writeFile with a caller-supplied name)
+   *   - SQL, HTML, YAML, JSON-as-shell-arg, etc.
+   * without escaping for the target context.
+   */
+  safeFilename: string
 }
 
 // ─── Errors ──────────────────────────────────────────────────────────────────
@@ -258,6 +272,12 @@ export class ConversationExtractor {
       logger.warn(
         `Entry validation failed for ${conversationUrl}: ${entriesValidationResult.error.message}`
       )
+      const paths = zodErrorPaths(entriesValidationResult)
+      this.diagnostics.writeFailure({
+        url: conversationUrl,
+        errorType: 'zod_error',
+        zodErrorDetails: paths,
+      })
       return err(new ParsingError('Failed to parse conversation data'))
     }
 
@@ -277,6 +297,9 @@ export class ConversationExtractor {
       return err(new ParsingError('Failed to parse conversation data'))
     }
 
+    const safeFilename = `${conversationId}-${slugify(title)}`
+    assertSafeFilename(safeFilename)
+
     return ok({
       id: conversationId,
       title,
@@ -285,6 +308,7 @@ export class ConversationExtractor {
       content: markdownContent,
       contentHash,
       messages,
+      safeFilename,
     })
   }
 

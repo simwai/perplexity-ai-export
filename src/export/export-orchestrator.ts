@@ -3,7 +3,7 @@ import { writeFileSync, existsSync, mkdirSync, readdirSync, statSync, unlinkSync
 import { pathToFileURL } from 'node:url'
 import { type Config } from '../utils/config.js'
 import type { ExtractedConversation } from '../scraper/conversation-extractor.js'
-import { sanitizeFilename, sanitizeSpaceName } from './sanitizer.js'
+import { slugify } from '../utils/shell-safety.js'
 import { type ExportStrategy } from '../exporters/export.strategy.js'
 import { logger } from '../utils/logging/logger.js'
 import { errorMessageOf } from '../utils/extract-error-message.js'
@@ -95,7 +95,7 @@ export class ExportOrchestrator {
 
     for (const strategy of this.strategies) {
       const outputDir = strategy.outputDir(this.config)
-      const safeSpaceName = sanitizeSpaceName(conversation.spaceName)
+      const safeSpaceName = slugify(conversation.spaceName)
       const spaceSpecificDirectory = join(outputDir, safeSpaceName)
 
       if (!existsSync(spaceSpecificDirectory)) {
@@ -110,8 +110,7 @@ export class ExportOrchestrator {
         }
       }
 
-      const safeFileTitle = sanitizeFilename(conversation.title)
-      const fileName = `${safeFileTitle} (${conversation.id})${strategy.fileExtension}`
+      const fileName = `${conversation.safeFilename}${strategy.fileExtension}`
       const destinationFilePath = join(spaceSpecificDirectory, fileName)
 
       this.cleanupStaleFiles(conversation.id, destinationFilePath, strategy.fileExtension)

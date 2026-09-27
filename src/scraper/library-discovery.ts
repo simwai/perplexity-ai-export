@@ -5,7 +5,7 @@ import { errorMessageOf } from '../utils/extract-error-message.js'
 import { BaseAppError } from '../utils/errors.js'
 import { ok, err, type Result, from } from 'super-result'
 import { z } from 'zod'
-import { ApiDiagnosticsWriter } from '../utils/logging/api-diagnostics.js'
+import { ApiDiagnosticsWriter, zodErrorPaths } from '../utils/logging/api-diagnostics.js'
 
 // ─── Errors ──────────────────────────────────────────────────────────────────
 
@@ -292,11 +292,16 @@ async function fetchThreadBatch(
 
   const validated = z.array(RawThreadSchema).safeParse(parseResult.value)
   if (!validated.success) {
-    const zodErrorPaths = validated.error.issues.map((issue) => issue.path.join('.'))
-    diagnosticsWriter.writeFailure({ url, errorType: 'zod_error', zodErrorPaths })
+    const paths = zodErrorPaths(validated, body) ?? []
+    diagnosticsWriter.writeFailure({
+      url,
+      errorType: 'zod_error',
+      zodErrorDetails: paths,
+      rawResponse: body,
+    })
     return err(
       new ApiError(
-        `list_ask_threads: schema validation failed — paths: ${zodErrorPaths.join(', ')}`
+        `list_ask_threads: schema validation failed — paths: ${paths.map((p: { path: string }) => p.path).join(', ')}`
       )
     )
   }
@@ -361,8 +366,13 @@ async function fetchPinnedThreads(
 
   const validated = z.array(RawThreadSchema).safeParse(parseResult.value)
   if (!validated.success) {
-    const zodErrorPaths = validated.error.issues.map((issue) => issue.path.join('.'))
-    diagnosticsWriter.writeFailure({ url, errorType: 'zod_error', zodErrorPaths })
+    const paths = zodErrorPaths(validated, body)
+    diagnosticsWriter.writeFailure({
+      url,
+      errorType: 'zod_error',
+      zodErrorDetails: paths,
+      rawResponse: body,
+    })
     logger.debug('list_pinned_ask_threads: schema validation failed — skipping pinned')
     return []
   }

@@ -9,7 +9,7 @@ import { ok, err, from, type Result } from 'super-result'
 import { logHttpRequest, logHttpResponse } from '../utils/logging/http-logger.js'
 import { createWaitStrategy } from './wait-strategy.js'
 import { z } from 'zod'
-import { ApiDiagnosticsWriter } from '../utils/logging/api-diagnostics.js'
+import { ApiDiagnosticsWriter, zodErrorPaths } from '../utils/logging/api-diagnostics.js'
 
 const SETTINGS_URL = 'https://www.perplexity.ai/settings'
 const NAVIGATION_TIMEOUT_MS = 15_000
@@ -212,11 +212,11 @@ export class BrowserManager {
             storageState: validated.data,
           })
         } else {
-          const paths = validated.error.issues.map((issue) => issue.path.join('.'))
+          const paths = zodErrorPaths(validated)
           const writeResult = await this.diagnosticsWriter.writeFailure({
             url: this.config.authStoragePath,
             errorType: 'zod_error',
-            zodErrorPaths: paths,
+            zodErrorDetails: paths,
           })
           if (!writeResult.ok) {
             logger.debug(
@@ -427,11 +427,11 @@ export class BrowserManager {
 
       const sessionParsed = AuthSessionSchema.safeParse(parsedResult.value)
       if (!sessionParsed.success) {
-        const paths = sessionParsed.error.issues.map((issue) => issue.path.join('.'))
+        const paths = zodErrorPaths(sessionParsed)
         this.diagnosticsWriter.writeFailure({
           url: '/api/auth/session',
           errorType: 'zod_error',
-          zodErrorPaths: paths,
+          zodErrorDetails: paths,
         })
         return false
       }
