@@ -6,8 +6,8 @@ Set `DEBUG=true` to enable verbose debug logging. When disabled, only warnings a
 
 | File | When it is written | What is logged |
 | --- | --- | --- |
-| `debug/main-log-<timestamp>.txt` | `DEBUG=true` | Main application log, including redacted debug/info/warn/error messages |
-| `debug/http-req-res-log-<timestamp>.txt` | `DEBUG=true` | HTTP request and response metadata for Perplexity API calls; prompt bodies are redacted; sensitive headers/query params are redacted |
+| `logs/main-log-<timestamp>.txt` | `DEBUG=true` | Main application log, including redacted debug/info/warn/error messages |
+| `logs/http-req-res-log-<timestamp>.txt` | `DEBUG=true` | HTTP request and response metadata for Perplexity API calls; prompt bodies are redacted; sensitive headers/query params are redacted |
 | `debug/api-diagnostics.jsonl` | `DEBUG=true` | JSONL entries for unexpected API response shapes and Zod validation failures |
 
 ## VS Code debug workflow
