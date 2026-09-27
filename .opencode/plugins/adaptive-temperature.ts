@@ -98,17 +98,6 @@ export default async (_ctx: any, options?: Record<string, unknown>): Promise<any
           state.topP = clamp(state.topP + args.topPDelta, config.min.topP, config.max.topP)
 
           try {
-            await _ctx.client.tui.showToast({
-              body: {
-                variant: 'info',
-                message: `Feedback applied: ${args.reasoning}\ntemperature: ${prevTemperature.toFixed(2)} -> ${state.temperature.toFixed(2)}\ntopP: ${prevTopP.toFixed(2)} -> ${state.topP.toFixed(2)}`,
-              },
-            })
-          } catch {
-            // tui may not be available
-          }
-
-          try {
             await _ctx.client.app.log({
               body: {
                 service: 'adaptive-temperature',
@@ -139,14 +128,6 @@ export default async (_ctx: any, options?: Record<string, unknown>): Promise<any
       const state = getSessionState(sessionID, config)
 
       const contextPrompt = `[ADAPTIVE FEEDBACK]\nUser feedback: "${feedbackText}"\nCurrent settings: temperature=${state.temperature.toFixed(2)}, topP=${state.topP.toFixed(2)}\n\nInterpret this feedback and call \`apply_feedback\` with appropriate deltas for temperature and topP, plus a brief reasoning. Consider how the current settings relate to the feedback when choosing deltas.`
-
-      try {
-        await _ctx.client.tui.appendPrompt({
-          body: { text: contextPrompt },
-        })
-      } catch {
-        // tui may not be available
-      }
     },
 
     'experimental.chat.system.transform': async (

@@ -141,21 +141,25 @@ Combine all Tier 1 + Tier 2 + Trello blocks above. Omit any Tier 2 servers whose
 
 ---
 
-## Loading the Full Spec
+<HIGH_PRIO>
+!!!
 
-AGENTS.md is the sole entry point. The system lives in `prompt-system/`, which holds the merged Baba system: orchestrator + routing + decision format (00), personas (01), output contracts + state schema (03), review rubrics (04), implementation style (05), operational protocol + commit/push gate (06), cross-cutting protocol (07), Plan-Versus-Actual Gate (08).
+## Loading the Full Spec (MANDATORY — immediate, before any other action)
 
-**On startup (MANDATORY - no exceptions):**
+AGENTS.md is the sole entry point. The system lives in `prompt-system/`.
 
-1. Read `AGENTS.md` (this file).
-2. Discover all system files by running `ls prompt-system/*.md` (or `rg -l '^\s*-\s+\`prompt-system/' prompt-system/00-system.md`).
-3. Read `prompt-system/00-system.md` — it contains the authoritative `## Load order` listing every system file to load.
-4. Read every file in `00-system.md`'s `## Load order` in full, in order. No file is hard-coded here — the load order in `00-system.md` is the single source of truth.
+**Immediately after reading this file (no exceptions):**
 
-**All discovered files must be read in full before ANY other action.** This is not optional, not conditional on phase or persona. The STARTUP phase in `00-system.md` enforces this with a hard guard: if STARTUP is not complete, any response in any other phase is a protocol breach.
+1. Read `AGENTS.md` in full with NO chunking — single read, largest window.
+2. Discover all system files: `ls prompt-system/*.md`.
+3. Read `prompt-system/00-system.md` — it contains the authoritative `## Load order`.
+4. Load every file in that load order in full with NO chunking.
+5. **Emit the bootstrap fingerprint**:
+   ```
+   AGENTS.md fingerprint: <line_count> lines, first_100_chars="<first 100 chars>", last_100_chars="<last 100 chars>", sha256_first_1kb="<hash or N/A>"
+   ```
+6. **Record completion** in session state `## Startup Verification` (or conversation carrier on READ_ONLY).
 
-The full load graph is flat and a star: `00-system.md` is the hub and references every other system file by path; each system file is a leaf with zero cross-references to other system files. There are no cycles.
-
-On opencode, the system files are pinned via `instructions` in `opencode.jsonc`, so loading is deterministic there. Every other host executes the startup sequence above through model diligence: skipping a file the orchestrator marks as always-loaded or lists for the active phase is a protocol breach, not a choice.
-
-On hosts confirmed read-only, the fileless-mode rules in `prompt-system/00-system.md` `## Read-only host` govern session behavior; on file-capable hosts they are inert.
+**All files must be read in full before ANY other action.** This is not optional, not conditional. Skipping any file is a protocol breach. If loading is incomplete, the agent must not proceed — output `BLOCKED` with reason "STARTUP incomplete".
+***
+</HIGH_PRIO>

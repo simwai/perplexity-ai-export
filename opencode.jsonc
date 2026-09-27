@@ -1,7 +1,7 @@
 ﻿{
-  // opencode-native config for the Baba prompt system.
-  // Inert for other agents — AGENTS.md + prompt-system/
-  // remain the portable copy-paste unit. This file only affects opencode.
+// opencode-native config for the Baba prompt system.
+// Inert for other agents — AGENTS.md + prompt-system/
+// remain the portable copy-paste unit. This file only affects opencode.
   "$schema": "https://opencode.ai/config.json",
 
   // Guarantees the system core is in every opencode session without relying
@@ -22,7 +22,7 @@
     "prompt-system/05-impl-style.md",
     "prompt-system/06-misc.md",
     "prompt-system/07-protocols.md",
-    "prompt-system/08-plan-actual-gate.md",
+    "prompt-system/08-plan-actual-gate.md"
   ],
 
   // Prefer the read-only BabaSensei planning path by default. The native Build
@@ -35,15 +35,16 @@
   // instead of auto-approving under permissive setups. Guards credit burn on
   // loop-prone models (Grok-class). See prompt-system/00-system.md ## Loop protection.
   "permission": {
-    "doom_loop": "deny",
+    "doom_loop": "deny"
   },
 
   // opencode plugins. @latest is fine for personal/dev use; pin a version
   // when reproducibility matters.
-  "plugin": [
+"plugin": [
     "opencode-vibeguard@latest",
     "opencode-adaptive-thinking@latest",
     "opencode-pty",
+    "opencode-scheduler",
     ".opencode/plugins/baba-startup-gate.ts",
     ".opencode/plugins/baba-reading-protocol.ts",
     ".opencode/plugins/baba-protocol-enforce.ts",
@@ -56,7 +57,7 @@
     ".opencode/plugins/baba-drift.ts",
     ".opencode/plugins/baba-lock-enforce.ts",
     ".opencode/plugins/adaptive-temperature.ts",
-    ".opencode/plugins/multi-model-consensus.ts",
+    ".opencode/plugins/multi-model-consensus.ts"
   ],
 
   // MCP servers mirror the fallback tiers in AGENTS.md, adapted to opencode's
@@ -66,36 +67,36 @@
     // Tier 1 — no keys required
     "context7": {
       "type": "remote",
-      "url": "https://mcp.context7.com/mcp",
+      "url": "https://mcp.context7.com/mcp"
     },
     "playwright": {
       "type": "local",
       "command": ["npx", "-y", "@playwright/mcp@0.0.80"],
-      "timeout": 30000,
+      "timeout": 30000
     },
     "playwright-headless": {
       "type": "local",
-      "command": ["npx", "-y", "@playwright/mcp@0.0.80", "--headless"],
+      "command": ["npx", "-y", "@playwright/mcp@0.0.80", "--headless"]
     },
     "g-search": {
       "type": "local",
-      "command": ["npx", "-y", "g-search-mcp"],
+      "command": ["npx", "-y", "g-search-mcp"]
     },
     "arxiv": {
       "type": "local",
-      "command": ["uvx", "arxiv-mcp-server"],
+      "command": ["uvx", "arxiv-mcp-server"]
     },
     // Tier 2 — requires env key; omit if key is not set
     "exa": {
       "type": "remote",
       "url": "https://mcp.exa.ai/mcp",
-      "headers": { "x-api-key": "{env:EXA_API_KEY}" },
+      "headers": { "x-api-key": "{env:EXA_API_KEY}" }
     },
     // Remote OAuth — no key, one-time browser consent via `opencode mcp auth trello`
     "trello": {
       "type": "remote",
       "url": "https://mcp.trello.com/v1",
-      "oauth": {},
-    },
-  },
+      "oauth": {}
+    }
+  }
 }

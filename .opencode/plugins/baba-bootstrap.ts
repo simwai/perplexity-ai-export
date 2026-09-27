@@ -2,7 +2,7 @@
  * Auto-First-Message Plugin for opencode
  *
  * Automatically sends a first message at the start of every new session/conversation
- * reminding the agent to read AGENTS.md and BOOTSTRAP.md and follow instructions 1:1.
+ * reminding the agent to read AGENTS.md and follow instructions 1:1.
  */
 
 const FIRST_MESSAGE = `# Session Start Reminder
@@ -10,8 +10,7 @@ const FIRST_MESSAGE = `# Session Start Reminder
 Before you do anything else, you MUST:
 
 1. **Read AGENTS.md in full** -- This is the sole entry point for the Baba prompt system
-2. **Read BOOTSTRAP.md in full** -- Contains deployment and setup instructions
-3. **Follow all instructions 1:1** -- No deviations, no shortcuts
+2. **Follow all instructions 1:1** -- No deviations, no shortcuts
 
 The system will not function correctly if you skip this step. The STARTUP phase in 00-system.md requires you to:
 - Read prompt-system/00-system.md in full (no chunking)
@@ -36,21 +35,9 @@ export default async ({
 }) => {
   return {
     event: async ({ event }: { event: any }) => {
-      // Session created - send initial reminder message
+      // Session created - initialize state silently
       if (event.type === 'session.created') {
         const sessionID = event.properties.sessionID
-
-        try {
-          await client.tui.showToast({
-            body: {
-              variant: 'warning',
-              message:
-                'Read AGENTS.md & BOOTSTRAP.md First: Follow all instructions 1:1 before responding',
-            },
-          })
-        } catch {
-          // tui may not be available
-        }
         return
       }
     },

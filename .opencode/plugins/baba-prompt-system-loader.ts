@@ -2,7 +2,7 @@
  * Prompt System Loader Plugin for opencode
  *
  * Tracks which prompt-system/*.md files have been loaded this session
- * and injects a system reminder when the full set has not been read
+ * and blocks assistant output until the full set has been read
  * before entering a new phase.
  *
  * The required file set is discovered from the filesystem at session
@@ -137,12 +137,23 @@ export default async ({
 
       if (missing.length > 0) {
         const list = missing.map((f) => `- ${f}`).join('\n')
-        const content =
+        const blockingContent =
           `PROMPT SYSTEM LOADER: The full prompt system has not been loaded this session.\n` +
           `Missing files:\n${list}\n` +
-          `Read them before producing ${detectedPhase} output.`
+          `Assistant output for [PHASE: ${detectedPhase}] is held until all required files are loaded. Please read the missing files first.`
 
-        console.log(`[prompt-system-loader] Missing files for ${detectedPhase}:\n${list}`)
+        if (lastMessage.role === 'assistant') {
+          lastMessage.parts = [{ type: 'text', text: blockingContent }]
+        } else {
+          messages.push({
+            role: 'system',
+            parts: [{ type: 'text', text: blockingContent }],
+          })
+        }
+
+        console.log(
+          `[prompt-system-loader] BLOCKING output for ${detectedPhase} due to missing files:\n${list}`
+        )
       }
 
       state.lastNotifiedPhase = detectedPhase

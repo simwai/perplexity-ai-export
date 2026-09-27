@@ -835,6 +835,86 @@ export async function findDuplicateFull(db: Client, content: string): Promise<nu
   return asNumber(found.rows[0]?.['id'])
 }
 
+export async function sweepGrounds(db: Client, changedGrounds: string[]): Promise<number> {
+  if (changedGrounds.length === 0) return 0
+
+  const placeholders = changedGrounds.map(() => '?').join(', ')
+  const groundRows = await db.execute({
+    sql: `SELECT DISTINCT g.memory_id AS memory_id FROM ground g JOIN ground_kind gk ON g.ground_kind_id = gk.id WHERE g.value IN (${placeholders}) OR gk.name IN (${placeholders})`,
+    args: [...changedGrounds, ...changedGrounds],
+  })
+
+  if (groundRows.rows.length === 0) return 0
+
+  const memoryIds = groundRows.rows.map((row) => asNumber(row['memory_id']))
+  if (memoryIds.length === 0) return 0
+
+  const statusId = await lookupId(db, 'memory_status', 'invalidated')
+  const now = epochInt()
+
+  const writes: Array<{ sql: string; args: Array<string | number | null> }> = []
+  for (const memoryId of memoryIds) {
+    writes.push({
+      sql: `UPDATE memory SET status_id = ?, updated_at = ? WHERE id = ?`,
+      args: [statusId, now, memoryId],
+    })
+  }
+  await db.batch(writes, 'write')
+  return memoryIds.length
+}
+
+export function previewParameterChange(
+  key: string,
+  proposedValue: string,
+  currentParams: Record<string, string>
+): PreviewResult {
+  const current = currentParams[key]
+  const num = Number(proposedValue)
+
+  switch (key) {
+    case 'trust_q': {
+      if (!Number.isFinite(num) || num < 0 || num > 1)
+        return { ok: false, error: 'trust_q must be between 0 and 1' }
+      const doubt = Number(currentParams['doubt_q'] ?? DEFAULT_TUNING_PARAMS.doubt_quantile)
+      if (num < doubt) return { ok: false, error: 'trust_q must be >= doubt_q' }
+      return { ok: true, previous: current }
+    }
+    case 'doubt_q': {
+      if (!Number.isFinite(num) || num < 0 || num > 1)
+        return { ok: false, error: 'doubt_q must be between 0 and 1' }
+      const trust = Number(currentParams['trust_q'] ?? DEFAULT_TUNING_PARAMS.trust_quantile)
+      if (trust < num) return { ok: false, error: 'doubt_q must be <= trust_q' }
+      return { ok: true, previous: current }
+    }
+    case 'min_evidence': {
+      if (!Number.isInteger(num) || num < 1)
+        return { ok: false, error: 'min_evidence must be a positive integer' }
+      return { ok: true, previous: current }
+    }
+    case 'decay_rate': {
+      if (!Number.isFinite(num) || num <= 0 || num > 1)
+        return { ok: false, error: 'decay_rate must be between 0 and 1' }
+      return { ok: true, previous: current }
+    }
+    case 'active_partition': {
+      if (!proposedValue.trim()) return { ok: false, error: 'active_partition cannot be empty' }
+      return { ok: true, previous: current }
+    }
+    case 'tune_interval': {
+      if (!Number.isInteger(num) || num < 1)
+        return { ok: false, error: 'tune_interval must be a positive integer' }
+      return { ok: true, previous: current }
+    }
+    case 'window_size': {
+      if (!Number.isInteger(num) || num < 1)
+        return { ok: false, error: 'window_size must be a positive integer' }
+      return { ok: true, previous: current }
+    }
+    default:
+      return { ok: true, previous: current }
+  }
+}
+
 export async function updateMemoryFull(
   db: Client,
   id: number,
@@ -876,88 +956,4 @@ export async function updateMemoryFull(
   }
   const check = await db.execute({ sql: `SELECT id FROM memory WHERE id = ?`, args: [id] })
   return check.rows.length > 0
-}
-
-export async function sweepGrounds(db: Client, changed: ReadonlyArray<string>): Promise<number> {
-  if (changed.length === 0) return 0
-  const invalidatedId = await lookupId(db, 'memory_status', 'invalidated')
-  const kinds = await db.execute({
-    sql: `SELECT id, name FROM ground_kind WHERE name IN ('symbol', 'git_ref')`,
-    args: [],
-  })
-  const kindIds: number[] = []
-  for (const row of kinds.rows) {
-    kindIds.push(asNumber(row['id']))
-  }
-  if (kindIds.length === 0) return 0
-  const kindPlaceholders = kindIds.map(() => '?').join(', ')
-  const activeId = await lookupId(db, 'memory_status', 'active')
-  let affected = 0
-  for (const symbol of changed) {
-    const scanned = await db.execute({
-      sql: `SELECT COUNT(DISTINCT memory_id) AS cnt FROM ground g JOIN memory m ON m.id = g.memory_id WHERE g.value = ? AND g.ground_kind_id IN (${kindPlaceholders}) AND m.status_id = ?`,
-      args: [symbol, ...kindIds, activeId],
-    })
-    affected += asNumber(scanned.rows[0]?.['cnt'])
-    await db.execute({
-      sql: `UPDATE memory SET status_id = ?, updated_at = ? WHERE id IN (SELECT memory_id FROM ground WHERE value = ? AND ground_kind_id IN (${kindPlaceholders}))`,
-      args: [invalidatedId, epochInt(), symbol, ...kindIds],
-    })
-  }
-  return affected
-}
-
-export interface KnobRange {
-  type: 'float01' | 'int' | 'task'
-}
-
-export const KNOB_RANGES: Record<string, KnobRange> = {
-  trust_q: { type: 'float01' },
-  doubt_q: { type: 'float01' },
-  min_evidence: { type: 'int' },
-  window_size: { type: 'int' },
-  tune_interval: { type: 'int' },
-  active_partition: { type: 'task' },
-}
-
-export function previewParameterChange(
-  knob: string,
-  value: string,
-  current: Record<string, string>
-): { ok: boolean; error?: string; previous?: string } {
-  const range = KNOB_RANGES[knob]
-  if (!range) return { ok: false, error: `unknown knob "${knob}"` }
-  const trimmed = value.trim()
-  const previous = current[knob]
-  switch (range.type) {
-    case 'float01': {
-      const numeric = Number(trimmed)
-      if (!Number.isFinite(numeric) || numeric <= 0 || numeric >= 1) {
-        return { ok: false, error: `${knob} must be between 0 and 1 (exclusive)` }
-      }
-      if (knob === 'trust_q' && numeric <= Number(current['doubt_q'] ?? 0.3)) {
-        return {
-          ok: false,
-          error: `trust_q (${numeric}) must exceed doubt_q (${current['doubt_q'] ?? 0.3})`,
-        }
-      }
-      if (knob === 'doubt_q' && numeric >= Number(current['trust_q'] ?? 0.7)) {
-        return {
-          ok: false,
-          error: `doubt_q (${numeric}) must stay below trust_q (${current['trust_q'] ?? 0.7})`,
-        }
-      }
-      return { ok: true, previous }
-    }
-    case 'int': {
-      const numeric = Number(trimmed)
-      if (!Number.isInteger(numeric) || numeric < 1) {
-        return { ok: false, error: `${knob} must be a positive integer` }
-      }
-      return { ok: true, previous }
-    }
-    case 'task':
-      if (!trimmed) return { ok: false, error: 'active_partition requires a non-empty name' }
-      return { ok: true, previous }
-  }
 }

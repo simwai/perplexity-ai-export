@@ -351,53 +351,6 @@ Allowed next move:
 - Approve spec -> enter CHECKLIST (or hand back to TASK_PLAN for task updates)
 ```
 
-## `BOOTSTRAP` template
-
-```txt
-[PHASE: BOOTSTRAP]
-
-# For the human
-[2-4 plain-language sentences: what was analyzed, how many specs generated, and the next step]
-
-# For the agent
-
-# Bootstrap Report
-Target: [repository path]
-Scope: [full|partial|domain-filter]
-
-## Analysis Summary
-Project type: [Node.js/Python/Go/Rust/Cloudflare Workers/other]
-Framework: [Express/FastAPI/Next.js/Wrangler/other]
-Architecture: [REST/GraphQL/CLI/Workers/library]
-Entry points found: [N] -- [list: main.ts, server.ts, worker.ts, etc.]
-
-## Generated Specs
-L1 Concept Specs: [N]
-- [FEATURE_NAME] -- [one-line description] -- Status: Draft
-- ...
-
-L2 Implementation Specs: [N]
-- [FEATURE_NAME] -- Implements: [L1-id] -- Status: Draft
-- ...
-
-## Registry Updates
-SPECS/INDEX.md: [N] new rows appended (all status=Draft)
-
-## Reading Verification
-Planned: N | Completed: M | Status: [complete | incomplete]
-Pending: [specific file paths or "none"]
-
-## Quality Gates
-- Artifact exclusion applied: [yes/no] -- [test files, generated code, vendor excluded]
-- Clustering threshold met: [yes/no] -- [min cohesion score]
-- NEEDS CLARIFICATION markers: [N] -- [list if any]
-
-Allowed next move:
-- Enter SPEC phase to review generated Draft specs
-- Re-run bootstrap with a focused domain filter
-- Abort (specs remain as phase output, not written to disk)
-```
-
 ## `DOCS` template
 
 ```txt
@@ -808,26 +761,22 @@ Gate result: ALL PASS required. Any FAIL -> return to PLAN.
 [PHASE: DRIFT]
 
 # Drift Report
-Spec: [SPECS/FEATURE_NAME.md] -- [version] -- [status]
-Mode: [standard|auto-fix] -- [auto-fix selected via DRIFT mitigation choice]
+Spec: [SPECS/NNN-name/spec.md] -- [version] -- [status]
 Registry check: [match | HALT] -- [registry version vs header version]
 
 Verified claims:
 - [claim id] -- [code location]
 
 Diverged claims:
-- [claim id] -- [code location] -- [expected vs actual] -- [classification: trivial|structural]
+- [claim id] -- [code location] -- [expected vs actual]
   - Mitigations:
-    - A. [auto-fix: generate patch for trivial divergence] (Recommended) -- [only when classification=trivial]
+    - A. [apply: update code to match the spec] (Recommended)
       - Pros: [one line]
       - Cons: [one line]
-    - B. [apply: update code to match the spec]
+    - B. [sync: human picks which side wins]
       - Pros: [one line]
       - Cons: [one line]
-    - C. [sync: human picks which side wins]
-      - Pros: [one line]
-      - Cons: [one line]
-    - D. [extract: spec needs a new claim] (omit when not viable)
+    - C. [extract: spec needs a new claim] (omit when not viable)
       - Pros: [one line]
       - Cons: [one line]
 
@@ -860,7 +809,6 @@ Fresh-eyes review (when requested):
 
 Exit:
 - Clean -> [prior phase]
-- Auto-fix confirmed -> PLAN (auto-fix patches flow through PATCH with full verification)
 - Findings requiring writes -> PLAN (drift_findings and spec_version travel via handoff contract)
 ```
 
@@ -1041,13 +989,6 @@ plan_actual_history: [list of (timestamp, items, verdict) tuples]
 prior_phase: [phase or n/a]
 spec_version: [x.y.z or n/a]
 
-## Bootstrap State
-
-bootstrap_specs_generated: [N]
-bootstrap_l1_specs: [list of FEATURE_NAMES]
-bootstrap_l2_specs: [list of FEATURE_NAMES with Implements refs]
-bootstrap_clarifications: [N] -- [list of NEEDS CLARIFICATION items]
-
 ## Phase Status
 
 phase_status: {sensei: [phase|n/a], tester: [phase|n/a], dev: [phase|n/a], merge: [pending|complete|n/a]}
@@ -1135,10 +1076,8 @@ Read the session state file `SESSION_STATE-<session_id>.md` and assess:
 5. Findings: confirmed vs disputed, mitigation choices, pending items
 6. Bug fix quality: regression tests added, baseline/post-fix results
 7. Drift: diverged claims, orphaned mappings, code-exceeds-spec
-8. Bootstrap: specs generated (L1/L2), clarifications, promotion rate
-9. Auto-fix: attempts, successes, escalations to PLAN
-10. Key decisions: A/B/C/skip/accept distribution, time-to-decision
-11. Lessons: what slowed the session, what worked well
+8. Key decisions: A/B/C/skip/accept distribution, time-to-decision
+9. Lessons: what slowed the session, what worked well
 
 Output format:
 - Verdict: PASS (session completed cleanly) | FAIL (session had significant protocol or quality issues) | SKIPPED (trivial session, no evaluation warranted)

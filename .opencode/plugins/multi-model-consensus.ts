@@ -54,13 +54,7 @@ function judgeMerge(prompt: string, a: string, b: string): Promise<string> {
 }
 
 async function notify(_ctx: any, message: string): Promise<void> {
-  try {
-    await _ctx.client.tui.showToast({
-      body: { variant: 'info', message },
-    })
-  } catch {
-    // tui may not be available
-  }
+  // TUI notifications removed; no-op.
 }
 
 export default async (_ctx: any): Promise<any> => {

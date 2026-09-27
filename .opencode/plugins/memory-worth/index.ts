@@ -1,4 +1,3 @@
-import type { Plugin } from '@opencode-ai/plugin'
 import { createConnection, getDbPath } from './db/connection.js'
 import { buildInjectionTexts } from './hooks/chat-message.js'
 import { buildCompactionContext } from './hooks/compacting.js'
@@ -30,7 +29,7 @@ function readSessionId(properties: unknown): string | undefined {
 
 const injectedSessions = new Set<string>()
 
-const MemoryWorthPlugin: Plugin = async ({ client, directory }) => {
+const MemoryWorthPlugin = async ({ client, directory }) => {
   const db = await createConnection(directory)
   const runtime = IS_BUN ? 'bun' : 'node'
   const logged = await fromAsync(() =>
