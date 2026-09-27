@@ -689,3 +689,103 @@ The tension between "feels at home on the platform" and "couldn't be mistaken fo
 - Indexes: every foreign key, every column referenced in `WHERE` for non-trivial queries, every column used in `ORDER BY` for sort. Every foreign key must have an explicit index. Add indexes for `WHERE`, `JOIN`, `ORDER BY`, `GROUP BY` columns on tables over ~1k rows.
 - Queries: parameterized only; no string concatenation; `EXPLAIN ANALYZE` reviewed for queries over 100ms.
 - Transactions: every multi-statement write wraps in a transaction; isolation level chosen explicitly, not defaulted. Neither SQLite nor Postgres supports unsigned integers natively - use `CHECK (col >= 0)` for non-negative constraints.
+
+## Documentation Style
+
+Documentation conventions for all `.md` files in `docs/`. These are enforced via `STYLE_POLICY.md` and the pre-commit hook.
+
+### File Naming
+
+All documentation files in `docs/` use **UPPER_SNAKE_CASE** with `.md` extension.
+
+- File names must be all uppercase with underscores separating words
+- Every file ends with `.md`
+- Acronyms stay uppercase (e.g., `TRELLO_INTEGRATION.md`, not `Trello_Integration.md`)
+- The `project-management/` root directory retains kebab-case for backward compatibility
+
+### Glossary
+
+The canonical glossary lives at **`docs/GLOSSARY.md`**. Maintained manually; updated when new terminology enters the system.
+
+### Auto-Generated Table of Contents
+
+TOCs are automatically generated via the `markdown-toc` pre-commit hook.
+
+- **Coverage**: All `docs/**/*.md` files
+- **Excluded**: `docs/GLOSSARY.md` and `docs/REFERENCE/` (manually maintained)
+- **Depth**: Up to 3 heading levels (`--maxdepth=3`)
+- **First H1**: Not used as TOC anchor (`--no-first-h1`)
+- **Runs**: On every `git commit` via pre-commit
+
+### Mermaid Diagrams
+
+All diagrams use **GitHub-flavored Mermaid** syntax inside fenced code blocks.
+
+- Every mermaid block starts with `%%{init: {'theme': 'dark'}}%%`
+- **Primary color**: `#6B21A8` (Dark Purple)
+- **Accent color**: `#06B6D4` (Cyan)
+- **Background**: Dark transparent (GitHub dark mode renders automatically)
+- Use `graph TD` (top-down) or `graph LR` (left-to-right) as appropriate
+- Colors applied via `style` or `classDef` when needed:
+  ```mermaid
+  %%{init: {'theme': 'dark'}}%%
+  classDef purple fill:#6B21A8,stroke:#7C3AED,color:#fff;
+  classDef cyan fill:#06B6D4,stroke:#22D3EE,color:#000;
+  ```
+
+### SVG Images
+
+SVG images follow a **dark purple + cyan cyberpunk** aesthetic.
+
+| Role | Color | Hex |
+|---|---|---|
+| Primary | Dark Purple | `#6B21A8` |
+| Primary Light | Purple | `#7C3AED` |
+| Accent | Cyan | `#06B6D4` |
+| Accent Light | Cyan Light | `#22D3EE` |
+| Background | Dark | `#0F0A1A` |
+| Text | Light | `#E2E8F0` |
+| Border | Purple Dim | `#4C1D95` |
+
+- All SVG files use the dark purple + cyan palette
+- Background is dark (`#0F0A1A` or transparent)
+- Strokes and fills use the palette colors above
+- Text uses light color (`#E2E8F0`) for contrast
+- SVGs should be self-contained (no external dependencies)
+
+### Markdown Linting
+
+All `.md` files are linted via `.markdownlint.jsonc`.
+
+| Rule | Setting | Purpose |
+|---|---|---|
+| MD013 | `line_length: 1000` | Long lines allowed for code blocks |
+| MD041 | `false` | First heading can be after frontmatter/tags |
+| MD024 | `siblings_only: true` | Duplicate headings allowed across sections |
+| MD033 | `false` | Inline HTML tags allowed (protocol markers) |
+| MD060 | `false` | Table column alignment not enforced |
+| MD012 | `false` | Multiple blank lines at EOF allowed |
+
+### Directory Structure
+
+```text
+docs/
+├── GLOSSARY.md              # Terminology reference
+├── ARCHITECTURE.md          # System architecture overview
+├── QUICKSTART.md            # Getting started guide
+├── PROJECT_MANAGEMENT/      # Project management docs (UPPER_SNAKE_CASE)
+│   ├── TRELLO_INTEGRATION.md
+│   ├── ROADMAPS.md
+│   └── SPRINTS.md
+├── REFERENCE/               # Reference docs (manually maintained)
+│   ├── RULES.md
+│   ├── RUBRICS.md
+│   └── PROTOCOLS.md
+├── USER_GUIDE/              # User guides
+│   ├── GETTING_STARTED.md
+│   ├── PHASES.md
+│   └── PERSONAS.md
+└── DOCUMENTATION_STYLE.md   # This file
+```
+
+> 📝 **Note**: `STYLE_POLICY.md` carries the machine-readable frontmatter fields (`doc_naming`, `doc_toc`, `doc_glossary`, `doc_mermaid_theme`, `doc_svg_style`) that the agent reads on every PATCH. This section is the human-readable reference.
