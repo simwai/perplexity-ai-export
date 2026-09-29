@@ -74,7 +74,16 @@ const subtaskResults = new Map<string, Map<string, unknown>>()
 const pendingStackedPromptResponse = new Set<string>()
 const pendingPromptReturn = new Map<string, string>()
 
-const BABA_AGENTS = ['baba-sensei', 'baba-dev', 'baba-tester', 'baba-reviewer', 'baba-scrum']
+const BABA_AGENTS = [
+  'baba-sensei',
+  'baba-dev',
+  'baba-tester',
+  'baba-reviewer',
+  'baba-scrum',
+  'baba-designer',
+  'explore',
+  'general',
+]
 
 // ============================================================================
 // Helpers
