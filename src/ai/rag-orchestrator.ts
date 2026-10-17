@@ -99,7 +99,7 @@ export class RagOrchestrator {
       this.diagnosticsWriter.writeFailure({
         url: `rag://${context}`,
         errorType: 'zod_error',
-        zodErrorPaths: paths,
+        zodErrorDetails: paths,
       })
     }
     return result.success ? result.data : defaultValue
@@ -567,7 +567,7 @@ Return JSON array: [{"fact": "...", "node_id": N}]
           this.diagnosticsWriter.writeFailure({
             url: 'rag://extract-facts',
             errorType: 'zod_error',
-            zodErrorPaths: paths,
+            zodErrorDetails: paths,
           })
           continue
         }

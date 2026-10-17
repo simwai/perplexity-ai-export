@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import type { Request, Response } from '@playwright/test'
 import { from } from 'super-result'
 import { z } from 'zod'
-import { ApiDiagnosticsWriter } from './api-diagnostics.js'
+import { ApiDiagnosticsWriter, zodErrorPaths } from './api-diagnostics.js'
 import { LOGS_DIRECTORY, LOG_FILE_TIMESTAMP } from '../log-constants.js'
 
 const SENSITIVE_KEY_PATTERN =
@@ -62,11 +62,11 @@ function isPromptRequest(url: string, postData: string | null, debug = false): b
         }
       } else {
         const writer = new ApiDiagnosticsWriter({ debug })
-        const paths = validated.error.issues.map((issue) => issue.path.join('.'))
+        const paths = zodErrorPaths(validated)
         writer.writeFailure({
           url,
           errorType: 'zod_error',
-          zodErrorPaths: paths,
+          zodErrorDetails: paths,
         })
       }
     }

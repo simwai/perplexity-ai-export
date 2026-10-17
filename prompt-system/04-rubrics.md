@@ -1,8 +1,8 @@
 # 04-rubrics
 
-Hard-tier (H1-H12) and soft-tier (S1-S20) review rubrics. Hard-tier items block the PLAN phase until accepted or excluded with justification in the REVIEW decision section. Soft-tier items are quality concerns; flag and discuss, do not hard-block.
+Hard-tier (H1-H12 and H13-H40) and soft-tier (S1-S20) review rubrics. Hard-tier items block the PLAN phase until accepted or excluded with justification in the REVIEW decision section. Soft-tier items are quality concerns; flag and discuss, do not hard-block.
 
-## Hard tier (H1-H12) <HIGH_PRIO>
+## Hard tier (H1-H12 and H13-H40) <HIGH_PRIO>
 
 **H1 -- Security: credentials, tokens, secrets in code or logs.** A credential-bearing file (`.env`, `.env.*`, `secrets/`, `*.pem`, `*.key`) read with the read tool, or its raw contents in the transcript, is a confirmed H1 breach.
 
@@ -28,59 +28,61 @@ Hard-tier (H1-H12) and soft-tier (S1-S20) review rubrics. Hard-tier items block 
 
 **H12 -- Idiom consistency: a change introduces an error-handling or style idiom that conflicts with the dominating pattern of the file or codebase** (e.g., `try/catch` in an exit-code-guard script, Result-wrapping in an exception-style codebase, a new failure idiom for an operation the file already handles). Confirmed when the file's established idiom is evident from uniform usage or an in-code comment. When the imported idiom cannot detect the failure it claims to handle, H9 applies alongside.
 
-**H13 -- No Duplication: fix introduces logic duplicated from an existing utility/helper/validator.** See `rules.md` H13 for detection, auto-exception, and scope. System-triggered: fires when `system_evidence.existing_utilities` contains a utility matching the new code pattern.
+**H13 -- Incomplete reading: analysis output emitted without completing the Reading Plan for the current scope.** Applies to any analysis output in any phase (REVIEW findings, PLAN proposals, DOCS judgments, DISCUSS conclusions). The Reading Verification section must show 100% completion. An incomplete Reading Plan produces a BLOCKED response, not analysis. Partial scope requires explicit user approval recorded in the session state before analysis may proceed.
 
-**H14 -- Library-First: fix hand-rolls logic that a maintained library already solves.** See `rules.md` H14 for detection, auto-exception, and scope. System-triggered: fires when `system_evidence.available_libraries` contains a library for the problem domain and the hand-rolled code exceeds the threshold.
+**H14 -- No Duplication: fix introduces logic duplicated from an existing utility/helper/validator.** See `rules.md` H14 for detection, auto-exception, and scope. System-triggered: fires when `system_evidence.existing_utilities` contains a utility matching the new code pattern.
 
-**H15 -- Ownership Routing: fix bypasses the architectural owner of the concern.** See `rules.md` H15 for detection, auto-exception, and scope. System-triggered: fires when the patch does not call the module identified as `pattern_owner` in `system_evidence`.
+**H15 -- Library-First: fix hand-rolls logic that a maintained library already solves.** See `rules.md` H15 for detection, auto-exception, and scope. System-triggered: fires when `system_evidence.available_libraries` contains a library for the problem domain and the hand-rolled code exceeds the threshold.
 
-**H16 -- Layer Discipline: fix violates architectural layer boundaries.** See `rules.md` H16 for detection, auto-exception, and scope. System-triggered: fires when the target file's layer classification identifies a forbidden pattern in the new code.
+**H16 -- Ownership Routing: fix bypasses the architectural owner of the concern.** See `rules.md` H16 for detection, auto-exception, and scope. System-triggered: fires when the patch does not call the module identified as `pattern_owner` in `system_evidence`.
 
-**H17 -- No Single-Use Abstraction: fix creates a new function/class/module with <=1 caller.** See `rules.md` H17 for detection, auto-exception, and scope. System-triggered: fires when a new symbol added by the fix has <=1 caller outside its defining file.
+**H17 -- Layer Discipline: fix violates architectural layer boundaries.** See `rules.md` H17 for detection, auto-exception, and scope. System-triggered: fires when the target file's layer classification identifies a forbidden pattern in the new code.
 
-**H18 -- Dominant Idiom Enforcement: fix introduces a new pattern when a dominant pattern exists with high confidence.** See `rules.md` H18 for detection, auto-exception, and scope. System-triggered: fires when `system_evidence.dominant_idiom` exists with high confidence and the fix's idiom differs.
+**H18 -- No Single-Use Abstraction: fix creates a new function/class/module with <=1 caller.** See `rules.md` H18 for detection, auto-exception, and scope. System-triggered: fires when a new symbol added by the fix has <=1 caller outside its defining file.
 
-**H19 -- No Over-Engineering: fix creates unnecessary abstraction layers.** See `rules.md` H19 for detection, auto-exception, and scope. System-triggered: fires when abstraction layers added > 1 AND callers < 3.
+**H19 -- Dominant Idiom Enforcement: fix introduces a new pattern when a dominant pattern exists with high confidence.** See `rules.md` H19 for detection, auto-exception, and scope. System-triggered: fires when `system_evidence.dominant_idiom` exists with high confidence and the fix's idiom differs.
 
-**H20 -- Composition Over Inheritance: fix uses class inheritance when composition is dominant in the layer.** See `rules.md` H20 for detection, auto-exception, and scope. System-triggered: fires when composition usage > 60% in the layer AND fix uses `extends`.
+**H20 -- No Over-Engineering: fix creates unnecessary abstraction layers.** See `rules.md` H20 for detection, auto-exception, and scope. System-triggered: fires when abstraction layers added > 1 AND callers < 3.
 
-**H21 -- Dependency Injection: fix uses `new` or direct instantiation outside the composition root.** See `rules.md` H21 for detection, auto-exception, and scope. System-triggered: fires when target is not the composition root AND contains `new`.
+**H21 -- Composition Over Inheritance: fix uses class inheritance when composition is dominant in the layer.** See `rules.md` H21 for detection, auto-exception, and scope. System-triggered: fires when composition usage > 60% in the layer AND fix uses `extends`.
 
-**H22 -- Single Source of Truth: fix duplicates config/data that exists in a single source.** See `rules.md` H22 for detection, auto-exception, and scope. System-triggered: fires when new code contains literals matching existing config/constant entries.
+**H22 -- Dependency Injection: fix uses `new` or direct instantiation outside the composition root.** See `rules.md` H22 for detection, auto-exception, and scope. System-triggered: fires when target is not the composition root AND contains `new`.
 
-**H23 -- Early Returns: fix introduces deep nesting (>3 levels) without early returns.** See `rules.md` H23 for detection, auto-exception, and scope. System-triggered: fires when nesting depth > 3 AND no early return exists in the function.
+**H23 -- Single Source of Truth: fix duplicates config/data that exists in a single source.** See `rules.md` H23 for detection, auto-exception, and scope. System-triggered: fires when new code contains literals matching existing config/constant entries.
 
-**H24 -- No Unnecessary Abstraction: fix creates a wrapper/adapter/delegator with <=1 caller.** See `rules.md` H24 for detection, auto-exception, and scope. System-triggered: fires when a new wrapper/adapter has <=1 caller.
+**H24 -- Early Returns: fix introduces deep nesting (>3 levels) without early returns.** See `rules.md` H24 for detection, auto-exception, and scope. System-triggered: fires when nesting depth > 3 AND no early return exists in the function.
 
-**H25 -- No Speculative Code: fix includes code for concerns not present in the task scope.** See `rules.md` H25 for detection, auto-exception, and scope. System-triggered: fires when new code contains TODOs without owner, unused parameters, or unreachable branches.
+**H25 -- No Unnecessary Abstraction: fix creates a wrapper/adapter/delegator with <=1 caller.** See `rules.md` H25 for detection, auto-exception, and scope. System-triggered: fires when a new wrapper/adapter has <=1 caller.
 
-**H26 -- No Manual-Sync Registries: fix creates a registry/mapping that requires manual sync.** See `rules.md` H26 for detection, auto-exception, and scope. System-triggered: fires when registry entries do not match discovered items.
+**H26 -- No Speculative Code: fix includes code for concerns not present in the task scope.** See `rules.md` H26 for detection, auto-exception, and scope. System-triggered: fires when new code contains TODOs without owner, unused parameters, or unreachable branches.
 
-**H27 -- No Over-Engineered Discovery: fix uses dynamic discovery when explicit list is simpler.** See `rules.md` H27 for detection, auto-exception, and scope. System-triggered: fires when explicit list has <10 items AND discovery mechanism is >3 lines.
+**H27 -- No Manual-Sync Registries: fix creates a registry/mapping that requires manual sync.** See `rules.md` H27 for detection, auto-exception, and scope. System-triggered: fires when registry entries do not match discovered items.
 
-**H28 -- Code-Decision Ladder Compliance: fix adds new code when existing utility/library/standard lib already solves it.** See `rules.md` H28 for detection, auto-exception, and scope. System-triggered: fires when existing solution with >80% similarity is found.
+**H28 -- No Over-Engineered Discovery: fix uses dynamic discovery when explicit list is simpler.** See `rules.md` H28 for detection, auto-exception, and scope. System-triggered: fires when explicit list has <10 items AND discovery mechanism is >3 lines.
 
-**H29 -- Stepdown Rule: fix mixes high-level orchestration with low-level operations without named intermediate.** See `rules.md` H29 for detection, auto-exception, and scope. Advisory only.
+**H29 -- Code-Decision Ladder Compliance: fix adds new code when existing utility/library/standard lib already solves it.** See `rules.md` H29 for detection, auto-exception, and scope. System-triggered: fires when existing solution with >80% similarity is found.
 
-**H30 -- Newspaper Order: fix places public function below private helper it calls.** See `rules.md` H30 for detection, auto-exception, and scope. Advisory only.
+**H30 -- Stepdown Rule: fix mixes high-level orchestration with low-level operations without named intermediate.** See `rules.md` H30 for detection, auto-exception, and scope. Advisory only.
 
-**H31 -- No Flag/Output Arguments: fix introduces boolean flag arguments or mutates output arguments.** See `rules.md` H31 for detection, auto-exception, and scope. System-triggered: fires when new function signature contains boolean flag or output argument pattern.
+**H31 -- Newspaper Order: fix places public function below private helper it calls.** See `rules.md` H31 for detection, auto-exception, and scope. Advisory only.
 
-**H32 -- Law of Demeter: fix introduces train-wreck chains (a.b.c.d) longer than 1 dot.** See `rules.md` H32 for detection, auto-exception, and scope. Advisory only.
+**H32 -- No Flag/Output Arguments: fix introduces boolean flag arguments or mutates output arguments.** See `rules.md` H32 for detection, auto-exception, and scope. System-triggered: fires when new function signature contains boolean flag or output argument pattern.
 
-**H33 -- No Dead Code: fix adds unreachable code or unused exports.** See `rules.md` H33 for detection, auto-exception, and scope. System-triggered: fires when new code contains unreachable paths or unused exports.
+**H33 -- Law of Demeter: fix introduces train-wreck chains (a.b.c.d) longer than 1 dot.** See `rules.md` H33 for detection, auto-exception, and scope. Advisory only.
 
-**H34 -- No Magic Values: fix introduces unexplained literals that should be named constants.** See `rules.md` H34 for detection, auto-exception, and scope. Advisory only.
+**H34 -- No Dead Code: fix adds unreachable code or unused exports.** See `rules.md` H34 for detection, auto-exception, and scope. System-triggered: fires when new code contains unreachable paths or unused exports.
 
-**H35 -- Error Handling Quality: fix swallows exceptions or loses error context.** See `rules.md` H35 for detection, auto-exception, and scope. System-triggered: fires when catch block is empty or lacks context.
+**H35 -- No Magic Values: fix introduces unexplained literals that should be named constants.** See `rules.md` H35 for detection, auto-exception, and scope. Advisory only.
 
-**H36 -- Logging Quality: fix adds debug prints or exposes sensitive data in logs.** See `rules.md` H36 for detection, auto-exception, and scope. System-triggered: fires when debug prints or sensitive data patterns are found in new code.
+**H36 -- Error Handling Quality: fix swallows exceptions or loses error context.** See `rules.md` H36 for detection, auto-exception, and scope. System-triggered: fires when catch block is empty or lacks context.
 
-**H37 -- Type Safety (Non-Python): fix uses unsafe casts, `any` type, or `as` without type guard.** See `rules.md` H37 for detection, auto-exception, and scope. System-triggered: fires when `any` or unsafe cast patterns are found in new code.
+**H37 -- Logging Quality: fix adds debug prints or exposes sensitive data in logs.** See `rules.md` H37 for detection, auto-exception, and scope. System-triggered: fires when debug prints or sensitive data patterns are found in new code.
 
-**H38 -- No Obvious Performance Issues: fix introduces O(n2) scans, nested loops over same data, or synchronous blocking in async context.** See `rules.md` H38 for detection, auto-exception, and scope. Advisory only.
+**H38 -- Type Safety (Non-Python): fix uses unsafe casts, `any` type, or `as` without type guard.** See `rules.md` H38 for detection, auto-exception, and scope. System-triggered: fires when `any` or unsafe cast patterns are found in new code.
 
-**H39 -- No Multi-Concept Files: fix combines multiple classes, errors, types, interfaces, or schemas into a single file.** See `rules.md` H39 for detection, auto-exception, and scope. System-triggered: fires when a file contains multiple distinct concept types.
+**H39 -- No Obvious Performance Issues: fix introduces O(n2) scans, nested loops over same data, or synchronous blocking in async context.** See `rules.md` H39 for detection, auto-exception, and scope. Advisory only.
+
+**H40 -- No Multi-Concept Files: fix combines multiple classes, errors, types, interfaces, or schemas into a single file.** See `rules.md` H40 for detection, auto-exception, and scope. System-triggered: fires when a file contains multiple distinct concept types.
 
 ## Soft tier (S1-S20)
 
@@ -118,7 +120,7 @@ Hard-tier (H1-H12) and soft-tier (S1-S20) review rubrics. Hard-tier items block 
 
 **S17 -- Tell, don't ask (Law of Demeter): a method reaches through another object to access its parts (`a.b.c.d`); the behavior belongs on the inner object.** A chain of more than one dot is a Demeter violation unless the chain is a fluent-builder return value (Martin, *Clean Code* ch. 6 / ch. 12 "Objects and Data Structures" -- The Law of Demeter).
 
-**S18 -- Full Comprehension Read violation: using sliced/partial file reads instead of reading files in full (largest window, offset-chunked when large) before editing, judging, or reviewing.** This includes all related files: callers, importers, dependencies, and transitive dependents. Partial reads reduce accuracy and are prohibited per `00-system.md` `## Identity` `### Rules always in force` (Full Comprehension Read rule). **Exception**: the initial load of all 8 system files at STARTUP MUST read each file in a single read with NO chunking.
+**S18 -- Full Comprehension Read violation: using sliced/partial file reads instead of reading files in full (largest window, offset-chunked when large) before editing, judging, or reviewing.** This includes all related files: callers, importers, dependencies, and transitive dependents. Partial reads reduce accuracy and are prohibited per `00-system.md` `## Identity` `### Rules always in force` (Full Comprehension Read rule). **Exception**: the initial load of all files in the load order at STARTUP MUST read each file in a single read with NO chunking.
 
 **S19 -- Log Output Calls in agent-generated code: debug prints (`console.log`, `print`, `Write-Host`, `printf`, etc.) left in generated or edited code.** These reduce accuracy and pollute the transcript. Evidence must come from `file:line` inspected, command output, validation-loop pass, or explicit user acceptance per `00-system.md` Loop protection / Log output prohibition.
 
@@ -134,23 +136,42 @@ Hard-tier (H1-H12) and soft-tier (S1-S20) review rubrics. Hard-tier items block 
 
 **S25 -- Missing required-field metadata in templates**: a phase template is missing the required/optional field metadata in the `## Template Field Contract` section, or the metadata does not match the actual template shape.
 
-## Documented extension IDs
+## Logical Correctness Tier (L1-L10)
+
+**L1 -- Mathematical Invariants** (Default: Blocking): code violates proven mathematical properties (commutativity, associativity, idempotency, conservation laws).
+
+**L2 -- Boundary Conditions** (Default: Blocking): off-by-one errors, empty collection handling, null/undefined at boundaries, inclusive vs exclusive ranges.
+
+**L3 -- State Machines** (Default: Blocking): invalid state transitions, unreachable states, missing transition guards, concurrent modification races.
+
+**L4 -- Time-Series Integrity** (Default: Blocking): timestamp ordering, gap detection, duplicate timestamps, monotonicity violations, timezone consistency.
+
+**L5 -- Portfolio Arithmetic** (Default: Blocking): position sizing math, P&L calculation, weight normalization, rebalancing drift, rounding errors.
+
+**L6 -- Statistical Validity** (Default: Blocking): p-hacking, multiple comparison correction, sample size adequacy, distribution assumptions, confidence interval correctness.
+
+**L7 -- Backtesting Integrity** (Default: Blocking): look-ahead bias, survivorship bias, overfitting detection, out-of-sample validation, transaction cost modeling.
+
+**L8 -- Risk/Sizing Logic** (Default: Blocking): VaR calculation, position limits, leverage constraints, correlation breakdown, tail risk modeling.
+
+**L9 -- Metric Correctness** (Default: Blocking): formula implementation matches specification, denominator zero handling, aggregation consistency, unit correctness.
+
+**L10 -- Strategy Logic** (Default: Blocking): signal generation correctness, entry/exit conditions, parameter sensitivity, regime detection, execution slippage.
+
+Severity classification (applied at discovery time):
+
+- **Blocking**: findings affecting correctness, safety, financial outcomes, or data integrity (behave like H-tier: block PATCH until accepted/excluded in REVIEW decision section)
+- **Advisory**: findings in non-critical paths -- logging, display formatting, non-validated display calculations, cosmetic state transitions (behave like S-tier: flag and discuss)
+
+The reviewer must classify each L-tier finding as blocking or advisory at discovery time. Default is Blocking; Advisory requires explicit one-line rationale.
+
+## Artifact & Git Hygiene Extensions
 
 When artifact, gitattributes, or pre-commit review is in scope, those extensions fall under the soft-tier coverage tick:
 
-- `S-artifact` -- artifact handling rules (binary files, build outputs, generated content).
-- `S-gitattributes` -- `.gitattributes` correctness (line endings, diff drivers, large-file handling).
-- `S-precommit` -- pre-commit hook configuration (file globs, hook ordering, auto-fix behavior).
-
-When logical correctness review is in scope, the L-series rubrics apply:
-
-- `L1-L10` -- Logical correctness: mathematical invariants (L1), boundary conditions (L2), state machines (L3), time-series integrity (L4), portfolio arithmetic (L5), statistical validity (L6), backtesting integrity (L7), risk/sizing logic (L8), metric correctness (L9), strategy logic (L10).
-
-Severity:
-- **Blocking**: L1-L10 findings that affect correctness, safety, financial outcomes, or data integrity are blocking (behave like H-tier: block PATCH until accepted or excluded with justification in the REVIEW decision section).
-- **Advisory**: L-tier findings in non-critical paths (logging, display formatting, non-validated display calculations, cosmetic state transitions) are advisory (behave like S-tier: flag and discuss, do not hard-block).
-
-The reviewer must classify each L-tier finding as blocking or advisory at discovery time.
+- `S-artifact` -- artifact handling rules (binary files, build outputs, generated content)
+- `S-gitattributes` -- `.gitattributes` correctness (line endings, diff drivers, large-file handling)
+- `S-precommit` -- pre-commit hook configuration (file globs, hook ordering, auto-fix behavior)
 
 ## Usage
 

@@ -84,8 +84,8 @@ Each story in the sprint file must include these fields:
 <!-- Track blockers here -->
 ```
 
-5. Populate stories from the roadmap's phases/items.
-6. Emit confirmation with the sprint file path and story count.
+1. Populate stories from the roadmap's phases/items.
+2. Emit confirmation with the sprint file path and story count.
 
 ## Trello backend (`backend: trello`)
 

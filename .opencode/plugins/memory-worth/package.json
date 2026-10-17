@@ -1,0 +1,17 @@
+{
+  "name": "memory-worth",
+  "version": "0.1.0",
+  "description": "Memory plugin for opencode with trust scoring and governance",
+  "main": "index.ts",
+  "peerDependencies": {
+    "@opencode-ai/plugin": "1.18.31"
+  },
+  "dependencies": {
+    "@libsql/client": "^0.4.3"
+  },
+  "devDependencies": {
+    "@opencode-ai/plugin": "1.18.31",
+    "@types/node": "^26.6.2",
+    "ts-node": "^10.9.2"
+  }
+}

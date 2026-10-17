@@ -3,6 +3,7 @@
 Operational protocol: PATCH behavior, commit/push gate. Cross-cutting protocol details (artifacts, pre-commit, cross-team, app lifecycle, library selection, session file locks, spec lifecycle, drift, discuss, scrum) live in `07-protocols.md`.
 
 <HIGH_PRIO>
+
 ## PATCH protocol
 
 Prerequisites: explicit user plan approval; complete rewrite contract.
@@ -68,26 +69,31 @@ A green pre-existing suite is never proof that a confirmed bug is covered. A ful
 <MUST>After the compliance audit, verify all system-derived constraints mechanically. This is a non-negotiable gate; a single FAIL returns to PLAN.</MUST>
 
 For each item in `Must use`:
+
 - verify: `rg "<module.method>" <target_file>`
 - expect: `pass` (exit 0, match found)
 - Record: PASS or FAIL with sanitized rg output
 
 For each item in `Must route through`:
+
 - verify: `rg "<owner_module>" <target_file>`
 - expect: `pass` (exit 0, match found)
 - Record: PASS or FAIL with sanitized rg output
 
 For each item in `Must not duplicate`:
+
 - verify: `rg "<pattern>" <target_file>`
 - expect: `silent` (exit 0, no matches)
 - Record: PASS or FAIL with sanitized rg output
 
 For each item in `Must use available library`:
+
 - verify: `rg "<library_usage>" <target_file>`
 - expect: `pass` (exit 0, match found)
 - Record: PASS or FAIL with sanitized rg output
 
 For each item in `Must follow layer`:
+
 - verify: `rg "<forbidden_pattern>" <target_file>`
 - expect: `silent` (exit 0, no matches)
 - Record: PASS or FAIL with sanitized rg output
@@ -99,6 +105,7 @@ Gate result: ALL PASS required. Any FAIL -> return to PLAN with specific constra
 <MUST>After the constraint verification, verify the agent's self-review claims from the PATCH template. This is a non-negotiable gate; a single FALSE claim returns to PLAN.</MUST>
 
 For each item in `## Self-Review`:
+
 - Agent claimed: [PASS|FAIL]
 - System verification: [PASS|FAIL]
 - Evidence: [rg command output or "n/a"]
@@ -215,6 +222,17 @@ Reply with: A, B, or C
 
 In STRUCTURED mode the ask carries the `[PHASE: PATCH]` header; in DIRECT mode it carries `[MODE: DIRECT]`.
 
+### Auto-close after commit/push
+
+When the commit/push gate completes with a user decision (A/B/C) and the session made file edits, the session closes automatically:
+
+1. Record `closed_at`, `closed_by: automatic`, `mode_at_close`, `final_commit`, `working_tree`, and `note` in the session state file `## Session Close` section.
+2. Spawn a `/subtask` to `baba-reviewer` with the evaluation prompt from `prompt-system/03-output-and-state.md` `## Session evaluation prompt`.
+3. Append the evaluation result to the session state file `## Session Close` section.
+4. Announce close to the user: session ID, final commit, evaluation verdict, and one-line summary.
+
+A session with no file edits does not auto-close; the user closes it explicitly via `/close` or natural language.
+
 ### Commit
 
 - Compose the message from the session scope in the repository's existing commit-message conventions.
@@ -260,8 +278,8 @@ Fix/debug sessions produce three categories of leftovers that must be auto-delet
 
 ### Categories
 
- - **Temp files** -- files created during the session that are not in the session's `## Edited Files` ledger (e.g., temporary test outputs, scratch files, intermediate build artifacts outside configured output directories). Files in the OS temp directory (`$env:TEMP` on Windows, `/tmp` on Unix) are exempt from leftover audit; repo-local temp files are subject to auto-deletion.
- - **Stale locks** -- `.session-locks/<flat-name>.lock/` directories whose `acquired_at` timestamp exceeds `SESSION_LOCK_TTL_MINUTES = 30` (see `07-protocols.md` `## Session file locks`).
+- **Temp files** -- files created during the session that are not in the session's `## Edited Files` ledger (e.g., temporary test outputs, scratch files, intermediate build artifacts outside configured output directories). Files in the OS temp directory (`$env:TEMP` on Windows, `/tmp` on Unix) are exempt from leftover audit; repo-local temp files are subject to auto-deletion.
+- **Stale locks** -- `.session-locks/<flat-name>.lock/` directories whose `acquired_at` timestamp exceeds `SESSION_LOCK_TTL_MINUTES = 30` (see `07-protocols.md` `## Session file locks`).
 - **Uncommitted session artifacts** -- `SESSION_STATE-*.md` files not staged for commit in the current session.
 
 ### Procedure (auto-delete at PATCH verification gate)
@@ -272,12 +290,14 @@ Fix/debug sessions produce three categories of leftovers that must be auto-delet
    - Stale locks: `Remove-Item -Recurse -Force` on the lock directory (releases the lock)
    - Uncommitted session artifacts: `Remove-Item -Force` on `SESSION_STATE-*.md` not in the current session's ledger
 3. **Record** -- write a `## Leftover Audit` section to the session state file:
+
    ```markdown
    ## Leftover Audit
    - temp files: [count] removed -- [paths]
    - stale locks: [count] removed -- [flat-names]
    - uncommitted session artifacts: [count] removed -- [paths]
    ```
+
 4. **Gate** -- the PATCH verification gate reports PASS only if the audit completes (leftovers found and deleted, or none found). A failure to run the audit is a gate FAIL.
 
 <MUST>No PATCH conclusion while leftover audit fails. The PATCH verification gate must complete the leftover audit before concluding.</MUST>

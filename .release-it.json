@@ -2,8 +2,7 @@
   "github": {
     "release": true,
     "assets": [
-      "dist/perplexity-history-export.exe",
-      "dist/perplexity-history-export",
+      "dist/",
       "README.md",
       "LICENSE"
     ]
@@ -22,6 +21,9 @@
     }
   },
   "hooks": {
-    "before:init": ["pnpm test", "pnpm run build:exe"]
+    "before:init": [
+      "pnpm test",
+      "pnpm run build"
+    ]
   }
 }

@@ -3,7 +3,7 @@ import { type Config } from '../utils/config.js'
 import { createResult, ok, type Result } from 'super-result'
 import { logger } from '../utils/logging/logger.js'
 import { z } from 'zod'
-import { ApiDiagnosticsWriter } from '../utils/logging/api-diagnostics.js'
+import { ApiDiagnosticsWriter, zodErrorPaths } from '../utils/logging/api-diagnostics.js'
 
 export interface ConversationMeta {
   id: string
@@ -155,11 +155,11 @@ export class CheckpointManager {
 
     const validateResult = CheckpointDataSchema.safeParse(parsedResult.value)
     if (!validateResult.success) {
-      const paths = validateResult.error.issues.map((issue) => issue.path.join('.'))
+      const paths = zodErrorPaths(validateResult)
       this.diagnosticsWriter.writeFailure({
         url: this.checkpointFilePath,
         errorType: 'zod_error',
-        zodErrorPaths: paths,
+        zodErrorDetails: paths,
       })
       logger.warn(
         `Corrupt checkpoint file at ${this.checkpointFilePath}, resetting to defaults: ${validateResult.error}`

@@ -22,7 +22,6 @@ When the target is a new project from scratch, or new files being added to a rep
 - the error-handling idiom for the stack
 - naming and file-naming rules (kebab-case, snake_case, PascalCase per stack)
 - project structure (flat `src/`, split at 8 files, layer names)
-- region tags for new projects
 - the code-decision ladder, comment policy, and logging palette
 
 This is the one case where "defaults" are binding rather than advisory: a
@@ -175,14 +174,13 @@ prefix is mentioned.
 - **Misleading or wrong** -- says one thing while the code does another. Worse than no comment. Delete and fix the code or the comment.
 - **Noise or formatting abuse** -- restates the obvious in a noisy way, uses
   loud markers (`////////////////////////////////////////////`), ASCII art separators,
-  `// ==== Section ====`, `// ----- HEYO -----`, or `// some random label`
-  headers. Use `// #region LABEL` / `// #endregion` instead. Region tags are
-  the only sanctioned way to mark a section.
+`// ==== Section ====`, `// ----- HEYO -----`, or `// some random label`
+  headers. Use section breaks or extract-method instead.
 - **Process artifacts** -- change logs at file top ("added by X on Y"),
   attributions (`// Added by Simon`), mandated comments required by process not
   code ("this function exists"), journal comments. Use git, not comments.
 - **Dead or commented-out code** -- dead code left as a comment, commented-out code blocks. Delete; git has the history.
-- **Structural violations** -- function headers (block comment at top of every function), docstrings on private/internal code, closing-brace comments (`// } end of while`), position markers (`// ACTIONS` at arbitrary columns). Use section breaks, extract-method, or region tags.
+- **Structural violations** -- function headers (block comment at top of every function), docstrings on private/internal code, closing-brace comments (`// } end of while`), position markers (`// ACTIONS` at arbitrary columns). Use section breaks or extract-method.
 - **Nonlocal or excessive context** -- references system-wide context without a
   link ("corresponds to issue #1234"), multi-paragraph essays, HTML/markup in
   comments (`// <b>important</b>`, Markdown/reST markup). Plain prose only;
@@ -197,12 +195,6 @@ Deliberate simplifications that cut a real corner with a known ceiling (global l
 - When creating or updating `.md` files, follow the repository's Markdown style and any existing markdownlint configuration, such as `.markdownlint.jsonc`.
 - Run the repository's configured Markdown linter for changed Markdown files when available. Do not invent a lint command when no project check exists.
 - Do not disable Markdown rules inline or in configuration unless the exception is explicitly required and documented.
-
-## Region tags
-
-- Use `// #region LABEL` / `// #endregion` (or language-equivalent syntax) to group related code in greenfield projects. Region tags are also added to an existing file when the project-level style decision is `upgrade-house-style`.
-- Do not add region tags to existing codebases whose project decision is `preserve-local`, unless the file already uses them.
-- Labels should be short, descriptive Title Case, e.g. `// #region Database Layer`.
 
 ## Naming
 
@@ -471,6 +463,10 @@ project via the `Stack/Style:` field or `STYLE_POLICY.md`. Accessibility and
 SEO rules are governed by the existing rubric IDs `S21`-`S24`; this section
 does not duplicate them.
 
+Owned by BabaDesigner. Frontend work should route through DESIGN_PLAN before
+implementation so UI choices are decided in one place, not invented during
+PATCH.
+
 ### Palettes
 
 Preferred palettes: **Catppuccin Mocha** and **Dracula**. Choose one palette per project; do not mix palettes within a single interface. Palette selection is recorded in `STYLE_POLICY.md` or the `Stack/Style:` field.
@@ -693,3 +689,103 @@ The tension between "feels at home on the platform" and "couldn't be mistaken fo
 - Indexes: every foreign key, every column referenced in `WHERE` for non-trivial queries, every column used in `ORDER BY` for sort. Every foreign key must have an explicit index. Add indexes for `WHERE`, `JOIN`, `ORDER BY`, `GROUP BY` columns on tables over ~1k rows.
 - Queries: parameterized only; no string concatenation; `EXPLAIN ANALYZE` reviewed for queries over 100ms.
 - Transactions: every multi-statement write wraps in a transaction; isolation level chosen explicitly, not defaulted. Neither SQLite nor Postgres supports unsigned integers natively - use `CHECK (col >= 0)` for non-negative constraints.
+
+## Documentation Style
+
+Documentation conventions for all `.md` files in `docs/`. These are enforced via `STYLE_POLICY.md` and the pre-commit hook.
+
+### File Naming
+
+All documentation files in `docs/` use **UPPER_SNAKE_CASE** with `.md` extension.
+
+- File names must be all uppercase with underscores separating words
+- Every file ends with `.md`
+- Acronyms stay uppercase (e.g., `TRELLO_INTEGRATION.md`, not `Trello_Integration.md`)
+- The `project-management/` root directory retains kebab-case for backward compatibility
+
+### Glossary
+
+The canonical glossary lives at **`docs/GLOSSARY.md`**. Maintained manually; updated when new terminology enters the system.
+
+### Auto-Generated Table of Contents
+
+TOCs are automatically generated via the `markdown-toc` pre-commit hook.
+
+- **Coverage**: All `docs/**/*.md` files
+- **Excluded**: `docs/GLOSSARY.md` and `docs/REFERENCE/` (manually maintained)
+- **Depth**: Up to 3 heading levels (`--maxdepth=3`)
+- **First H1**: Not used as TOC anchor (`--no-first-h1`)
+- **Runs**: On every `git commit` via pre-commit
+
+### Mermaid Diagrams
+
+All diagrams use **GitHub-flavored Mermaid** syntax inside fenced code blocks.
+
+- Every mermaid block starts with `%%{init: {'theme': 'dark'}}%%`
+- **Primary color**: `#6B21A8` (Dark Purple)
+- **Accent color**: `#06B6D4` (Cyan)
+- **Background**: Dark transparent (GitHub dark mode renders automatically)
+- Use `graph TD` (top-down) or `graph LR` (left-to-right) as appropriate
+- Colors applied via `style` or `classDef` when needed:
+  ```mermaid
+  %%{init: {'theme': 'dark'}}%%
+  classDef purple fill:#6B21A8,stroke:#7C3AED,color:#fff;
+  classDef cyan fill:#06B6D4,stroke:#22D3EE,color:#000;
+  ```
+
+### SVG Images
+
+SVG images follow a **dark purple + cyan cyberpunk** aesthetic.
+
+| Role | Color | Hex |
+|---|---|---|
+| Primary | Dark Purple | `#6B21A8` |
+| Primary Light | Purple | `#7C3AED` |
+| Accent | Cyan | `#06B6D4` |
+| Accent Light | Cyan Light | `#22D3EE` |
+| Background | Dark | `#0F0A1A` |
+| Text | Light | `#E2E8F0` |
+| Border | Purple Dim | `#4C1D95` |
+
+- All SVG files use the dark purple + cyan palette
+- Background is dark (`#0F0A1A` or transparent)
+- Strokes and fills use the palette colors above
+- Text uses light color (`#E2E8F0`) for contrast
+- SVGs should be self-contained (no external dependencies)
+
+### Markdown Linting
+
+All `.md` files are linted via `.markdownlint.jsonc`.
+
+| Rule | Setting | Purpose |
+|---|---|---|
+| MD013 | `line_length: 1000` | Long lines allowed for code blocks |
+| MD041 | `false` | First heading can be after frontmatter/tags |
+| MD024 | `siblings_only: true` | Duplicate headings allowed across sections |
+| MD033 | `false` | Inline HTML tags allowed (protocol markers) |
+| MD060 | `false` | Table column alignment not enforced |
+| MD012 | `false` | Multiple blank lines at EOF allowed |
+
+### Directory Structure
+
+```text
+docs/
+├── GLOSSARY.md              # Terminology reference
+├── ARCHITECTURE.md          # System architecture overview
+├── QUICKSTART.md            # Getting started guide
+├── PROJECT_MANAGEMENT/      # Project management docs (UPPER_SNAKE_CASE)
+│   ├── TRELLO_INTEGRATION.md
+│   ├── ROADMAPS.md
+│   └── SPRINTS.md
+├── REFERENCE/               # Reference docs (manually maintained)
+│   ├── RULES.md
+│   ├── RUBRICS.md
+│   └── PROTOCOLS.md
+├── USER_GUIDE/              # User guides
+│   ├── GETTING_STARTED.md
+│   ├── PHASES.md
+│   └── PERSONAS.md
+└── DOCUMENTATION_STYLE.md   # This file
+```
+
+> 📝 **Note**: `STYLE_POLICY.md` carries the machine-readable frontmatter fields (`doc_naming`, `doc_toc`, `doc_glossary`, `doc_mermaid_theme`, `doc_svg_style`) that the agent reads on every PATCH. This section is the human-readable reference.

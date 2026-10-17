@@ -7,7 +7,7 @@ import { rgPath } from '@vscode/ripgrep'
 import { BaseAppError } from '../utils/errors.js'
 import { z } from 'zod'
 import { createResult, ok, err, type Result } from 'super-result'
-import { ApiDiagnosticsWriter } from '../utils/logging/api-diagnostics.js'
+import { ApiDiagnosticsWriter, zodErrorPaths } from '../utils/logging/api-diagnostics.js'
 
 // why: ripgrep emits this exact substring on stderr when the binary is missing or unreadable
 const RIPGREP_ENOENT_MESSAGE = 'No such file or directory'
@@ -114,13 +114,11 @@ export class RipgrepSearch {
               text: parsed.data.data.lines.text,
             })
           } else {
-            const paths = parsed.success
-              ? undefined
-              : parsed.error.issues.map((issue) => issue.path.join('.'))
+            const paths = parsed.success ? undefined : zodErrorPaths(parsed)
             this.diagnosticsWriter.writeFailure({
               url: 'rg://search-line',
               errorType: 'zod_error',
-              zodErrorPaths: paths,
+              zodErrorDetails: paths,
             })
             logger.debug(`Failed to parse ripgrep JSON line`)
           }

@@ -577,6 +577,99 @@ function ReReadAndDiffStagedFiles {
         $results += @{ File = $file; Match = $match; Reason = if ($match) { 'OK' } else { 'Content differs from expected' } }
     }
 
-    $mismatches = $results | Where-Object { -not $_.Match }
+$mismatches = $results | Where-Object { -not $_.Match }
     return @{ Success = ($mismatches.Count -eq 0); Results = $results }
+}
+
+# ════════════════════════════════════════════════════════════════════════════
+# Lock status check (for plugin integration)
+# ═══════════════════════════════════════════════════════════════════════════
+
+function Test-FileLockHeld {
+    param(
+        [string]$RepoRelativePath,
+        [string]$SessionId = (Get-SessionId)
+    )
+
+    if (Is-ReadOnlyHost) { return @{ Held = $true; Skipped = $true; Reason = 'READ_ONLY host' } }
+
+    $repoRoot = Get-RepoRoot
+    $flatName = Get-FlatName $RepoRelativePath
+    $lockPath = Get-LockPath $repoRoot $flatName
+
+    # Check exact lock
+    if (Test-Path $lockPath) {
+        $info = Read-LockInfo $lockPath
+        if ($info.Owner -and ($info.Owner.Trim() -eq $SessionId)) {
+            if ($info.Dependencies -and $info.Dependencies.Count -gt 0) {
+                return @{ Held = $true; Owner = $SessionId; Type = 'Dependency' }
+            } else {
+                return @{ Held = $true; Owner = $SessionId; Type = 'PerFile' }
+            }
+        }
+        return @{ Held = $false; Owner = $info.Owner; Reason = 'Owned by another session' }
+    }
+
+    # Check covering dependency lock
+    $lockDir = Get-LockDir $repoRoot
+    if (Test-Path -LiteralPath $lockDir) {
+        foreach ($dir in Get-ChildItem -Path $lockDir -Directory -Filter '*.lock' -ErrorAction SilentlyContinue) {
+            $depsPath = Join-Path $dir.FullName 'dependencies.txt'
+            if (-not (Test-Path -LiteralPath $depsPath)) { continue }
+            $covers = @(Get-Content $depsPath -ErrorAction SilentlyContinue) | Where-Object { $_ -and $_.Trim() -eq $flatName }
+            if (-not $covers) { continue }
+            $coverInfo = Read-LockInfo $dir.FullName
+            if ($coverInfo.Owner -and (Is-LockLive $coverInfo.AcquiredAt)) {
+                if ($coverInfo.Owner.Trim() -eq $SessionId) {
+                    return @{ Held = $true; Owner = $SessionId; Type = 'Dependency' }
+                } else {
+                    return @{ Held = $false; Owner = $coverInfo.Owner; Reason = 'Covered by a live peer dependency lock' }
+                }
+            }
+        }
+    }
+
+    return @{ Held = $false; Reason = 'No lock exists' }
+}
+
+# ════════════════════════════════════════════════════════════════════════════
+# Command dispatcher (for plugin integration)
+# ═══════════════════════════════════════════════════════════════════════════
+
+if ($args.Count -gt 0 -and $args[0] -eq '-Command') {
+    $command = $args[1]
+    $params = @{}
+    for ($i = 2; $i -lt $args.Count; $i += 2) {
+        if ($i + 1 -lt $args.Count) {
+            $params[$args[$i].TrimStart('-')] = $args[$i + 1]
+        }
+    }
+    
+    switch ($command) {
+        'Test-FileLockHeld' {
+            $result = Test-FileLockHeld -RepoRelativePath $params['RepoRelativePath'] -SessionId $params['SessionId']
+            $result | ConvertTo-Json -Depth 3
+            break
+        }
+        'Acquire-FileLock' {
+            $result = Acquire-FileLock -RepoRelativePath $params['RepoRelativePath'] -SessionId $params['SessionId']
+            $result | ConvertTo-Json -Depth 3
+            break
+        }
+        'Release-FileLock' {
+            $result = Release-FileLock -RepoRelativePath $params['RepoRelativePath'] -SessionId $params['SessionId']
+            $result | ConvertTo-Json -Depth 3
+            break
+        }
+        'Release-DependencyLock' {
+            $result = Release-DependencyLock -RepoRelativePath $params['RepoRelativePath'] -SessionId $params['SessionId']
+            $result | ConvertTo-Json -Depth 3
+            break
+        }
+        default {
+            Write-Error "Unknown command: $command"
+            exit 1
+        }
+    }
+    exit 0
 }

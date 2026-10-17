@@ -16,9 +16,9 @@ Categories and canonical examples:
 - **Test and coverage output**: `coverage/`, `.coverage`, `*.lcov`, `htmlcov/`, `junit.xml`, `test-results/`.
 - **AI session artifacts**: `sessions/`, `chat-export/`, `*.session.txt`, `*.session.md`, `*.session.json`, raw session dumps, exported conversation files, prompt-drafting scratch files. Rule: never commit raw AI session output. Sessions are ephemeral context, not source of truth.
 - **Tooling caches**: `.pre-commit-cache/`, `.mypy_cache/`, `.ruff_cache/`, `.pyrefly_cache/`, `.pytest_cache/`, `.turbo/`, `.next/`, `.nuxt/`, `.svelte-kit/`.
- - **Scratch and WIP files**: `*.tmp`, `*.bak`, `*.orig`, `scratch/`, `todo.md`, `WIP.md` at repo root.
- - **OS temp directory**: the only allowed throwaway location is the OS temp directory (`$env:TEMP` on Windows, `/tmp` on Unix). Do not create repo-local temp directories for scratch work; use the OS temp directory instead.
- - **OS temp directory**: the only allowed throwaway location is the OS temp directory (`$env:TEMP` on Windows, `/tmp` on Unix). Do not create repo-local temp directories for scratch work; use the OS temp directory instead.
+- **Scratch and WIP files**: `*.tmp`, `*.bak`, `*.orig`, `scratch/`, `todo.md`, `WIP.md` at repo root.
+- **OS temp directory**: the only allowed throwaway location is the OS temp directory (`$env:TEMP` on Windows, `/tmp` on Unix). Do not create repo-local temp directories for scratch work; use the OS temp directory instead.
+- **OS temp directory**: the only allowed throwaway location is the OS temp directory (`$env:TEMP` on Windows, `/tmp` on Unix). Do not create repo-local temp directories for scratch work; use the OS temp directory instead.
 
 ### Review rule
 
@@ -81,13 +81,78 @@ The `prompt-system/` folder and its files are the core system and must be protec
 
 ### Enforcement
 
-- `07-protocols.md` rule detection (H13-H39) must not fire against `prompt-system/` files. The system reads `STYLE_POLICY.md` for project-level exceptions and treats `prompt-system/` as an always-excluded directory.
+- `07-protocols.md` rule detection (H14-H40) must not fire against `prompt-system/` files. The system reads `STYLE_POLICY.md` for project-level exceptions and treats `prompt-system/` as an always-excluded directory.
 - Pre-commit hooks must not include `prompt-system/` in their staged-file patterns.
 - Discovery Protocol searches must exclude `prompt-system/` from the project source tree.
 
 ### Exception
 
 - Updates to the prompt-system itself (new rules, rubric changes, style updates) are performed in a dedicated governance session and deployed via the sync mechanism (`sync.ps1`), not through normal project PATCH flows.
+
+## Reading Protocol
+
+Trigger: any session with a concrete target that requires analysis, review, plan, docs judgment, or discussion. Applies in every phase where analysis output is emitted, not only at phase transitions.
+
+Relevance is defined mechanically. The agent does not decide what to read. The system computes a dependency closure and the agent must read every file in that closure before emitting analysis.
+
+### Relevance = dependency closure to depth 3
+
+A file IS in scope if ANY of:
+
+- It is the target file
+- It is imported by the target file (forward dependency)
+- It imports the target file (reverse dependency)
+- It is a transitive forward or reverse dependency to depth 3
+- It is a test file for any file in the closure (matches `*.test.*`, `*.spec.*`, `test_*.*`)
+
+Excluded by default: `node_modules/`, `vendor/`, `prompt-system/`, `dist/`, `build/`, `.git/`, `__pycache__/`, `.venv/`, `venv/`, and other artifact directories per `## Artifact handling`.
+
+Greenfield targets (no existing source files): Reading Protocol is skipped. Record `reading_plan: skipped (greenfield)` in session state and proceed.
+
+### Reading Plan artifact
+
+The Reading Plan is computed and written to session state before any analysis output. The agent cannot add or remove files from the plan.
+
+Format:
+
+```yaml
+reading_plan:
+  scope: <target path>
+  created_at: <ISO-8601 UTC>
+  status: <in_progress | complete | partial-approved | skipped-greenfield>
+  files:
+    - path: <file path>
+      status: <pending | complete | deferred>
+```
+
+### Reading Verification block
+
+Every analysis output must include a Reading Verification section:
+
+```text
+# Reading Verification
+Planned: N | Completed: M | Status: [complete | incomplete]
+Pending: [specific file paths or "none"]
+```
+
+In DIRECT mode, Reading Verification is reported as inline text before stating results, not as a template section.
+
+### Enforcement rules
+
+1. No analysis output in any phase without Reading Verification showing 100% completion.
+2. Incomplete Reading Plan produces `[PHASE: BLOCKED]`, not analysis.
+3. The only exits from BLOCKED are: finish all pending reads, or obtain explicit user approval for partial scope.
+4. Partial scope approval must be recorded in session state before analysis may proceed.
+5. The agent cannot mark files complete without an actual read. The read ledger in session state is the source of truth.
+
+### Partial scope
+
+When the user approves partial scope:
+
+- Record `reading_plan.status: partial-approved` in session state
+- Deferred files are listed explicitly in the Reading Verification block
+- Analysis proceeds only on the read subset
+- Deferred files remain pending and must be addressed before PATCH
 
 ## Discovery Protocol
 
@@ -129,7 +194,8 @@ Search scope excludes `prompt-system/` (core system, never part of project work)
 
 ### Rule detection
 
-For each rule in `rules.md` H13-H39:
+For each rule in `rules.md` H14-H40:
+
 1. Check if rule applies to target file's context
 2. If yes: add to `system_evidence.rule_triggers` with evidence
 3. If rule has auto-exception: evaluate exception conditions
@@ -139,6 +205,7 @@ For each rule in `rules.md` H13-H39:
 ### Architecture doc scanning
 
 Scan for project architecture/style docs:
+
 - `ARCHITECTURE.md`
 - `ADR/` directory
 - `docs/architecture/`
@@ -146,6 +213,7 @@ Scan for project architecture/style docs:
 - Module-level `README.md` files
 
 Extract declared rules using pattern matching:
+
 - "All validation MUST go through X" → `must_use: X`
 - "Controllers must not contain business logic" → `layer_constraint: controller`
 - "Use dependency injection" → `di_required: true`
@@ -167,7 +235,7 @@ system_evidence:
     - <module.method> (<file:line>) [rule: H15]
   
   must_not_duplicate:
-    - <file:lines> -- <pattern> [rule: H13]
+    - <file:lines> -- <pattern> [rule: H14]
   
   must_use_library:
     - <name> (<version>) [rule: H14]
@@ -182,7 +250,7 @@ system_evidence:
     confidence: high|medium|low
   
   rule_triggers:
-    - rule: H13
+    - rule: H14
       active: true|false
       auto_excepted: true|false
       reason: <if auto-excepted>
@@ -211,7 +279,8 @@ system_evidence:
 ### Exception handling
 
 System reads `STYLE_POLICY.md` for project-level rule exceptions:
-- `rule_exceptions.H13: disabled|advisory|mandatory`
+
+- `rule_exceptions.H14: disabled|advisory|mandatory`
 - `rule_exceptions.H14: disabled|advisory|mandatory`
 - etc.
 
@@ -220,6 +289,7 @@ Project-level exceptions override system defaults. If a rule is disabled for the
 ### Greenfield handling
 
 For greenfield targets (no existing source files):
+
 - Discovery runs on the project's `05-impl-style.md` defaults and stack conventions
 - `system_evidence` records declared conventions as constraints
 - No ownership resolution (no existing code to own the concern)
@@ -322,6 +392,7 @@ If any `.sh` or `.ps1` scripts exist in the repo that should run as hooks, they 
 ### A11y and SEO validation
 
 For projects with frontend UI:
+
 - Run axe-core or pa11y against changed pages/components when the change touches markup, templates, or component structure
 - Run lighthouse CI or equivalent for SEO score when the change touches page-level content, meta tags, or routing
 - A11y/SEO failures are soft-tier findings (S23-S26) unless they constitute an accessibility violation under applicable law (e.g., WCAG 2.1 AA required for public sector) - in which case they escalate to H-tier with legal risk noted
@@ -441,6 +512,25 @@ When a session involves starting, stopping, or smoke-testing a long-running proc
 - `app_lifecycle.stop`: send the documented shutdown signal; wait for exit; record the exit code. On a `READ_ONLY` host, every step reports `SKIPPED -- <reason>`.
 
 Smoke runs once per PATCH at the Verification gate. It is not retried per edit.
+
+### Close-session protocol
+
+A session ends in one of three ways:
+
+1. **Explicit command**: user types `/close`.
+2. **Natural language**: user says "close the session", "end session", or "close session".
+3. **Automatic**: the commit/push gate completes in PATCH and the user makes a commit/push decision (A/B/C). This is the default close trigger for sessions that made edits.
+
+When any close trigger fires:
+
+- Record `closed_at`, `closed_by`, `mode_at_close`, `final_commit`, `working_tree`, and `note` in the session state file `## Session Close` section.
+- If the session made edits and a commit was recorded, the close is automatic after the commit/push gate outcome is written.
+- If the session made no edits, or the user invoked `/close` or natural-language close explicitly, evaluate whether a close-session evaluation is warranted:
+  - Structured sessions with phase artifacts (CHECKLIST onward) -> run evaluation.
+  - Trivial exploratory sessions with no phase artifacts -> skip evaluation; record `evaluation_skipped_reason`.
+- Run the close-session evaluation by spawning a `/subtask` to `baba-reviewer` with the evaluation prompt from `prompt-system/03-output-and-state.md` `## Session evaluation prompt`.
+- Append the evaluation result to the session state file `## Session Close` section.
+- Announce close to the user: session ID, final commit (if any), evaluation verdict (PASS/FAIL/SKIPPED), and one-line summary.
 
 ### Startup validation
 
@@ -676,6 +766,7 @@ Do not adopt the candidate without an explicit exception when it is archived or 
 - H8 remains the hard-tier audit for known CVEs and unreviewed dependency versions. This section governs selection before adoption; it does not replace the review rubric.
 
 <HIGH_PRIO>
+
 ## Session file locks
 
 Per-file serialization for concurrent editing sessions operating on the same repository checkout. Prevents two sessions from silently bundling each other's uncommitted hunks into one commit by ensuring one file has at most one writer at a time. Loaded for all phases where file writes may occur. On a `READ_ONLY` host, locks are inert.
@@ -688,6 +779,7 @@ Host capability reaches the script via the `BABA_READ_ONLY` environment flag; wh
 <MUST_NOT>Skip lock acquisition when a shell tool can invoke the lock script.</MUST_NOT>
 <MUST_NOT>Auto-steal a live peer lock.</MUST_NOT>
 <MUST_NOT>Release a lock whose `owner` is not this session id.</MUST_NOT>
+
 - Stale locks are never auto-stolen. Surface the choice to the user.
 - The commit/push gate staging is refused if any path in the proposed commit is not currently locked by this session or released by this session within the current PATCH/DIRECT step.
 - A session never releases a lock whose `owner` is not its own session id. Releasing a peer's lock is a protocol violation and surfaces as BLOCKED.

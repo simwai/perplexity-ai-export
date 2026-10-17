@@ -1,10 +1,20 @@
 ﻿{
     "dependencies":  {
                          "opencode-vibeguard":  "latest",
-                         "opencode-scheduler":  "latest",
+                         "@libsql/client":  "^0.4.3",
                          "opencode-pty":  "latest",
                          "beautiful-mermaid":  "^1.1.3",
-                         "@opencode-ai/plugin":  "1.18.31",
                          "opencode-adaptive-thinking":  "latest"
-                     }
+                     },
+    "peerDependencies":  {
+                             "@opencode-ai/plugin":  "1.18.31"
+                         },
+    "devDependencies":  {
+                            "@opencode-ai/plugin":  "1.18.31",
+                            "@types/node":  "^26.6.2",
+                            "ts-node":  "^10.9.2"
+                        },
+    "scripts":  {
+                    "typecheck":  "tsc --noEmit"
+                }
 }

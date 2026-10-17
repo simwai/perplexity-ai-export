@@ -12,7 +12,7 @@ import { type Config } from '../utils/config.js'
 import { isTypedError, BaseAppError } from '../utils/errors.js'
 import { join } from 'node:path'
 import { writeFileSync, existsSync, mkdirSync, statSync } from 'node:fs'
-import { sanitizeFilename, sanitizeSpaceName } from '../export/sanitizer.js'
+import { slugify, safeLog } from '../utils/shell-safety.js'
 import { ok, err, from, createResult, type Result } from 'super-result'
 import { errorMessageOf } from '../utils/extract-error-message.js'
 import { RateLimiter } from './rate-limiter.js'
@@ -139,8 +139,6 @@ export class WorkerPool {
     result: Result<ExtractedConversation, unknown>
   ): Promise<void> {
     const existingHash = this.checkpointManager.getContentHash(meta.id)
-    const { processed, total } = this.checkpointManager.getProcessingProgress()
-    const progressLabel = `[${processed}/${total}]`
 
     if (!result.ok) {
       errorBus.emitError('Extraction returned error', result.error)
@@ -152,7 +150,9 @@ export class WorkerPool {
     if (existingHash && existingHash === conversation.contentHash) {
       const markResult = await this.checkpointManager.markAsProcessed(meta.id)
       if (!markResult.ok) errorBus.emitError('Failed to mark as processed', markResult.error)
-      logger.info(`${progressLabel} Up to date: ${conversation.title} (skipped write)`)
+      const { processed, total } = this.checkpointManager.getProcessingProgress()
+      const progressLabel = `[${processed}/${total}]`
+      logger.info(`${progressLabel} Up to date: ${safeLog(conversation.title)} (skipped write)`)
     } else {
       const writeResult = await this.writeConversationAsMarkdown(result)
       if (!writeResult.ok) {
@@ -164,7 +164,9 @@ export class WorkerPool {
         conversation.contentHash
       )
       if (!markResult.ok) errorBus.emitError('Failed to mark as processed', markResult.error)
-      logger.info(`${progressLabel} Processed: ${conversation.title}`)
+      const { processed, total } = this.checkpointManager.getProcessingProgress()
+      const progressLabel = `[${processed}/${total}]`
+      logger.info(`${progressLabel} Processed: ${safeLog(conversation.title)}`)
     }
 
     worker.extractor.recoverTimeout()
@@ -177,7 +179,7 @@ export class WorkerPool {
 
     const data = conversation.value as ExtractedConversation
     const outputDir = this.config.exportDir
-    const safeSpaceName = sanitizeSpaceName(data.spaceName)
+    const safeSpaceName = slugify(data.spaceName)
     const spaceSpecificDirectory = join(outputDir, safeSpaceName)
 
     return from(async () => {
@@ -185,8 +187,7 @@ export class WorkerPool {
         mkdirSync(spaceSpecificDirectory, { recursive: true })
       }
 
-      const safeFileTitle = sanitizeFilename(data.title)
-      const fileName = `${safeFileTitle} (${data.id}).md`
+      const fileName = `${data.safeFilename}.md`
       const destinationFilePath = join(spaceSpecificDirectory, fileName)
 
       const headerTitle = `# ${data.title}\n\n`
