@@ -119,11 +119,12 @@ bash -c "cp .env.example .env"
 ### Key Environment Variables
 
 - **HEADLESS**: Set to `false` in your `.env` file. **Note:** Headless mode (`true`) is currently non-functional due to Cloudflare Turnstile protection on Perplexity.ai. Using headful mode allows you to complete any challenges manually if they appear.
-- **AI_PROVIDER**: "ollama" or "openai-compatible".
-- **AI_API_KEY**: Required for external providers.
-- **AI_BASE_URL**: Base URL for external providers (e.g., https://openrouter.ai/api/v1).
-- **AI_MODEL**: Cognitive model for RAG synthesis (e.g., deepseek-r1). The system defaults to `llama3.1` internally if this is not specified.
-- **AI_EMBED_MODEL**: Model for generating vector representations (e.g., nomic-embed-text).
+- **AI_PROVIDER**: "ollama" or "openai-compatible" for text generation and synthesis.
+- **AI_EMBED_PROVIDER**: "ollama" or "openai-compatible" for embeddings (defaults to `AI_PROVIDER` if omitted). Allows granular selection (e.g., local Ollama for embeddings and NVIDIA NIM / OpenRouter / OpenAI / DeepSeek for LLM synthesis).
+- **AI_API_KEY**: API key required for external providers.
+- **AI_BASE_URL**: Base URL for external providers (e.g., `https://integrate.api.nvidia.com/v1`, `https://openrouter.ai/api/v1`, or `https://api.openai.com/v1`).
+- **AI_MODEL**: Model name for generation / synthesis (e.g., `meta/llama-3.3-70b-instruct`, `deepseek-r1`, `gpt-4o`). Defaults to `llama3.1`.
+- **AI_EMBED_MODEL**: Model name for generating vector embeddings (e.g., `nomic-embed-text`, `text-embedding-3-small`).
 - **EXPORT_STRATEGIES**: A comma-separated list of enabled export formats (default: `markdown`).
 - **ENABLE_VECTOR_SEARCH**: Set to `true` to activate semantic and RAG layers.
 

@@ -45,11 +45,13 @@ export class CommandHandler {
     errorBus.emitError(errorMessage)
     if (mode === 'auto') {
       logger.warn(
-        'Ollama is not available (required for semantic features). Falling back to Exact Text search (ripgrep).'
+        'LLM provider is not available (required for semantic features). Falling back to Exact Text search (ripgrep).'
       )
       return false
     }
-    logger.info('Start Ollama with the embedding model, then run "vectorize".')
+    logger.info(
+      'Ensure your configured LLM provider and embedding model are accessible, then run "vectorize".'
+    )
     return false
   }
 
@@ -251,8 +253,8 @@ export class CommandHandler {
       message: 'Search mode:',
       choices: [
         { name: 'Auto (semantic for long queries, exact for short)', value: 'auto' },
-        { name: 'Semantic (Ollama + Vectra)', value: 'vector' },
-        { name: 'RAG (Ask history with Ollama)', value: 'rag' },
+        { name: 'Semantic (LLM + Vectra)', value: 'vector' },
+        { name: 'RAG (Ask history with LLM)', value: 'rag' },
         { name: 'Exact text (ripgrep)', value: 'rg' },
       ],
       default: 'auto',

@@ -44,6 +44,7 @@
     "inquirer": "^13.2.2",
     "playwright-core": "^1.58.2",
     "sanitize-filename": "^1.6.3",
+    "strip-ansi": "^7.2.0",
     "super-result": "^1.4.3",
     "vectra": "^0.12.3",
     "zod": "^4.3.6"

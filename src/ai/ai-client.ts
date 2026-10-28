@@ -80,10 +80,12 @@ export class AiClient {
     if (isInputEmpty) return ok([])
 
     const isOllama = this.config.aiEmbedProvider === 'ollama'
+    if (!isOllama && !this.config.aiBaseUrl) {
+      return err(new AiError('AI_BASE_URL is required for external AI embedding providers'))
+    }
+
     const endpoint = '/v1/embeddings'
-    const baseUrl = isOllama
-      ? this.config.ollamaUrl
-      : (this.config.aiBaseUrl ?? this.config.ollamaUrl)
+    const baseUrl = isOllama ? this.config.ollamaUrl : this.config.aiBaseUrl!
     const model = this.config.aiEmbedModel ?? 'nomic-embed-text'
 
     const requestBody = {
@@ -325,8 +327,16 @@ export class AiClient {
     apiEndpoint: string,
     requestBody: object
   ): Promise<Result<{ data: unknown; rawText: string }, AiError>> {
-    const sanitizedBaseUrl = baseUrl.replace(/\/\/(.+):(.+)@/, '//<redacted>:<redacted>@')
-    const fullRequestUrl = `${sanitizedBaseUrl}${apiEndpoint}`
+    const cleanBaseUrl = baseUrl.replace(/\/+$/, '')
+    const cleanEndpoint =
+      cleanBaseUrl.endsWith('/v1') && apiEndpoint.startsWith('/v1/')
+        ? apiEndpoint.slice(3)
+        : apiEndpoint.startsWith('/')
+          ? apiEndpoint
+          : `/${apiEndpoint}`
+
+    const sanitizedBaseUrl = cleanBaseUrl.replace(/\/\/(.+):(.+)@/, '//<redacted>:<redacted>@')
+    const fullRequestUrl = `${sanitizedBaseUrl}${cleanEndpoint}`
     const headers: Record<string, string> = { 'Content-Type': 'application/json' }
 
     if (this.config.aiApiKey) {
@@ -382,9 +392,17 @@ export class AiClient {
       return ok([legacyParseResult.data.embedding])
     }
 
+    const rawBaseUrl =
+      this.config.aiEmbedProvider === 'ollama'
+        ? this.config.ollamaUrl
+        : (this.config.aiBaseUrl ?? this.config.ollamaUrl)
+    const cleanBaseUrl = rawBaseUrl.replace(/\/+$/, '')
+    const endpoint = cleanBaseUrl.endsWith('/v1') ? '/embeddings' : '/v1/embeddings'
+    const diagnosticUrl = `${cleanBaseUrl}${endpoint}`
+
     const paths = zodErrorPaths(openAiParseResult, rawText)
     this.diagnosticsWriter.writeFailure({
-      url: `${this.config.aiEmbedProvider === 'ollama' ? this.config.ollamaUrl : (this.config.aiBaseUrl ?? this.config.ollamaUrl)}/v1/embeddings`,
+      url: diagnosticUrl,
       errorType: 'zod_error',
       zodErrorDetails: paths,
       rawResponse: rawText,
